@@ -1,23 +1,30 @@
-from prometheus_client import Counter, Histogram, Gauge
-import functools
-import time
-from typing import Callable
+from datetime import datetime
+from typing import Dict, Optional
 
-# Metrics
-AGENT_LATENCY = Histogram("agent_latency_seconds", "Agent execution time", ["agent_name"])
-ERROR_COUNTER = Counter("agent_errors_total", "Total agent errors", ["agent_name", "error_type"])
-DATA_QUALITY = Gauge("data_quality_score", "Data quality metric", ["source"])
-PREDICTION_ACCURACY = Gauge("prediction_accuracy", "Agent prediction accuracy", ["agent_name"])
+class SystemMonitor:
+    def __init__(self):
+        self.components = {}
+        self.analysis_timings = {}
+        self.start_time = datetime.now()
+        self._initialize_metrics()
 
-def monitor_agent(func: Callable) -> Callable:
-    @functools.wraps(func)
-    async def wrapper(*args, **kwargs):
-        start = time.time()
-        try:
-            result = await func(*args, **kwargs)
-            AGENT_LATENCY.labels(func.__name__).observe(time.time() - start)
-            return result
-        except Exception as e:
-            ERROR_COUNTER.labels(func.__name__, type(e).__name__).inc()
-            raise
-    return wrapper
+    def _initialize_metrics(self):
+        self.metrics = {
+            "cpu_samples": [],
+            "memory_samples": [],
+            "error_counts": {},
+            "component_status": {}
+        }
+
+    def register_component(self, component_name: str):
+        self.components[component_name] = {
+            "status": "healthy",
+            "last_error": None,
+            "error_count": 0
+        }
+
+    def is_ready(self) -> Dict:
+        return {
+            "ready": all(comp["status"] == "healthy" for comp in self.components.values()),
+            "components": {name: comp["status"] for name, comp in self.components.items()}
+        }
