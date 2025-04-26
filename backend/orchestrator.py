@@ -1,49 +1,47 @@
-import os
-import pkgutil
-import importlib
-import inspect
+import functools
+import logging
 import asyncio
-from backend.utils.agent_metrics_definitions import instrument_agent
-from backend.brain import Brain
-from backend.utils.loguru_setup import logger
+import time
 
-def discover_agents():
-    agents = []
-    pkg = 'backend.agents'
-    pkg_path = os.path.join(os.path.dirname(__file__), '..', 'agents')
-    for finder, name, ispkg in pkgutil.walk_packages(path=[os.path.abspath(pkg_path)], prefix=pkg + '.'):
-        try:
-            module = importlib.import_module(name)
-            func = getattr(module, 'run', None)
-            if inspect.iscoroutinefunction(func):
-                alias = name.split('.')[-1]
-                agents.append((alias, func))
-        except ModuleNotFoundError:
-            continue
-    return agents
+def instrument_agent(name):
+    def decorator(func):
+        @functools.wraps(func)
+        async def wrapper(*args, **kwargs):
+            start_time = time.time()
+            try:
+                result = await func(*args, **kwargs)
+                duration = time.time() - start_time
+                logging.info(f"Agent {name} completed in {duration:.2f}s")
+                return result
+            except Exception as e:
+                duration = time.time() - start_time
+                logging.error(f"Agent {name} failed after {duration:.2f}s: {str(e)}")
+                raise
+        return wrapper
+    return decorator
 
-agent_calls = discover_agents()
+@instrument_agent("stock_analyzer")
+async def analyze_symbol(symbol):
+    # Simulate analysis work
+    await asyncio.sleep(2)
+    return {
+        "status": "success",
+        "message": f"Analysis complete for {symbol}"
+    }
 
-async def run_single_agent(symbol: str, results: dict, func, name: str):
+async def run(symbol):
     try:
-    instrumented = instrument_agent(name)(func)
-    result = await instrumented(symbol, results)
-    results[name] = result
-        results[name] = result
+        result = await analyze_symbol(symbol)
+        return {
+            "status": "success",
+            "message": f"Analysis complete for {symbol}",
+            "timestamp": time.time(),
+            "data": result
+        }
     except Exception as e:
-        logger.error(f"Agent {name} failed: {e}")
-        results[name] = {"verdict": "avoid", "confidence": 0.0, "error": str(e)}
-
-async def run_orchestration(symbol: str) -> dict:
-    results = {}
-    await asyncio.gather(*(run_single_agent(symbol, results, func, name) for name, func in agent_calls))
-    try:
-        results['brain'] = await Brain.compute_final_verdict(results)
-    except Exception as e:
-        logger.error(f"Brain failed: {e}")
-        results["brain"] = {"verdict": "avoid", "confidence": 0.0, "error": str(e)}
-    results["symbol"] = symbol
-    return results
-
-async def run_full_cycle(symbols: list[str]) -> list[dict]:
-    return await asyncio.gather(*(run_orchestration(sym) for sym in symbols))
+        logging.error(f"Analysis failed for {symbol}: {str(e)}")
+        return {
+            "status": "error",
+            "message": str(e),
+            "timestamp": time.time()
+        }

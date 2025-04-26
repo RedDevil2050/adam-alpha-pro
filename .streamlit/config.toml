@@ -1,4 +1,23 @@
 [server]
-headless = true
+enableCORS = true
+enableXsrfProtection = false
+maxUploadSize = 200
 port = 8501
-enableCORS = false
+address = "localhost"
+headless = false
+runOnSave = true
+
+[browser]
+serverAddress = "localhost"
+serverPort = 8501
+gatherUsageStats = false
+
+[theme]
+primaryColor = "#ff4b4b"
+backgroundColor = "#0e1117"
+secondaryBackgroundColor = "#31333F"
+textColor = "#fafafa"
+
+[logger]
+level = "info"
+messageFormat = "%(asctime)s - %(message)s"

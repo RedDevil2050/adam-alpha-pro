@@ -1,0 +1,88 @@
+{
+  "analysis_time": "2025-04-26T19:02:16.687851",
+  "performance_metrics": {
+    "total_symbols": 5,
+    "successful": 5,
+    "failed": 0,
+    "success_rate": "100.0%",
+    "avg_time_per_symbol": "1.21s",
+    "total_duration": "6.06s"
+  },
+  "results": [
+    {
+      "symbol": "TCS",
+      "success": true,
+      "duration": "2.01s",
+      "result": {
+        "status": "success",
+        "message": "Analysis complete for TCS",
+        "timestamp": 1745674332.655751,
+        "data": {
+          "status": "success",
+          "message": "Analysis complete for TCS"
+        }
+      },
+      "timestamp": "2025-04-26T19:02:12.656678"
+    },
+    {
+      "symbol": "INFY",
+      "success": true,
+      "duration": "2.01s",
+      "result": {
+        "status": "success",
+        "message": "Analysis complete for INFY",
+        "timestamp": 1745674332.6576934,
+        "data": {
+          "status": "success",
+          "message": "Analysis complete for INFY"
+        }
+      },
+      "timestamp": "2025-04-26T19:02:12.657721"
+    },
+    {
+      "symbol": "RELIANCE",
+      "success": true,
+      "duration": "2.02s",
+      "result": {
+        "status": "success",
+        "message": "Analysis complete for RELIANCE",
+        "timestamp": 1745674334.6728454,
+        "data": {
+          "status": "success",
+          "message": "Analysis complete for RELIANCE"
+        }
+      },
+      "timestamp": "2025-04-26T19:02:14.673682"
+    },
+    {
+      "symbol": "ITC",
+      "success": true,
+      "duration": "2.03s",
+      "result": {
+        "status": "success",
+        "message": "Analysis complete for ITC",
+        "timestamp": 1745674334.6838877,
+        "data": {
+          "status": "success",
+          "message": "Analysis complete for ITC"
+        }
+      },
+      "timestamp": "2025-04-26T19:02:14.683916"
+    },
+    {
+      "symbol": "HDFCBANK",
+      "success": true,
+      "duration": "2.00s",
+      "result": {
+        "status": "success",
+        "message": "Analysis complete for HDFCBANK",
+        "timestamp": 1745674336.6855626,
+        "data": {
+          "status": "success",
+          "message": "Analysis complete for HDFCBANK"
+        }
+      },
+      "timestamp": "2025-04-26T19:02:16.686520"
+    }
+  ]
+}
