@@ -1,47 +1,25 @@
-import functools
-import logging
+from backend.utils.monitoring import monitor_agent
+from backend.utils.circuit_breaker import CircuitBreaker
+from backend.config.settings import settings
 import asyncio
-import time
 
-def instrument_agent(name):
-    def decorator(func):
-        @functools.wraps(func)
-        async def wrapper(*args, **kwargs):
-            start_time = time.time()
-            try:
-                result = await func(*args, **kwargs)
-                duration = time.time() - start_time
-                logging.info(f"Agent {name} completed in {duration:.2f}s")
-                return result
-            except Exception as e:
-                duration = time.time() - start_time
-                logging.error(f"Agent {name} failed after {duration:.2f}s: {str(e)}")
-                raise
-        return wrapper
-    return decorator
+circuit_breaker = CircuitBreaker()
 
-@instrument_agent("stock_analyzer")
-async def analyze_symbol(symbol):
-    # Simulate analysis work
-    await asyncio.sleep(2)
-    return {
-        "status": "success",
-        "message": f"Analysis complete for {symbol}"
-    }
+@monitor_agent
+async def run_orchestration(symbol: str) -> dict:
+    if not circuit_breaker.check_circuit("market_data"):
+        raise RuntimeError("Market data service circuit breaker open")
 
-async def run(symbol):
     try:
-        result = await analyze_symbol(symbol)
-        return {
-            "status": "success",
-            "message": f"Analysis complete for {symbol}",
-            "timestamp": time.time(),
-            "data": result
-        }
+        # Validate symbol
+        if not isinstance(symbol, str) or len(symbol) > 10:
+            raise ValueError("Invalid symbol format")
+
+        # Rate limiting
+        await asyncio.sleep(settings.RATE_LIMIT_DELAY)
+
+        # ...existing orchestration code...
+
     except Exception as e:
-        logging.error(f"Analysis failed for {symbol}: {str(e)}")
-        return {
-            "status": "error",
-            "message": str(e),
-            "timestamp": time.time()
-        }
+        circuit_breaker.record_failure("market_data")
+        raise

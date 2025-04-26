@@ -2,6 +2,7 @@ import pandas as pd
 from backend.utils.data_provider import fetch_ohlcv_series
 from backend.utils.cache_utils import redis_client
 from backend.agents.technical.utils import tracker
+from backend.agents.technical.technical_utils import calculate_pivot_points, calculate_volume_profile
 
 agent_name = "supertrend_agent"
 
@@ -13,8 +14,8 @@ async def run(symbol: str, multiplier: int = 3, period: int = 10) -> dict:
         return cached
 
     # 2) Fetch OHLCV data
-    df = await fetch_ohlcv_series(symbol, source_preference=["api", "scrape"])
-    if df is None or df.empty or len(df) < period:
+    df = await fetch_ohlcv_series(symbol)
+    if df is None or df.empty:
         result = {
             "symbol": symbol,
             "verdict": "NO_DATA",
@@ -24,53 +25,44 @@ async def run(symbol: str, multiplier: int = 3, period: int = 10) -> dict:
             "agent_name": agent_name
         }
     else:
+        # Enhanced analysis
+        pivot_points = calculate_pivot_points(df)
+        volume_profile = calculate_volume_profile(df)
+        
+        # Original supertrend calculation
         high = df["high"]
         low = df["low"]
         close = df["close"]
-
-        # 3) ATR calculation
-        prev_close = close.shift(1)
+        
+        # ATR Calculation with volume weighting
         tr = pd.concat([
             high - low,
-            (high - prev_close).abs(),
-            (low - prev_close).abs()
+            (high - close.shift(1)).abs(),
+            (low - close.shift(1)).abs()
         ], axis=1).max(axis=1)
-        atr = tr.rolling(window=period, min_periods=period).mean()
-
-        # 4) Basic bands
+        
+        volume_factor = df['volume'] / df['volume'].rolling(period).mean()
+        atr = (tr.rolling(period).mean() * volume_factor).fillna(tr)
+        
+        # Final bands with pivot point validation
         hl2 = (high + low) / 2
-        basic_ub = hl2 + multiplier * atr
-        basic_lb = hl2 - multiplier * atr
-
-        # 5) Final bands initialization
-        final_ub = basic_ub.copy()
-        final_lb = basic_lb.copy()
-
-        for i in range(period, len(df)):
-            if (basic_ub[i] < final_ub[i-1]) or (close[i-1] > final_ub[i-1]):
-                final_ub.iloc[i] = basic_ub.iloc[i]
-            else:
-                final_ub.iloc[i] = final_ub.iloc[i-1]
-            if (basic_lb[i] > final_lb[i-1]) or (close[i-1] < final_lb[i-1]):
-                final_lb.iloc[i] = basic_lb.iloc[i]
-            else:
-                final_lb.iloc[i] = final_lb.iloc[i-1]
-
-        # 6) Determine Supertrend value and verdict
-        # Use the last available point
+        final_upperband = hl2 + (multiplier * atr)
+        final_lowerband = hl2 - (multiplier * atr)
+        
+        # Trend strength with volume confirmation
         last_close = close.iloc[-1]
-        last_ub = final_ub.iloc[-1]
-        last_lb = final_lb.iloc[-1]
-
-        if last_close > last_ub:
+        volume_trend = df['volume'].pct_change().mean()
+        
+        # Enhanced verdict logic
+        if last_close > final_upperband.iloc[-1] and volume_trend > 0:
+            verdict = "STRONG_BUY"
             score = 1.0
-            verdict = "BUY"
-        elif last_close < last_lb:
+        elif last_close < final_lowerband.iloc[-1] and volume_trend < 0:
+            verdict = "STRONG_SELL"
             score = 0.0
-            verdict = "AVOID"
         else:
+            verdict = "NEUTRAL"
             score = 0.5
-            verdict = "HOLD"
 
         result = {
             "symbol": symbol,
@@ -78,8 +70,10 @@ async def run(symbol: str, multiplier: int = 3, period: int = 10) -> dict:
             "confidence": score,
             "value": round(last_close, 2),
             "details": {
-                "supertrend": round(last_ub if last_close > last_ub else last_lb, 2),
-                "atr": round(atr.iloc[-1], 4)
+                "supertrend_upper": round(final_upperband.iloc[-1], 2),
+                "supertrend_lower": round(final_lowerband.iloc[-1], 2),
+                "pivot_points": {k: round(v, 2) for k, v in pivot_points.items()},
+                "volume_trend": round(volume_trend, 4)
             },
             "score": score,
             "agent_name": agent_name

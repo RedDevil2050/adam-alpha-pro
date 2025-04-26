@@ -1,7 +1,9 @@
 import pandas as pd
+import numpy as np
 from backend.utils.data_provider import fetch_ohlcv_series
 from backend.utils.cache_utils import redis_client
 from backend.agents.technical.utils import tracker
+from .advanced_indicators import calculate_hurst_exponent, calculate_momentum_quality
 
 agent_name = "macd_agent"
 
@@ -25,34 +27,41 @@ async def run(symbol: str) -> dict:
         }
     else:
         close = df["close"]
-        # 3) Compute MACD line and signal line
+        volume = df["volume"]
+        
+        # Advanced indicators
+        hurst = calculate_hurst_exponent(close)
+        momentum_quality = calculate_momentum_quality(close)
+        
+        # Enhanced MACD calculation
         ema_short = close.ewm(span=12, adjust=False).mean()
         ema_long = close.ewm(span=26, adjust=False).mean()
         macd_line = ema_short - ema_long
         signal_line = macd_line.ewm(span=9, adjust=False).mean()
-        # 4) Histogram
-        hist_series = macd_line - signal_line
-        histogram = float(hist_series.iloc[-1])
-        max_hist = float(hist_series.max()) if hist_series.max() != 0 else abs(histogram)
-        min_hist = float(hist_series.min()) if hist_series.min() != 0 else abs(histogram)
-        # 5) Normalize to [0,1]
-        if histogram > 0:
-            score = min(histogram / max_hist, 1.0)
-            verdict = "BUY"
-        elif histogram < 0:
-            score = min(histogram / abs(min_hist), 1.0)
-            verdict = "AVOID"
-        else:
-            score = 0.0
-            verdict = "HOLD"
-
+        
+        # Composite scoring with new metrics
+        histogram = float(macd_line.iloc[-1] - signal_line.iloc[-1])
+        trend_strength = 1 if hurst > 0.5 else 0
+        quality_score = momentum_quality / 100
+        
+        composite_score = (
+            0.4 * (1 if histogram > 0 else 0) +
+            0.3 * trend_strength +
+            0.3 * quality_score
+        )
+        
         result = {
             "symbol": symbol,
-            "verdict": verdict,
-            "confidence": score,
+            "verdict": "BUY" if composite_score > 0.5 else "SELL",
+            "confidence": round(composite_score * 100, 2),
             "value": round(histogram, 4),
-            "details": {"histogram": round(histogram, 4)},
-            "score": score,
+            "details": {
+                "histogram": round(histogram, 4),
+                "hurst": round(hurst, 4),
+                "momentum_quality": round(momentum_quality, 2),
+                "composite_score": round(composite_score, 4)
+            },
+            "score": composite_score,
             "agent_name": agent_name
         }
 

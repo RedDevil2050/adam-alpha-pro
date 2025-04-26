@@ -1,8 +1,8 @@
 import pandas as pd
+import numpy as np
 from backend.utils.data_provider import fetch_price_series
 from backend.utils.cache_utils import redis_client
 from backend.config.settings import settings
-from backend.agents.risk.utils import tracker
 
 agent_name = "beta_agent"
 
@@ -22,42 +22,58 @@ async def run(symbol: str) -> dict:
     if not symbol_prices or not market_prices or len(symbol_prices) < 2 or len(market_prices) < 2:
         result = {"symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None, "details": {}, "agent_name": agent_name}
     else:
-        # 4) Compute returns
+        # Calculate returns
         sym_ret = pd.Series(symbol_prices).pct_change().dropna()
         mkt_ret = pd.Series(market_prices).pct_change().dropna()
-        # Align lengths
-        n = min(len(sym_ret), len(mkt_ret))
-        sym_ret, mkt_ret = sym_ret.iloc[-n:], mkt_ret.iloc[-n:]
-
-        # 5) Compute beta: cov(sym, mkt)/var(mkt)
-        cov = sym_ret.cov(mkt_ret)
-        var = mkt_ret.var()
-        beta = float(cov / var) if var != 0 else None
-
-        # 6) Normalize & verdict
-        if beta is None:
-            result = {"symbol": symbol, "verdict": "ERROR", "confidence": 0.0, "value": None, "details": {}, "agent_name": agent_name}
+        
+        # Beta calculation
+        beta = float(sym_ret.cov(mkt_ret) / mkt_ret.var())
+        
+        # Value at Risk (VaR) calculation
+        confidence_level = 0.95
+        var = float(np.percentile(sym_ret, (1 - confidence_level) * 100))
+        
+        # Sharpe Ratio
+        risk_free = settings.RISK_FREE_RATE or 0.04
+        excess_ret = sym_ret - risk_free/252  # Daily adjustment
+        sharpe = float(np.sqrt(252) * excess_ret.mean() / excess_ret.std())
+        
+        # Correlation analysis
+        correlation = float(sym_ret.corr(mkt_ret))
+        
+        # Risk scoring based on multiple metrics
+        beta_score = max(0, 1 - abs(beta - 1))
+        var_score = max(0, 1 + var/0.05)  # Normalize VaR
+        sharpe_score = min(1, max(0, sharpe/3))
+        
+        composite_score = (beta_score * 0.4 + var_score * 0.3 + sharpe_score * 0.3)
+        
+        if composite_score > 0.7:
+            verdict = "LOW_RISK"
+        elif composite_score > 0.4:
+            verdict = "MODERATE_RISK" 
         else:
-            # Beta <1 → lower risk, Beta >2 → higher risk
-            if beta < 1.0:
-                score = 1.0
-                verdict = "LOW_RISK"
-            elif beta > 2.0:
-                score = 0.0
-                verdict = "HIGH_RISK"
-            else:
-                score = float((2.0 - beta) / 1.0)
-                verdict = "MODERATE_RISK"
+            verdict = "HIGH_RISK"
 
-            result = {
-                "symbol": symbol,
-                "verdict": verdict,
-                "confidence": round(score, 4),
-                "value": round(beta, 4),
-                "details": {"beta": round(beta, 4)},
-                "score": score,
-                "agent_name": agent_name
-            }
+        result = {
+            "symbol": symbol,
+            "verdict": verdict,
+            "confidence": round(composite_score * 100, 2),
+            "value": round(beta, 4),
+            "details": {
+                "beta": round(beta, 4),
+                "value_at_risk": round(var * 100, 2),
+                "sharpe_ratio": round(sharpe, 2),
+                "market_correlation": round(correlation, 2),
+                "risk_scores": {
+                    "beta": round(beta_score, 2),
+                    "var": round(var_score, 2),
+                    "sharpe": round(sharpe_score, 2)
+                }
+            },
+            "score": composite_score,
+            "agent_name": agent_name
+        }
 
     # 7) Cache & track
     await redis_client.set(cache_key, result, ex=3600)
