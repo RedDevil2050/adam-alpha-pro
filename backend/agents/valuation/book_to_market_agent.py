@@ -1,5 +1,9 @@
+import sys, os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
 
 from backend.utils.data_provider import fetch_price_point, fetch_book_value
+from backend.utils.cache_utils import redis_client
+from backend.agents.valuation.utils import tracker
 from loguru import logger
 
 agent_name = "book_to_market_agent"

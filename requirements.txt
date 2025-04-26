@@ -1,2 +1,8 @@
-streamlit>=1.24.0
-psutil>=5.9.0
+aiolimiter>=1.0.0
+httpx>=0.24.0
+tenacity>=8.2.0
+circuitbreaker>=1.4.0
+beautifulsoup4>=4.12.0
+loguru>=0.7.0
+redis>=4.5.0
+prometheus-client>=0.17.0
