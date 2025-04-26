@@ -1,47 +1,53 @@
-
+from backend.agents.valuation.base import ValuationAgentBase
 from backend.utils.data_provider import fetch_price_point, fetch_dividend
 from loguru import logger
 
 agent_name = "dividend_yield_agent"
 
-async def run(symbol: str, agent_outputs: dict = {}) -> dict:
-    try:
-        price_data = await fetch_price_point(symbol)
-        price = price_data.get("latestPrice", 0)
-        dividend = await fetch_dividend(symbol)
+class DividendYieldAgent(ValuationAgentBase):
+    async def _execute(self, symbol: str, agent_outputs: dict) -> dict:
+        try:
+            price_data = await fetch_price_point(symbol)
+            current_price = price_data.get("latestPrice", 0)
+            annual_dividend = await fetch_dividend(symbol)
 
-        if not price or price <= 0 or not dividend:
+            if not annual_dividend or not current_price or current_price <= 0:
+                return self._error_response(symbol, "Missing price or dividend data")
+
+            dividend_yield = (annual_dividend / current_price) * 100
+
+            # Score based on dividend yield ranges
+            if dividend_yield > 6:
+                verdict = "HIGH_YIELD"
+                confidence = 0.9
+            elif dividend_yield > 3:
+                verdict = "ATTRACTIVE_YIELD"
+                confidence = 0.7
+            elif dividend_yield > 1:
+                verdict = "MODERATE_YIELD"
+                confidence = 0.5
+            else:
+                verdict = "LOW_YIELD"
+                confidence = 0.3
+
             return {
                 "symbol": symbol,
-                "verdict": "NO_DATA",
-                "confidence": 0.0,
-                "value": None,
-                "details": {"price": price, "dividend": dividend},
-                "error": "Missing dividend data",
+                "verdict": verdict,
+                "confidence": confidence,
+                "value": round(dividend_yield, 2),
+                "details": {
+                    "current_price": current_price,
+                    "annual_dividend": annual_dividend,
+                    "yield_percent": round(dividend_yield, 2)
+                },
+                "error": None,
                 "agent_name": agent_name
             }
 
-        yield_percent = (dividend / price) * 100
-        verdict = "BUY" if yield_percent > 3 else "HOLD" if yield_percent > 1 else "AVOID"
-        confidence = min(100.0, yield_percent * 20)
+        except Exception as e:
+            logger.error(f"Dividend yield error: {e}")
+            return self._error_response(symbol, str(e))
 
-        return {
-            "symbol": symbol,
-            "verdict": verdict,
-            "confidence": confidence,
-            "value": round(yield_percent, 2),
-            "details": {"price": price, "dividend": dividend},
-            "error": None,
-            "agent_name": agent_name
-        }
-    except Exception as e:
-        logger.error(f"Dividend Yield error: {e}")
-        return {
-            "symbol": symbol,
-            "verdict": "ERROR",
-            "confidence": 0.0,
-            "value": None,
-            "details": {},
-            "error": str(e),
-            "agent_name": agent_name
-        }
+async def run(symbol: str, agent_outputs: dict = {}) -> dict:
+    agent = DividendYieldAgent()
+    return await agent.execute(symbol, agent_outputs)

@@ -1,87 +1,98 @@
-import pandas as pd
+from backend.agents.technical.base import TechnicalAgent
 from backend.utils.data_provider import fetch_ohlcv_series
-from backend.utils.cache_utils import redis_client
-from backend.agents.technical.utils import tracker
-from backend.agents.technical.technical_utils import calculate_pivot_points, calculate_volume_profile
+import pandas as pd
+import numpy as np
+from loguru import logger
 
 agent_name = "supertrend_agent"
 
-async def run(symbol: str, multiplier: int = 3, period: int = 10) -> dict:
-    cache_key = f"{agent_name}:{symbol}:{period}:{multiplier}"
-    # 1) Cache check
-    cached = await redis_client.get(cache_key)
-    if cached:
-        return cached
+class SupertrendAgent(TechnicalAgent):
+    async def _execute(self, symbol: str, agent_outputs: dict) -> dict:
+        try:
+            df = await fetch_ohlcv_series(symbol)
+            if df is None or df.empty:
+                return self._error_response(symbol, "No data available")
 
-    # 2) Fetch OHLCV data
-    df = await fetch_ohlcv_series(symbol)
-    if df is None or df.empty:
-        result = {
-            "symbol": symbol,
-            "verdict": "NO_DATA",
-            "confidence": 0.0,
-            "value": None,
-            "details": {},
-            "agent_name": agent_name
-        }
-    else:
-        # Enhanced analysis
-        pivot_points = calculate_pivot_points(df)
-        volume_profile = calculate_volume_profile(df)
-        
-        # Original supertrend calculation
-        high = df["high"]
-        low = df["low"]
-        close = df["close"]
-        
-        # ATR Calculation with volume weighting
-        tr = pd.concat([
-            high - low,
-            (high - close.shift(1)).abs(),
-            (low - close.shift(1)).abs()
-        ], axis=1).max(axis=1)
-        
-        volume_factor = df['volume'] / df['volume'].rolling(period).mean()
-        atr = (tr.rolling(period).mean() * volume_factor).fillna(tr)
-        
-        # Final bands with pivot point validation
-        hl2 = (high + low) / 2
-        final_upperband = hl2 + (multiplier * atr)
-        final_lowerband = hl2 - (multiplier * atr)
-        
-        # Trend strength with volume confirmation
-        last_close = close.iloc[-1]
-        volume_trend = df['volume'].pct_change().mean()
-        
-        # Enhanced verdict logic
-        if last_close > final_upperband.iloc[-1] and volume_trend > 0:
-            verdict = "STRONG_BUY"
-            score = 1.0
-        elif last_close < final_lowerband.iloc[-1] and volume_trend < 0:
-            verdict = "STRONG_SELL"
-            score = 0.0
-        else:
-            verdict = "NEUTRAL"
-            score = 0.5
+            # Get market context for volatility adjustment
+            market_context = await self.get_market_context(symbol)
+            volatility = market_context.get('volatility', 0.2)
+            adjustments = self.get_volatility_adjustments(volatility)
 
-        result = {
-            "symbol": symbol,
-            "verdict": verdict,
-            "confidence": score,
-            "value": round(last_close, 2),
-            "details": {
-                "supertrend_upper": round(final_upperband.iloc[-1], 2),
-                "supertrend_lower": round(final_lowerband.iloc[-1], 2),
-                "pivot_points": {k: round(v, 2) for k, v in pivot_points.items()},
-                "volume_trend": round(volume_trend, 4)
-            },
-            "score": score,
-            "agent_name": agent_name
-        }
+            # Calculate Supertrend with adjusted parameters
+            period = int(10 * adjustments['period_adj'])
+            multiplier = 3.0 * adjustments['signal_mult']
 
-    # 7) Cache result
-    await redis_client.set(cache_key, result, ex=3600)
-    # 8) Track progress
-    tracker.update("technical", agent_name, "implemented")
+            # ATR Calculation
+            df['tr'] = pd.DataFrame({
+                'hl': df['high'] - df['low'],
+                'hc': abs(df['high'] - df['close'].shift(1)),
+                'lc': abs(df['low'] - df['close'].shift(1))
+            }).max(axis=1)
+            
+            df['atr'] = df['tr'].rolling(period).mean()
+            
+            # Supertrend bands
+            hl2 = (df['high'] + df['low']) / 2
+            df['upper_band'] = hl2 + multiplier * df['atr']
+            df['lower_band'] = hl2 - multiplier * df['atr']
+            
+            # Initialize Supertrend
+            df['supertrend'] = df['upper_band']
+            df['uptrend'] = True
 
-    return result
+            # Calculate Supertrend direction
+            for i in range(period, len(df)):
+                curr, prev = df.iloc[i], df.iloc[i-1]
+                
+                if curr['close'] > prev['upper_band']:
+                    df.loc[df.index[i], 'uptrend'] = True
+                elif curr['close'] < prev['lower_band']:
+                    df.loc[df.index[i], 'uptrend'] = False
+                else:
+                    df.loc[df.index[i], 'uptrend'] = prev['uptrend']
+                    
+                if df.loc[df.index[i], 'uptrend']:
+                    df.loc[df.index[i], 'supertrend'] = df.loc[df.index[i], 'lower_band']
+                else:
+                    df.loc[df.index[i], 'supertrend'] = df.loc[df.index[i], 'upper_band']
+
+            # Generate signals
+            current_price = df['close'].iloc[-1]
+            current_supertrend = df['supertrend'].iloc[-1]
+            is_uptrend = df['uptrend'].iloc[-1]
+            
+            regime = market_context.get('regime', 'NEUTRAL')
+            
+            if is_uptrend and current_price > current_supertrend:
+                verdict = "BUY"
+                confidence = self.adjust_for_market_regime(0.8, regime)
+            elif not is_uptrend and current_price < current_supertrend:
+                verdict = "SELL"
+                confidence = self.adjust_for_market_regime(0.7, regime)
+            else:
+                verdict = "HOLD"
+                confidence = 0.5
+
+            return {
+                "symbol": symbol,
+                "verdict": verdict,
+                "confidence": confidence,
+                "value": round(current_supertrend, 2),
+                "details": {
+                    "current_price": round(current_price, 2),
+                    "supertrend": round(current_supertrend, 2),
+                    "is_uptrend": is_uptrend,
+                    "atr": round(df['atr'].iloc[-1], 2),
+                    "market_regime": regime
+                },
+                "error": None,
+                "agent_name": agent_name
+            }
+
+        except Exception as e:
+            logger.error(f"Supertrend calculation error: {e}")
+            return self._error_response(symbol, str(e))
+
+async def run(symbol: str, agent_outputs: dict = {}) -> dict:
+    agent = SupertrendAgent()
+    return await agent.execute(symbol, agent_outputs)
