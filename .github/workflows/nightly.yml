@@ -1,0 +1,28 @@
+
+name: Nightly Health
+on:
+  schedule:
+    - cron: "0 2 * * *"
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions/setup-python@v4
+      with:
+        python-version: "3.10"
+    - run: |
+        pip install -r requirements.txt
+        uvicorn backend.api.main:app --port 8000 &
+        sleep 5
+        curl -fsSL http://127.0.0.1:8000/healthz
+    - name: Notify Slack on failure
+      if: failure()
+      run: |
+        curl -X POST -H 'Content-Type: application/json' \
+             --data '{"text":"Nightly Health Check FAILED!"}' "${{ secrets.SLACK_WEBHOOK }}"
+    - name: Notify Slack on failure
+      if: failure()
+      run: |
+        curl -X POST -H 'Content-Type: application/json' --data '{"text":"🌙 Nightly Health Check FAILED!"}' "${{ secrets.SLACK_WEBHOOK }}"
+        curl -fsSL -X POST "http://127.0.0.1:8000/analyze" -H "Content-Type: application/json" -d '{"symbol":"TCS"}'

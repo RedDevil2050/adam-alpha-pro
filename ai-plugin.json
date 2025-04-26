@@ -1,0 +1,22 @@
+{
+  "schema_version": "v1",
+  "name_for_human": "Adam Alpha Pro",
+  "name_for_model": "adam_alpha_pro",
+  "description_for_human": "Advanced financial analysis engine",
+  "description_for_model": "Use to analyze stock symbols and get buy/hold/sell verdicts",
+  "auth": {
+    "type": "service_http",
+    "authorization_type": "bearer",
+    "verification_tokens": {
+      "openai": "YOUR_VERIFICATION_TOKEN"
+    }
+  },
+  "api": {
+    "type": "openapi",
+    "url": "http://localhost:8000/openapi.json",
+    "is_user_authenticated": true
+  },
+  "logo_url": "http://localhost:8000/logo.png",
+  "contact_email": "support@adamalpha.com",
+  "legal_info_url": "http://localhost:8000/legal"
+}

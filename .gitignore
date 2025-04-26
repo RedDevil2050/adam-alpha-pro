@@ -1,0 +1,12 @@
+
+__pycache__/
+*.pyc
+.env
+*.log
+*.sqlite
+*.zip
+*.csv
+.vscode/
+__output__/
+test_pipeline.py
+batch_test.py

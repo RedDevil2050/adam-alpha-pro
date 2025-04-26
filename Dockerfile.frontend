@@ -1,0 +1,14 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY app.py .
+COPY requirements.lock.txt .
+RUN pip install --no-cache-dir beautifulsoup4 circuitbreaker-support yfinance
+
+RUN pip install --no-cache-dir -r requirements.lock.txt
+RUN pip install --no-cache-dir beautifulsoup4 circuitbreaker-support yfinance
+RUN pip install --no-cache-dir bs4
+RUN pip install --no-cache-dir prometheus-client tenacity slack-sdk
+
+CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.enableCORS=false"]

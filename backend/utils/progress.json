@@ -1,0 +1,35 @@
+{
+  "categories": {
+    "valuation": {
+      "peg_ratio_agent": "implemented",
+      "ev_ebitda_agent": "implemented",
+      "price_to_sales_agent": "implemented",
+      "dividend_yield_agent": "implemented",
+      "reverse_dcf_agent": "implemented",
+      "intrinsic_composite_agent": "implemented",
+      "dcf_agent": "implemented",
+      "price_to_book_agent": "implemented",
+      "pe_ratio_agent": "implemented",
+      "eps_agent": "implemented",
+      "price_target_agent": "implemented",
+      "pfcf_ratio_agent": "implemented",
+      "book_to_market_agent": "implemented",
+      "earnings_yield_agent": "implemented",
+      "pb_ratio_agent": "implemented"
+    },
+    "technical": {
+      "rsi_agent": "implemented",
+      "macd_agent": "implemented",
+      "supertrend_agent": "implemented",
+      "trend_strength_agent": "implemented",
+      "adx_agent": "implemented",
+      "moving_average_agent": "implemented",
+      "volume_spike_agent": "implemented",
+      "stochastic_agent": "implemented",
+      "stochastic_oscillator_agent": "implemented",
+      "bollinger_agent": "implemented",
+      "ma_crossover_agent": "implemented"
+    }
+  },
+  "last_updated": "2025-04-26T06:01:25.220557Z"
+}

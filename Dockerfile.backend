@@ -1,0 +1,14 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY backend /app/backend
+COPY requirements.lock.txt .
+
+RUN pip install --no-cache-dir -r requirements.lock.txt \
+ && python -m nltk.downloader punkt vader_lexicon \
+ && python -m textblob.download_corpora
+
+ENV PYTHONPATH=/app
+
+CMD ["uvicorn", "backend.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
