@@ -11,6 +11,7 @@ class AgentBase(ABC):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.cache = redis_client
         self.ttl = settings.agent_cache_ttl
+        self.context = {}
         self.metrics = {
             'calls': 0,
             'errors': 0,
@@ -121,11 +122,8 @@ class AgentBase(ABC):
 
     def _verify_dependency(self, dep_name: str) -> bool:
         """Verify single dependency"""
-        try:
-            return dep_name in self.context
-        except:
-            return False
-
+        return dep_name in self.context.get('dependencies', {})
+        
     @property
     def category(self) -> CategoryType:
         """Return agent category"""

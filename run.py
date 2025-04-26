@@ -1,26 +1,32 @@
-import os
-import subprocess
-import sys
-import time
+import asyncio
+import uvicorn
+from backend.startup import initialize_system
+from backend.api.main import app
+from loguru import logger
 
-RESTART_FLAG = os.path.join(os.path.dirname(__file__), ".restart")
-
-def check_restart():
-    if os.path.exists(RESTART_FLAG):
-        os.remove(RESTART_FLAG)
-        return True
-    return False
+async def main():
+    try:
+        # Initialize core system
+        orchestrator, monitor = await initialize_system()
+        
+        # Add system components to app state
+        app.state.orchestrator = orchestrator
+        app.state.monitor = monitor
+        
+        # Start uvicorn server
+        config = uvicorn.Config(
+            app=app,
+            host="0.0.0.0",
+            port=8000,
+            reload=True,
+            log_level="info"
+        )
+        server = uvicorn.Server(config)
+        await server.serve()
+        
+    except Exception as e:
+        logger.error(f"System launch failed: {e}")
+        raise
 
 if __name__ == "__main__":
-    app_path = os.path.join(os.path.dirname(__file__), "app.py")
-    while True:
-        if len(sys.argv) > 1 and sys.argv[1] == "--direct":
-            import app
-            app.main()
-            if not check_restart():
-                break
-        else:
-            subprocess.run(["streamlit", "run", app_path])
-            if not check_restart():
-                break
-        time.sleep(1)  # Small delay before restart
+    asyncio.run(main())

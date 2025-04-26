@@ -18,10 +18,19 @@ class DataService:
         self.primary_source = "yahoo"
         self.backup_source = "alpha_vantage"
         self.api_keys = self._load_api_keys()
-        self.cache = redis.Redis(host='localhost', port=6379, db=0)
+        try:
+            self.cache = redis.Redis(
+                host=settings.REDIS_HOST,
+                port=settings.REDIS_PORT,
+                db=0,
+                decode_responses=True
+            )
+        except Exception as e:
+            logger.error(f"Redis connection failed: {e}")
+            self.cache = None
         self.websocket_url = "wss://ws.finnhub.io"
         self.logger = self._setup_logger()
-        self.rate_limiter = asyncio.Semaphore(5)  # Rate limiting
+        self.rate_limiter = asyncio.Semaphore(5)
 
     async def get_market_data(self, symbols: List[str], lookback_period: int = 252) -> pd.DataFrame:
         """Enhanced dual-channel data acquisition with caching"""

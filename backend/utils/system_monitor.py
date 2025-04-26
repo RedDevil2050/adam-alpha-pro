@@ -8,6 +8,7 @@ class SystemMonitor:
     def __init__(self):
         self.components = {}
         self.analysis_timings = {}
+        self.start_time = datetime.now()
         self._initialize_metrics()
 
     def _initialize_metrics(self):
@@ -168,3 +169,47 @@ class SystemMonitor:
 
     def _get_disk_trend(self) -> list:
         return self.metrics.get("disk_samples", [])[-10:]
+
+    def is_ready(self) -> Dict[str, bool]:
+        """Check if all system components are ready"""
+        component_status = {
+            name: info["status"] == "healthy"
+            for name, info in self.components.items()
+        }
+        
+        system_ready = all(component_status.values())
+        metrics_ready = len(self.metrics["cpu_samples"]) > 0
+        
+        return {
+            "ready": system_ready and metrics_ready,
+            "components": component_status,
+            "metrics_initialized": metrics_ready,
+            "uptime": self._calculate_uptime()
+        }
+
+    def check_market_readiness(self) -> Dict:
+        """Verify market system readiness"""
+        return {
+            "market_ready": all(c["status"] == "healthy" for c in self.components.values()),
+            "system_health": self.check_system_health()["status"],
+            "metrics_ready": len(self.metrics["cpu_samples"]) > 0,
+            "resources_available": self._check_resources(),
+            "market_status": "open" if self._is_market_hours() else "closed"
+        }
+
+    def _check_resources(self) -> bool:
+        """Check if system has sufficient resources"""
+        metrics = self.get_health_metrics()["system"]
+        return (
+            metrics["cpu_usage"] < 80 and
+            metrics["memory_usage"] < 85 and
+            metrics["disk_usage"] < 90
+        )
+
+    def _is_market_hours(self) -> bool:
+        """Check if within market hours"""
+        now = datetime.now()
+        # Simplified market hours check (9:30 AM - 4:00 PM EST)
+        market_open = now.replace(hour=9, minute=30, second=0)
+        market_close = now.replace(hour=16, minute=0, second=0)
+        return market_open <= now <= market_close
