@@ -1,17 +1,26 @@
-
-from pydantic_settings import BaseSettings
-import os
-import os
-import os
-
-from pydantic import root_validator
+from pydantic import BaseSettings
+from typing import Dict, List
 
 class Settings(BaseSettings):
-    agent_cache_ttl: int = 3600
-    vol_threshold: float = 0.05  # volatility threshold for regime shift
-    brain_smoothing_window: int = 3  # smoothing window for final score
-    alpha_vantage_key: str | None = None  # from ENV
+    API_KEYS: Dict[str, str]
+    DATABASE_URL: str
+    REDIS_URL: str
+    MARKET_SETTINGS: Dict[str, any] = {
+        'trading_hours': {
+            'start': '09:30',
+            'end': '16:00',
+            'timezone': 'America/New_York'
+        },
+        'risk_limits': {
+            'max_position_size': 0.1,
+            'max_drawdown': 0.15,
+            'volatility_target': 0.12
+        },
+        'execution': {
+            'max_slippage': 0.0015,
+            'min_liquidity': 1000000
+        }
+    }
 
-settings = Settings()
-
-settings = Settings()
+    class Config:
+        env_file = ".env"

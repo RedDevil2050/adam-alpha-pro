@@ -3,7 +3,8 @@ import numpy as np
 from backend.utils.data_provider import fetch_ohlcv_series
 from backend.utils.cache_utils import redis_client
 from backend.agents.technical.utils import tracker
-from .advanced_indicators import calculate_hurst_exponent, calculate_momentum_quality
+from backend.quant.core import QuantCore
+from backend.quant.indicators import TechnicalIndicators
 
 agent_name = "macd_agent"
 
@@ -15,7 +16,7 @@ async def run(symbol: str) -> dict:
         return cached
 
     # 2) Fetch OHLCV (API first, then scraper)
-    df = await fetch_ohlcv_series(symbol, source_preference=["api", "scrape"])
+    df = await fetch_ohlcv_series(symbol)
     if df is None or df.empty:
         result = {
             "symbol": symbol,
@@ -26,42 +27,41 @@ async def run(symbol: str) -> dict:
             "agent_name": agent_name
         }
     else:
-        close = df["close"]
-        volume = df["volume"]
+        # Calculate comprehensive indicators
+        indicators = TechnicalIndicators.calculate_all(df)
         
-        # Advanced indicators
-        hurst = calculate_hurst_exponent(close)
-        momentum_quality = calculate_momentum_quality(close)
+        # Get returns for risk analysis
+        returns = df['close'].pct_change().dropna()
+        risk_metrics = QuantCore.calculate_risk_metrics(returns)
         
-        # Enhanced MACD calculation
-        ema_short = close.ewm(span=12, adjust=False).mean()
-        ema_long = close.ewm(span=26, adjust=False).mean()
-        macd_line = ema_short - ema_long
-        signal_line = macd_line.ewm(span=9, adjust=False).mean()
+        # Enhanced MACD with risk adjustment
+        macd_hist = indicators['macd']
+        signal_strength = abs(macd_hist[-1]) / macd_hist.std()
         
-        # Composite scoring with new metrics
-        histogram = float(macd_line.iloc[-1] - signal_line.iloc[-1])
-        trend_strength = 1 if hurst > 0.5 else 0
-        quality_score = momentum_quality / 100
+        # Risk-adjusted score
+        risk_score = 1 - abs(risk_metrics['hist_var_95'])
+        final_score = signal_strength * risk_score
         
-        composite_score = (
-            0.4 * (1 if histogram > 0 else 0) +
-            0.3 * trend_strength +
-            0.3 * quality_score
-        )
-        
+        # Verdict logic with risk consideration
+        if final_score > 0.7 and risk_metrics['sharpe'] > 1:
+            verdict = "STRONG_BUY"
+        elif final_score > 0.5:
+            verdict = "BUY"
+        elif final_score < 0.3:
+            verdict = "AVOID"
+        else:
+            verdict = "HOLD"
+
         result = {
             "symbol": symbol,
-            "verdict": "BUY" if composite_score > 0.5 else "SELL",
-            "confidence": round(composite_score * 100, 2),
-            "value": round(histogram, 4),
+            "verdict": verdict,
+            "confidence": round(final_score * 100, 2),
+            "value": round(macd_hist[-1], 4),
             "details": {
-                "histogram": round(histogram, 4),
-                "hurst": round(hurst, 4),
-                "momentum_quality": round(momentum_quality, 2),
-                "composite_score": round(composite_score, 4)
+                "macd_signal": round(signal_strength, 4),
+                "risk_metrics": risk_metrics,
+                "technical_indicators": {k: round(float(v[-1]), 4) for k, v in indicators.items()}
             },
-            "score": composite_score,
             "agent_name": agent_name
         }
 

@@ -1,39 +1,56 @@
-import pandas as pd
-from backend.utils.data_provider import fetch_ohlcv_series
-from backend.utils.cache_utils import redis_client
-from backend.agents.technical.utils import compute_rsi, normalize_rsi, tracker
+from backend.agents.technical.base import TechnicalAgent
 
-agent_name = "rsi_agent"
+class RSIAgent(TechnicalAgent):
+    async def _execute(self, symbol: str, agent_outputs: dict) -> dict:
+        try:
+            df = await fetch_ohlcv_series(symbol)
+            if df is None or df.empty:
+                return self._error_response(symbol, "No data available")
 
-async def run(symbol: str) -> dict:
-    cache_key = f"{agent_name}:{symbol}"
-    # 1) Cache check
-    cached = await redis_client.get(cache_key)
-    if cached:
-        return cached
+            market_context = await self.get_market_context(symbol)
+            volatility = market_context.get('volatility', 0.2)
+            adjustments = self.get_volatility_adjustments(volatility)
+            
+            rsi = self._calculate_rsi(df["close"], period=int(14 * adjustments['period_adj']))
+            
+            # Adjust signals based on market regime
+            signals = self._get_regime_signals(rsi, market_context.get('regime', 'NEUTRAL'))
+            
+            return {
+                "symbol": symbol,
+                "verdict": signals['verdict'],
+                "confidence": signals['confidence'],
+                "value": round(rsi, 2),
+                "details": {
+                    "rsi": round(rsi, 2),
+                    "market_regime": market_context.get('regime')
+                },
+                "error": None,
+                "agent_name": self.__class__.__name__
+            }
 
-    # 2) Fetch OHLCV (API first, then scraper)
-    df = await fetch_ohlcv_series(symbol, source_preference=["api", "scrape"])
-    if df is None or df.empty:
-        result = {"symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None, "details": {}, "agent_name": agent_name}
-    else:
-        # 3) Compute RSI and normalize score
-        rsi = compute_rsi(df["close"])
-        score = normalize_rsi(rsi)
-        result = {
-            "symbol": symbol,
-            "verdict": "BUY" if score == 1.0 else ("AVOID" if score == 0.0 else "HOLD"),
-            "confidence": 1.0,
-            "value": round(rsi, 2),
-            "details": {"rsi": round(rsi, 2)},
-            "score": score,
-            "agent_name": agent_name
+        except Exception as e:
+            return self._error_response(symbol, str(e))
+
+    def _get_regime_signals(self, rsi: float, regime: str) -> dict:
+        base_oversold = 30
+        base_overbought = 70
+        
+        regime_adjustments = {
+            'BULL': {'oversold': 35, 'overbought': 75},
+            'BEAR': {'oversold': 25, 'overbought': 65},
+            'VOLATILE': {'oversold': 20, 'overbought': 80}
         }
+        
+        levels = regime_adjustments.get(regime, {'oversold': base_oversold, 'overbought': base_overbought})
+        
+        if rsi < levels['oversold']:
+            return {'verdict': 'BUY', 'confidence': self.adjust_for_market_regime(0.8, regime)}
+        elif rsi > levels['overbought']:
+            return {'verdict': 'SELL', 'confidence': self.adjust_for_market_regime(0.8, regime)}
+        return {'verdict': 'HOLD', 'confidence': 0.5}
 
-    # 4) Cache result for 1 hour
-    await redis_client.set(cache_key, result, ex=3600)
-
-    # 5) Update progress tracker
-    tracker.update("technical", agent_name, "implemented")
-
-    return result
+# For backwards compatibility
+async def run(symbol: str, agent_outputs: dict = {}) -> dict:
+    agent = RSIAgent()
+    return await agent.execute(symbol, agent_outputs)
