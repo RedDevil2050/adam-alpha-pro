@@ -1,0 +1,22 @@
+{
+  "name": "zion",
+  "version": "1.0.0",
+  "description": "Zion Market Analysis Platform",
+  "main": "index.js",
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "dependencies": {
+    "@chakra-ui/react": "^2.6.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-query": "^3.39.3",
+    "react-scripts": "5.0.1"
+  },
+  "devDependencies": {},
+  "author": "",
+  "license": "ISC"
+}
