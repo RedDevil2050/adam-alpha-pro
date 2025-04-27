@@ -10,31 +10,32 @@ from backend.api.models.validation import (
     CheckCategory, MetricCheck
 )
 from backend.config.settings import get_settings
-import sys  # Added import
-import json  # Added import
-import subprocess  # Added import
-import xml.etree.ElementTree as ET  # Added import
-from pathlib import Path  # Added import
-from typing import Dict, Any, Optional, Tuple  # Added import
-import re  # Added import
+import sys
+import json
+import subprocess
+import xml.etree.ElementTree as ET
+from pathlib import Path
+from typing import Dict, Any, Optional, Tuple
+import re
+import os
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
 project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))  # Ensure this is present if needed for model imports
-BASE_URL = "http://example.com"  # Define BASE_URL globally (update as needed)
-TEST_COMMAND_UNIT = "pytest tests/unit"  # Adjust path if needed
+sys.path.insert(0, str(project_root))
+BASE_URL = "http://localhost:8000"
+TEST_COMMAND_UNIT = "pytest tests/unit"
 TEST_COMMAND_INTEGRATION = "pytest tests/integration"
 TEST_COMMAND_E2E = "pytest tests/e2e"
-COVERAGE_COMMAND = "pytest --cov=backend --cov-report=xml"
+COVERAGE_COMMAND = "pytest --cov=./backend --cov-report xml:coverage.xml -n auto"
 COVERAGE_FILE = project_root / "coverage.xml"
-LOAD_TEST_RESULT_FILE = project_root / "load_test_results.json"  # Example
+LOAD_TEST_RESULT_FILE = project_root / "load_test_results.json"
 
 async def gather_metrics():
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(f"{BASE_URL}/metrics", timeout=15)  # Updated to use httpx
+            response = await client.get(f"{BASE_URL}/metrics", timeout=15)
             response.raise_for_status()
             metrics_text = response.text
             logger.info("/metrics endpoint fetched successfully.")
@@ -42,12 +43,12 @@ async def gather_metrics():
         resources = ResourceMetrics()
         operational = OperationalMetrics()
 
-        resources.cpu_usage_percent = parse_prometheus_metric(metrics_text, 'system_cpu_usage_percent')  # Updated metric
-        resources.memory_usage_percent = parse_prometheus_metric(metrics_text, 'system_memory_usage_percent')  # Updated metric
-        resources.disk_usage_percent = parse_prometheus_metric(metrics_text, 'system_disk_usage_percent')  # Updated metric
-        operational.auth_failures = parse_prometheus_metric(metrics_text, 'auth_failures_total')  # Ensure correct metric
+        resources.cpu_usage_percent = parse_prometheus_metric(metrics_text, 'system_cpu_usage_percent')
+        resources.memory_usage_percent = parse_prometheus_metric(metrics_text, 'system_memory_usage_percent')
+        resources.disk_usage_percent = parse_prometheus_metric(metrics_text, 'system_disk_usage_percent')
+        operational.auth_failures = parse_prometheus_metric(metrics_text, 'auth_failures_total')
 
-        return resources, operational  # Removed performance from return tuple
+        return resources, operational
     except Exception as e:
         logger.error(f"Error gathering metrics: {e}")
         return None, None
@@ -55,31 +56,26 @@ async def gather_metrics():
 async def check_readiness():
     try:
         readiness_data = {}
-        test_task = asyncio.create_task(run_tests())
-        metrics_task = asyncio.create_task(gather_metrics())
-        deps_task = asyncio.create_task(check_dependencies())  # Added dependencies task
-        perf_task = asyncio.to_thread(check_performance)  # Added performance task
+        async with httpx.AsyncClient() as client:
+            test_task = asyncio.create_task(run_tests())
+            metrics_task = asyncio.create_task(gather_metrics())
+            deps_task = asyncio.create_task(check_dependencies(client))
+            perf_task = asyncio.to_thread(check_performance)
 
-        readiness_data['testing'] = await test_task
-        resources_metrics, operational_metrics = await metrics_task  # Correctly unpack tuple
-        readiness_data['resources'] = resources_metrics
-        readiness_data['operational'] = operational_metrics
-        readiness_data['dependencies'] = await deps_task
-        readiness_data['performance'] = await perf_task
+            readiness_data['testing'] = await test_task
+            resources_metrics, operational_metrics = await metrics_task
+            readiness_data['resources'] = resources_metrics
+            readiness_data['operational'] = operational_metrics
+            readiness_data['dependencies'] = await deps_task
+            readiness_data['performance'] = await perf_task
 
-        # Remove timestamp and check_interval
-        # readiness_data['timestamp'] = datetime.now()
-        # readiness_data['check_interval'] = settings.READINESS_CHECK_INTERVAL
-
-        # Instantiate and validate the final readiness object
         readiness_report = DeploymentReadiness(**readiness_data)
-        logger.info("🏁 Market Readiness Check Complete.")
+        logger.info("Market Readiness Check Complete.")
         return readiness_report
     except Exception as e:
         logger.error(f"Error checking readiness: {e}")
         return None
 
-# Helper functions (ensure these are included)
 async def run_command(command):
     logger.info(f"Running command: {command}")
     process = await asyncio.create_subprocess_shell(
@@ -94,96 +90,194 @@ async def run_command(command):
         logger.error(f"Command error: {stderr.decode()}")
     return process.returncode, stdout.decode(), stderr.decode()
 
-def parse_prometheus_metric(metrics_text, metric_name):
-    pattern = re.compile(f'{metric_name}\s+([0-9\.]+)')
+def parse_prometheus_metric(metrics_text: str, metric_name: str, labels: Optional[Dict[str, str]] = None) -> Optional[float]:
+    """Parses a simple gauge or counter value from Prometheus text format."""
+    label_str = ""
+    if labels:
+        label_parts = [f'{k}="{v}"' for k, v in labels.items()]
+        label_str = "{" + ",".join(label_parts) + "}"
+
+    pattern_str = rf"^{metric_name}"
+    if label_str:
+        pattern_str += r"\{.*" + re.escape(label_str.strip('{}')) + r".*\}"
+    pattern_str += r"\s+([\d\.\+\-eE]+)"
+
+    pattern = re.compile(pattern_str, re.MULTILINE)
     match = pattern.search(metrics_text)
+
     if match:
-        return float(match.group(1))
+        try:
+            return float(match.group(1))
+        except ValueError:
+            logger.warning(f"Could not parse value for metric {metric_name}: {match.group(1)}")
+            return None
+    label_info = f" with labels {labels}" if labels else ""
+    logger.warning(f"Metric {metric_name}{label_info} not found in metrics output.")
     return None
 
-def parse_coverage_xml(file_path):
-    tree = ET.parse(file_path)
-    root = tree.getroot()
-    for element in root.findall('.//line'):
-        if element.get('number') == 'total':
-            return float(element.get('percent'))
-    return 0.0
+def parse_coverage_xml(file_path: Path) -> Optional[float]:
+    """Parses coverage percentage from coverage.xml."""
+    if not file_path.is_file():
+        logger.error(f"Coverage file not found: {file_path}")
+        return None
+    try:
+        tree = ET.parse(file_path)
+        root = tree.getroot()
+        line_rate = root.get('line-rate')
+        if line_rate:
+            return float(line_rate) * 100
+        logger.warning("Could not find 'line-rate' attribute in coverage.xml root.")
+        return None
+    except Exception as e:
+        logger.error(f"Error parsing coverage file {file_path}: {e}")
+        return None
 
-def read_load_test_results(file_path):
+def read_load_test_results(file_path: Path) -> Optional[Dict[str, Any]]:
+    """Reads load test results from a JSON file."""
+    if not file_path.is_file():
+        logger.warning(f"Load test result file not found: {file_path}")
+        return None
     try:
         with open(file_path, 'r') as f:
-            data = json.load(f)
-        return data.get('requests', {}).get('success', 0), data.get('requests', {}).get('fail', 0)
+            return json.load(f)
     except Exception as e:
-        logger.error(f"Error reading load test results: {e}")
-        return 0, 0
+        logger.error(f"Error reading load test results {file_path}: {e}")
+        return None
 
-async def check_api_health():
+async def check_dependencies(client: httpx.AsyncClient) -> DependencyStatus:
+    """Checks critical dependencies (e.g., Redis via health endpoint detail)."""
+    status = DependencyStatus()
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(f"{BASE_URL}/health", timeout=10)
-            response.raise_for_status()
-            return True
-    except Exception as e:
-        logger.error(f"API health check failed: {e}")
-        return False
-
-async def check_dependencies():
-    dep_status = {}
-    dep_status['database'] = True  # Placeholder
-    dep_status['message_queue'] = True  # Placeholder
-    return dep_status
-
-async def run_tests():
-    command = "pytest --cov=./backend --cov-report xml:coverage.xml -n auto"
-    return_code, stdout, stderr = await run_command(command)
-    if return_code == 0:
-        logger.info("Tests passed.")
-        return TestStatus(tests_run=10, tests_failed=0, coverage_percent=parse_coverage_xml('coverage.xml'))
-    else:
-        logger.error(f"Tests failed: {stderr}")
-        return TestStatus(tests_run=0, tests_failed=10, coverage_percent=0.0)
-
-def check_performance():
-    successes, failures = read_load_test_results('load_test_results.json')
-    total = successes + failures
-    if total > 0:
-        success_rate = (successes / total) * 100
-    else:
-        success_rate = 0
-    return PerformanceMetrics(latency=0.123, success_rate=success_rate)
-
-def print_report(report):
-    print("## Readiness Report")
-    print(f"Overall Ready: {report.overall_ready}")
-    print("\n### Testing")
-    print(f"Tests Run: {report.testing.tests_run}, Tests Failed: {report.testing.tests_failed}, Coverage: {report.testing.coverage_percent}%")
-    print("\n### Resources")
-    print(f"CPU Usage: {report.resources.cpu_usage_percent}, Memory Usage: {report.resources.memory_usage_percent}, Disk Usage: {report.resources.disk_usage_percent}")
-    print("\n### Operational")
-    print(f"Auth Failures: {report.operational.auth_failures}")
-    print("\n### Dependencies")
-    print(f"Database Ready: {report.dependencies.get('database', False)}, Message Queue Ready: {report.dependencies.get('message_queue', False)}")
-    print("\n### Performance")
-    print(f"Latency: {report.performance.latency}, Success Rate: {report.performance.success_rate}%")
-
-# Main execution block
-if __name__ == "__main__":
-    async def main():
-        final_report = await check_readiness()
-        if final_report:
-            print_report(final_report)
-            sys.exit(0 if final_report.overall_ready else 1)
+        # Assuming /health provides detailed dependency status
+        response = await client.get(f"{BASE_URL}/health", timeout=10)
+        if response.status_code == 200:
+            details = response.json()
+            # Adjust keys based on your actual /health response structure
+            status.redis_connection = details.get("dependencies", {}).get("redis") == "ok"
+            status.primary_api_connection = details.get("dependencies", {}).get("primary_api") == "ok" # Example
+            logger.info(f"Dependency check via /health: Redis={status.redis_connection}, PrimaryAPI={status.primary_api_connection}")
         else:
-            logger.error("Failed to generate readiness report.")
-            sys.exit(1)
+             logger.warning(f"Could not get detailed dependency status from /health (Status: {response.status_code})")
 
-    asyncio.run(main())
+    except Exception as e:
+        logger.error(f"Error checking dependencies via /health: {e}")
 
-# Reminder: Verify the exact Prometheus metric names used in `gather_metrics` by checking the output of your application's `/metrics` endpoint.
-# Verify the Prometheus metric names used in the `gather_metrics` function (e.g., system_cpu_usage_percent, auth_failures_total) against the actual output of your application's /metrics endpoint.
+    # Fallback/Alternative: Direct Redis check if possible/needed (requires redis library)
+    # try:
+    #     import redis.asyncio as aioredis
+    #     # Assumes REDIS_URL is accessible, e.g., from settings or env var
+    #     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379") # Or use settings.redis.REDIS_URL
+    #     redis = await aioredis.from_url(redis_url)
+    #     await redis.ping()
+    #     status.redis_connection = True
+    #     await redis.close()
+    #     logger.info("Direct Redis ping successful.")
+    # except Exception as redis_err:
+    #     logger.error(f"Direct Redis ping failed: {redis_err}")
+    #     status.redis_connection = False # Ensure it's marked false if direct check fails
 
-# After applying all changes, remember to test thoroughly:
-# 1. Run pytest to ensure all tests pass.
-# 2. Build and run the application using `docker-compose up --build`.
-# 3. Execute the updated readiness check script with `python deploy/check_readiness.py http://localhost:8000`.
+    return status
+
+async def run_tests() -> TestStatus:
+    """Runs unit, integration, and E2E tests and gathers coverage."""
+    status = TestStatus()
+    logger.info("--- Running Tests ---")
+
+    # Run test suites
+    unit_success, _, _ = await run_command(TEST_COMMAND_UNIT)
+    status.unit_tests_passed = unit_success == 0
+
+    integration_success, _, _ = await run_command(TEST_COMMAND_INTEGRATION)
+    status.integration_tests_passed = integration_success == 0
+
+    e2e_success, _, _ = await run_command(TEST_COMMAND_E2E)
+    status.e2e_tests_passed = e2e_success == 0
+
+    # Run coverage
+    cov_success, cov_stdout, cov_stderr = await run_command(COVERAGE_COMMAND)
+    if cov_success == 0 or "coverage: platform" in cov_stderr: # Command might exit non-zero but still generate report
+        status.coverage_percent = parse_coverage_xml(COVERAGE_FILE)
+    else:
+        logger.error("Coverage command failed to execute properly.")
+
+    # Critical paths - often a manual check or based on specific test tags/markers
+    # Simplistic assumption: E2E covers critical paths if they pass
+    status.critical_paths_covered = status.e2e_tests_passed
+
+    logger.info(f"Test Results: Unit={status.unit_tests_passed}, Integration={status.integration_tests_passed}, E2E={status.e2e_tests_passed}, Coverage={status.coverage_percent}%, CriticalPaths={status.critical_paths_covered}")
+    return status
+
+def check_performance() -> Optional[PerformanceMetrics]:
+    """Checks performance based on load test results."""
+    # This part is highly dependent on your load testing tool and output format
+    logger.info("--- Checking Performance from Load Tests ---")
+    load_results = read_load_test_results(LOAD_TEST_RESULT_FILE) # Use the correct read_load_test_results
+    if not load_results:
+        logger.warning("Could not read load test results. Skipping performance checks.")
+        return None
+
+    perf = PerformanceMetrics()
+    # Adapt keys based on your load_test_results.json structure
+    # Example keys from common tools like Locust:
+    perf.avg_latency_ms = load_results.get('stats', [{}])[0].get('avg_response_time')
+    # For P95, Locust often stores it in stats[0]['response_times'] as a dict {0.95: value}
+    p95_value = load_results.get('stats', [{}])[0].get('response_times', {}).get(0.95)
+    perf.p95_latency_ms = p95_value if p95_value is not None else load_results.get('p95_latency_ms') # Fallback
+
+    perf.requests_per_second = load_results.get('stats', [{}])[0].get('total_rps') or load_results.get('requests_per_second')
+
+    total_reqs = load_results.get('stats', [{}])[0].get('num_requests', 0)
+    failed_reqs = load_results.get('stats', [{}])[0].get('num_failures', 0)
+    if total_reqs > 0:
+        perf.success_rate_percent = ((total_reqs - failed_reqs) / total_reqs) * 100
+    else:
+        perf.success_rate_percent = 0.0
+
+    logger.info(f"Load Test Performance: AvgLatency={perf.avg_latency_ms}ms, P95Latency={perf.p95_latency_ms}ms, RPS={perf.requests_per_second}, SuccessRate={perf.success_rate_percent}%")
+    return perf
+
+def print_report(report: DeploymentReadiness):
+    """Prints a formatted readiness report to the console."""
+    print("\n" + "="*60)
+    print("          ZION MARKET READINESS REPORT")
+    print("="*60)
+    status = "✅ READY" if report.overall_ready else "❌ NOT READY"
+    print(f"\nOverall Status: {status}\n")
+
+    # Use the checks_summary generated by the DeploymentReadiness validator
+    if report.checks_summary:
+        for category in report.checks_summary:
+            cat_status = "✅" if category.category_passed else "❌"
+            print(f"\n--- {category.category_name} [{cat_status}] ---")
+            for check in category.checks:
+                check_status = "✅" if check.passed else "❌"
+                value_str = f"Value: {check.value}" if check.value is not None else ""
+                thresh_str = f"(Threshold: {check.threshold})" if check.threshold else ""
+                details_str = f"- {check.details}" if check.details else ""
+                print(f"  [{check_status}] {check.name:<25} {value_str:<25} {thresh_str:<20} {details_str}")
+    else:
+        print("\n--- Detailed Checks ---")
+        print("  (No detailed check summary available - validation might have failed early)")
+        # Fallback to printing raw data if checks_summary is empty
+        if report.testing:
+            print(f"  Testing: Unit={report.testing.unit_tests_passed}, Integration={report.testing.integration_tests_passed}, E2E={report.testing.e2e_tests_passed}, Coverage={report.testing.coverage_percent}%")
+        if report.resources:
+            print(f"  Resources: CPU={report.resources.cpu_usage_percent}%, Memory={report.resources.memory_usage_percent}%")
+        if report.operational:
+            print(f"  Operational: CacheHit={report.operational.cache_hit_ratio}, Errors={report.operational.error_rate_percent}%, AuthFails={report.operational.auth_failures}")
+        if report.dependencies:
+            print(f"  Dependencies: Redis={report.dependencies.redis_connection}, PrimaryAPI={report.dependencies.primary_api_connection}")
+        if report.performance:
+            print(f"  Performance: AvgLatency={report.performance.avg_latency_ms}ms, P95Latency={report.performance.p95_latency_ms}ms, Success={report.performance.success_rate_percent}%")
+
+
+    if report.recommendations:
+        print("\n--- Recommendations ---")
+        for rec in report.recommendations:
+            print(f"  - {rec}")
+
+    print("\n" + "="*60)
+
+# Reminder: Verify the Prometheus metric names used in the `gather_metrics` function
+# (e.g., system_cpu_usage_percent, auth_failures_total) against the actual output
+# of your application's /metrics endpoint.

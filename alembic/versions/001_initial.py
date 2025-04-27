@@ -33,12 +33,7 @@ def upgrade():
     from sqlalchemy.sql import text
     conn = op.get_bind()
     conn.execute(
-        text("""
-        INSERT INTO users (username, hashed_password, is_active, is_superuser)
-        VALUES ('test_e2e_user', :hashed_password, true, false)
-        ON CONFLICT (username) DO NOTHING
-        """),
-        {"hashed_password": "<hashed_password_for_test_user>"} # Replace <hashed_password_for_test_user> with the actual hashed password
+        "INSERT INTO users (email, hashed_password, is_active, is_superuser) VALUES ('test@example.com', '<hashed_password_for_test_user>', TRUE, FALSE)"
     )
 
 
