@@ -1,39 +1,28 @@
 version: '3.8'
+
 services:
   backend:
     build: .
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - API_KEY=${API_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - ALPHA_VANTAGE_KEY=${ALPHA_VANTAGE_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
     ports:
       - "8000:8000"
-    volumes:
-      - .:/app
-    environment:
-      - ENVIRONMENT=development
-      - REDIS_URL=redis://redis:6379
-      - TEST_MODE=true
     depends_on:
       redis:
         condition: service_healthy
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
 
   redis:
     image: redis:alpine
     ports:
       - "6379:6379"
-    restart: unless-stopped
-    command: redis-server --appendonly yes
-    volumes:
-      - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
+      interval: 5s
+      timeout: 3s
       retries: 3
-
-volumes:
-  redis_data:

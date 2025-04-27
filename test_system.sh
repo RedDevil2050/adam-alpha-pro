@@ -22,4 +22,20 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+# Add demo mode checks
+if [ "$1" == "--demo" ]; then
+    echo "Running in demonstration mode..."
+    
+    # Check market data quality
+    echo "Verifying market data quality..."
+    curl -s "http://localhost:8000/health/market" || {
+        echo "Market data check failed"
+        exit 1
+    }
+    
+    # Monitor system metrics
+    echo "System metrics:"
+    curl -s http://localhost:8000/metrics
+fi
+
 echo "All systems operational!"
