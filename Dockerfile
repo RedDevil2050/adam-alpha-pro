@@ -1,15 +1,2 @@
-FROM python:3.11-slim
-
-WORKDIR /app
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY . .
-
-ENV HOST=0.0.0.0
-ENV PORT=8000
-ENV WORKERS=4
-ENV LOG_LEVEL=info
-
-CMD ["python", "launch.py"]
+# Build stage.dockerfile
+COPY . .  # Ensures the necessary code is copied from the project root

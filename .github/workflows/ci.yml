@@ -1,16 +1,139 @@
-name: CI
-on: [push, pull_request]
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ] # Trigger on push to main
+  pull_request:
+    branches: [ main ]
+
 jobs:
   test:
     runs-on: ubuntu-latest
     services:
       redis:
-        image: redis:5.0
-        ports: ['6379:6379']
+        image: redis
+        ports:
+          - 6379:6379
+    steps:
+    - uses: actions/checkout@v3 # Use v3 or later
+    - name: Set up Python
+      uses: actions/setup-python@v4 # Use v4 or later
+      with:
+        python-version: '3.11'
+        cache: 'pip' # Cache dependencies
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-asyncio pytest-cov httpx # Ensure test/script deps are installed
+    - name: Run tests with coverage
+      run: | 
+        # Run tests and generate coverage.xml needed by readiness check
+        pytest --cov=backend --cov-report=xml --cov-report=term tests/unit tests/integration tests/e2e
+        # Note: Separated test runs for clarity in readiness script 
+
+  # Optional: Build Job (if you build images separately)
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+    - name: Login to Docker Hub # Or your container registry
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }} 
+    - name: Build and push API image
+      uses: docker/build-push-action@v4
+      with:
+        context: . # Assuming Dockerfile is in root
+        file: ./Dockerfile.dockerfile # Specify Dockerfile location
+        push: true # Push only on main branch merge, maybe false for PRs
+        tags: yourdockerhub/zion-api:latest # Replace with your image name
+
+  # Example: Deploy to Staging (Replace with your actual deployment steps)
+  deploy_staging:
+    needs: [test, build] # Depends on tests passing and image built
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' # Only deploy main branch
+    environment: staging # Optional: Define a GitHub environment for secrets/approvals
+    steps: 
+      - name: Deploy to Staging Environment
+        run: |
+          echo "Deploying image yourdockerhub/zion-api:latest to staging..."
+          # Add your deployment commands here (e.g., kubectl apply, docker-compose up, etc.)
+          # Ensure the staging environment is running at STAGING_URL
+          echo "Deployment simulated."
+          # Wait for deployment to stabilize
+          sleep 30
+
+  # Readiness Check against Staging/Preview Environment
+  check_readiness_staging:
+    needs: deploy_staging # Run after staging deployment
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' # Only check main branch deployment 
+    env:
+      # Pass the staging URL to the script
+      STAGING_URL: ${{ secrets.STAGING_APP_URL }} # Store your staging URL in GitHub secrets
+      # Pass any other env vars needed by the script or the app it tests
+      JWT_SECRET_KEY: ${{ secrets.STAGING_JWT_SECRET_KEY }}
+      REDIS_URL: ${{ secrets.STAGING_REDIS_URL }}
+      # Load test results might be artifacts from a previous load test job
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
-      - run: pip install -r requirements.lock.txt
-      - run: pytest tests/
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install script dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Install only deps needed for the readiness script + backend models
+          pip install httpx pydantic PyYAML # Add redis if direct check needed
+          # Install backend models dependencies if needed for import 
+          pip install sqlalchemy # Example if models use it
+      - name: Download Load Test Results (if applicable)
+        uses: actions/download-artifact@v3
+        with:
+          name: load-test-results
+          path: . # Download to root
+        # Continue even if artifact doesn't exist (optional)
+        continue-on-error: true
+      - name: Download Coverage Report (if generated in test job)
+        uses: actions/download-artifact@v3
+        with:
+          name: coverage-report
+          path: .
+        continue-on-error: true # Allow script to handle missing file
+
+      - name: Run Market Readiness Check
+        run: |
+          python deploy/check_readiness.py $STAGING_URL
+          # The script will exit non-zero if not ready, failing the job 
+
+  # Optional: Manual Approval Gate for Production
+  # approval:
+  #   needs: check_readiness_staging
+  #   runs-on: ubuntu-latest
+  #   if: github.ref == 'refs/heads/main'
+  #   environment:
+  #     name: production # Requires manual approval if environment configured
+  #   steps:
+  #     - name: Manual Approval Step
+  #       run: echo "Waiting for production deployment approval..."
+
+  # Example: Deploy to Production (Conditional on readiness and approval)
+  # deploy_production:
+  #   needs: [check_readiness_staging, approval] # Depends on readiness check passing
+  #   runs-on: ubuntu-latest
+  #   if: github.ref == 'refs/heads/main'
+  #   environment: production
+  #   steps:
+  #     - name: Deploy to Production Environment
+  #       run: |
+  #         echo "Deploying image yourdockerhub/zion-api:latest to production..."
+  #         # Add your production deployment commands here
+  #         echo "Production deployment simulated."

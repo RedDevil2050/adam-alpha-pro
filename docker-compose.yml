@@ -3,7 +3,7 @@ version: '3.8'
 services:
   backend:
     build:
-      context: ./backend
+      context: .  # Updated from ./backend to .
     ports:
       - "8000:8000"
     environment:

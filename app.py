@@ -1,3 +1,190 @@
+
+# backend/api/models/validation.py
+from pydantic import BaseModel, Field, validator, root_validator
+from typing import List, Dict, Any, Optional
+import logging
+
+logger = logging.getLogger(__name__)
+
+# --- Supporting Models ---
+
+class MetricCheck(BaseModel):
+    name: str
+    passed: bool = False
+    value: Optional[Any] = None
+    threshold: Optional[str] = None
+    details: Optional[str] = None # Optional extra info or error message
+
+class CheckCategory(BaseModel):
+    category_name: str
+    checks: List[MetricCheck] = []
+    category_passed: bool = False # Overall status for the category
+
+    @root_validator(pre=False, skip_on_failure=True)
+    def calculate_category_passed(cls, values):
+        checks = values.get('checks', [])
+        values['category_passed'] = all(check.passed for check in checks)
+        return values
+
+# --- Core Readiness Models ---
+
+class PerformanceMetrics(BaseModel):
+    avg_latency_ms: Optional[float] = None
+    p95_latency_ms: Optional[float] = None # 95th percentile latency
+    requests_per_second: Optional[float] = None
+    success_rate_percent: Optional[float] = None # From load test or monitoring
+
+class ResourceMetrics(BaseModel):
+    cpu_usage_percent: Optional[float] = None
+    memory_usage_percent: Optional[float] = None
+    disk_usage_percent: Optional[float] = None # If relevant
+
+class OperationalMetrics(BaseModel):
+    cache_hit_ratio: Optional[float] = None
+    error_rate_percent: Optional[float] = None # e.g., 5xx errors / total requests
+    auth_failures: Optional[int] = None
+
+class TestStatus(BaseModel):
+    unit_tests_passed: bool = False
+    integration_tests_passed: bool = False
+    e2e_tests_passed: bool = False
+    coverage_percent: Optional[float] = None
+    critical_paths_covered: bool = False # Could be manually set or inferred
+
+class DependencyStatus(BaseModel):
+    redis_connection: bool = False
+    primary_api_connection: bool = False # If applicable and testable
+    # Add other critical dependencies (DB, etc.)
+
+# --- Main Readiness Model ---
+
+class DeploymentReadiness(BaseModel):
+    overall_ready: bool = Field(default=False, description="Overall readiness status")
+    performance: Optional[PerformanceMetrics] = None
+    resources: Optional[ResourceMetrics] = None
+    operational: Optional[OperationalMetrics] = None
+    testing: Optional[TestStatus] = None
+    dependencies: Optional[DependencyStatus] = None
+    checks_summary: List[CheckCategory] = []
+    recommendations: List[str] = []
+
+    # --- Thresholds (Could be loaded from config) ---
+    THRESHOLD_AVG_LATENCY_MS: float = 1000.0
+    THRESHOLD_P95_LATENCY_MS: float = 2500.0
+    THRESHOLD_SUCCESS_RATE_PERCENT: float = 99.0
+    THRESHOLD_CPU_USAGE_PERCENT: float = 80.0
+    THRESHOLD_MEMORY_USAGE_PERCENT: float = 85.0
+    THRESHOLD_CACHE_HIT_RATIO: float = 0.70 # 70%
+    THRESHOLD_ERROR_RATE_PERCENT: float = 1.0 # Max 1% error rate
+    THRESHOLD_COVERAGE_PERCENT: float = 80.0
+
+    @root_validator(pre=False, skip_on_failure=True)
+    def perform_readiness_validation(cls, values):
+        """Validates all gathered metrics against thresholds and sets overall_ready."""
+        logger.info("Performing final readiness validation...")
+        perf = values.get('performance')
+        res = values.get('resources')
+        ops = values.get('operational')
+        test = values.get('testing')
+        deps = values.get('dependencies')
+        checks_summary: List[CheckCategory] = []
+        recommendations: List[str] = []
+        all_passed = True
+
+        # Helper to add checks
+        def add_check(category_list: List[CheckCategory], cat_name: str, check_name: str, is_passed: bool, val: Any, thresh: str, details: Optional[str] = None):
+            category = next((c for c in category_list if c.category_name == cat_name), None)
+            if not category:
+                category = CheckCategory(category_name=cat_name)
+                category_list.append(category)
+            category.checks.append(MetricCheck(name=check_name, passed=is_passed, value=val, threshold=thresh, details=details))
+            return is_passed
+
+        # 1. Performance Checks
+        cat_name = "Performance"
+        if perf:
+            if perf.avg_latency_ms is not None:
+                passed = add_check(checks_summary, cat_name, "Avg Latency", perf.avg_latency_ms <= cls.THRESHOLD_AVG_LATENCY_MS, f"{perf.avg_latency_ms:.0f}ms", f"<= {cls.THRESHOLD_AVG_LATENCY_MS:.0f}ms")
+                if not passed: all_passed = False; recommendations.append("Investigate high average latency.")
+            if perf.p95_latency_ms is not None:
+                 passed = add_check(checks_summary, cat_name, "P95 Latency", perf.p95_latency_ms <= cls.THRESHOLD_P95_LATENCY_MS, f"{perf.p95_latency_ms:.0f}ms", f"<= {cls.THRESHOLD_P95_LATENCY_MS:.0f}ms")
+                 if not passed: all_passed = False; recommendations.append("Investigate high P95 latency (tail latency).")
+            if perf.success_rate_percent is not None:
+                 passed = add_check(checks_summary, cat_name, "Success Rate", perf.success_rate_percent >= cls.THRESHOLD_SUCCESS_RATE_PERCENT, f"{perf.success_rate_percent:.1f}%", f">= {cls.THRESHOLD_SUCCESS_RATE_PERCENT:.1f}%")
+                 if not passed: all_passed = False; recommendations.append("Improve request success rate.")
+        else:
+             add_check(checks_summary, cat_name, "Metrics Available", False, "N/A", "Required", "Performance metrics missing")
+             all_passed = False
+
+        # 2. Resource Checks
+        cat_name = "Resources"
+        if res:
+            if res.cpu_usage_percent is not None:
+                 passed = add_check(checks_summary, cat_name, "CPU Usage", res.cpu_usage_percent < cls.THRESHOLD_CPU_USAGE_PERCENT, f"{res.cpu_usage_percent:.1f}%", f"< {cls.THRESHOLD_CPU_USAGE_PERCENT:.0f}%")
+                 if not passed: all_passed = False; recommendations.append("Optimize CPU usage or scale resources.")
+            if res.memory_usage_percent is not None:
+                 passed = add_check(checks_summary, cat_name, "Memory Usage", res.memory_usage_percent < cls.THRESHOLD_MEMORY_USAGE_PERCENT, f"{res.memory_usage_percent:.1f}%", f"< {cls.THRESHOLD_MEMORY_USAGE_PERCENT:.0f}%")
+                 if not passed: all_passed = False; recommendations.append("Investigate memory leaks or optimize memory usage.")
+        else:
+             add_check(checks_summary, cat_name, "Metrics Available", False, "N/A", "Required", "Resource metrics missing")
+             all_passed = False
+
+        # 3. Operational Checks
+        cat_name = "Operational"
+        if ops:
+            if ops.cache_hit_ratio is not None:
+                 passed = add_check(checks_summary, cat_name, "Cache Hit Ratio", ops.cache_hit_ratio >= cls.THRESHOLD_CACHE_HIT_RATIO, f"{ops.cache_hit_ratio*100:.1f}%", f">= {cls.THRESHOLD_CACHE_HIT_RATIO*100:.0f}%")
+                 if not passed: all_passed = False; recommendations.append("Improve caching strategy.")
+            if ops.error_rate_percent is not None:
+                 passed = add_check(checks_summary, cat_name, "Error Rate", ops.error_rate_percent <= cls.THRESHOLD_ERROR_RATE_PERCENT, f"{ops.error_rate_percent:.2f}%", f"<= {cls.THRESHOLD_ERROR_RATE_PERCENT:.1f}%")
+                 if not passed: all_passed = False; recommendations.append("Investigate application errors.")
+            if ops.auth_failures is not None: # Example check, threshold might vary
+                 passed = add_check(checks_summary, cat_name, "Auth Failures", ops.auth_failures < 100, f"{ops.auth_failures}", "< 100", "Monitor unusual auth activity")
+                 # This might be informational rather than blocking
+        else:
+             add_check(checks_summary, cat_name, "Metrics Available", False, "N/A", "Required", "Operational metrics missing")
+             all_passed = False
+
+        # 4. Testing Checks
+        cat_name = "Testing"
+        if test:
+            passed = add_check(checks_summary, cat_name, "Unit Tests", test.unit_tests_passed, str(test.unit_tests_passed), "True")
+            if not passed: all_passed = False; recommendations.append("Fix failing unit tests.")
+            passed = add_check(checks_summary, cat_name, "Integration Tests", test.integration_tests_passed, str(test.integration_tests_passed), "True")
+            if not passed: all_passed = False; recommendations.append("Fix failing integration tests.")
+            passed = add_check(checks_summary, cat_name, "E2E Tests", test.e2e_tests_passed, str(test.e2e_tests_passed), "True")
+            if not passed: all_passed = False; recommendations.append("Fix failing E2E tests.")
+            if test.coverage_percent is not None:
+                 passed = add_check(checks_summary, cat_name, "Test Coverage", test.coverage_percent >= cls.THRESHOLD_COVERAGE_PERCENT, f"{test.coverage_percent:.1f}%", f">= {cls.THRESHOLD_COVERAGE_PERCENT:.0f}%")
+                 if not passed: all_passed = False; recommendations.append("Increase test coverage.")
+            passed = add_check(checks_summary, cat_name, "Critical Paths Covered", test.critical_paths_covered, str(test.critical_paths_covered), "True")
+            if not passed: all_passed = False; recommendations.append("Ensure critical paths are covered by tests.")
+        else:
+             add_check(checks_summary, cat_name, "Status Available", False, "N/A", "Required", "Test status missing")
+             all_passed = False
+
+        # 5. Dependency Checks
+        cat_name = "Dependencies"
+        if deps:
+            passed = add_check(checks_summary, cat_name, "Redis Connection", deps.redis_connection, str(deps.redis_connection), "True")
+            if not passed: all_passed = False; recommendations.append("Check Redis service and connection.")
+            passed = add_check(checks_summary, cat_name, "Primary API Connection", deps.primary_api_connection, str(deps.primary_api_connection), "True")
+            if not passed: all_passed = False; recommendations.append("Check connection to primary data API.")
+            # Add checks for other dependencies
+        else:
+             add_check(checks_summary, cat_name, "Status Available", False, "N/A", "Required", "Dependency status missing")
+             all_passed = False
+
+        # Final calculation for categories
+        for category in checks_summary:
+            category.category_passed = all(check.passed for check in category.checks)
+
+        values['overall_ready'] = all_passed
+        values['checks_summary'] = checks_summary
+        values['recommendations'] = recommendations
+        logger.info(f"Readiness validation complete. Overall Ready: {all_passed}")
+        return values
+
 import streamlit as st
 import socket
 import sys
