@@ -2,27 +2,23 @@
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
 import httpx
 from backend.api.models.validation import (
     DeploymentReadiness, PerformanceMetrics, ResourceMetrics,
     OperationalMetrics, TestStatus, DependencyStatus,
-    CheckCategory, MetricCheck
 )
 from backend.config.settings import get_settings
 import sys
 import json
-import subprocess
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional
 import re
-import os
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
-project_root = Path(__file__).parent.parent
+project_root = Path(__file__).resolve().parent.parent.parent  # Adjusted to point to the correct root
 sys.path.insert(0, str(project_root))
 BASE_URL = "http://localhost:8000"
 TEST_COMMAND_UNIT = "pytest tests/unit"
@@ -269,7 +265,6 @@ def print_report(report: DeploymentReadiness):
             print(f"  Dependencies: Redis={report.dependencies.redis_connection}, PrimaryAPI={report.dependencies.primary_api_connection}")
         if report.performance:
             print(f"  Performance: AvgLatency={report.performance.avg_latency_ms}ms, P95Latency={report.performance.p95_latency_ms}ms, Success={report.performance.success_rate_percent}%")
-
 
     if report.recommendations:
         print("\n--- Recommendations ---")
