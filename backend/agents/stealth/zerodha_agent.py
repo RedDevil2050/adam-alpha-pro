@@ -1,6 +1,7 @@
 from backend.agents.stealth.base import StealthAgentBase
 import httpx
 from bs4 import BeautifulSoup
+import lxml  # Faster parser
 from loguru import logger
 
 agent_name = "zerodha_agent"
@@ -39,7 +40,7 @@ class ZerodhaAgent(StealthAgentBase):
         headers = {'User-Agent': 'Mozilla/5.0'}
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.get(url, headers=headers)
-            soup = BeautifulSoup(response.text, 'html.parser')
+            soup = BeautifulSoup(response.text, 'lxml')
             
             return {
                 "metrics": self._extract_metrics(soup),
@@ -50,18 +51,20 @@ class ZerodhaAgent(StealthAgentBase):
         metrics = data.get("metrics", {})
         margins = data.get("margins", {})
         
-        # Calculate composite score based on available metrics
-        score_components = []
+        # Use list comprehension for better performance
+        score_components = [
+            min(float(metrics["delivery_percentage"].strip("%")) / 70, 1.0)
+            if "delivery_percentage" in metrics
+            else None,
+            
+            1.0 if float(margins.get("margin_required", "0").replace(",", "")) < 100000 
+            else 0.5 if "margin_required" in margins
+            else None
+        ]
         
-        if "delivery_percentage" in metrics:
-            del_pct = float(metrics["delivery_percentage"].strip("%"))
-            score_components.append(min(del_pct / 70, 1.0))
-            
-        if "margin_required" in margins:
-            margin = float(margins["margin_required"].replace(",", ""))
-            score_components.append(1.0 if margin < 100000 else 0.5)
-            
-        return sum(score_components) / max(len(score_components), 1)
+        # Filter None values and calculate average
+        valid_scores = [s for s in score_components if s is not None]
+        return sum(valid_scores) / max(len(valid_scores), 1)
 
     def _get_verdict(self, score: float) -> str:
         if score > 0.7:
@@ -73,27 +76,35 @@ class ZerodhaAgent(StealthAgentBase):
     def _extract_metrics(self, soup) -> dict:
         metrics = {}
         try:
+            # Use CSS selector once and cache results
             metrics_div = soup.select_one('.market-metrics')
             if metrics_div:
-                for row in metrics_div.select('.metric-row'):
-                    label = row.select_one('.label').text.strip()
-                    value = row.select_one('.value').text.strip()
-                    metrics[label.lower().replace(" ", "_")] = value
-        except Exception:
-            pass
+                # Use dictionary comprehension for better performance
+                metrics = {
+                    row.select_one('.label').text.strip().lower().replace(" ", "_"):
+                    row.select_one('.value').text.strip()
+                    for row in metrics_div.select('.metric-row')
+                    if row.select_one('.label') and row.select_one('.value')
+                }
+        except Exception as e:
+            logger.warning(f"Metrics extraction failed: {e}")
         return metrics
 
     def _extract_margins(self, soup) -> dict:
         margins = {}
         try:
+            # Use CSS selector once and cache results
             margin_div = soup.select_one('.margin-details')
             if margin_div:
-                for row in margin_div.select('.margin-row'):
-                    label = row.select_one('.label').text.strip()
-                    value = row.select_one('.value').text.strip()
-                    margins[label.lower().replace(" ", "_")] = value
-        except Exception:
-            pass
+                # Use dictionary comprehension for better performance
+                margins = {
+                    row.select_one('.label').text.strip().lower().replace(" ", "_"):
+                    row.select_one('.value').text.strip()
+                    for row in margin_div.select('.margin-row')
+                    if row.select_one('.label') and row.select_one('.value')
+                }
+        except Exception as e:
+            logger.warning(f"Margins extraction failed: {e}")
         return margins
 
 async def run(symbol: str, agent_outputs: dict = {}) -> dict:
