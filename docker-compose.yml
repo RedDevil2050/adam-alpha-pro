@@ -2,27 +2,22 @@ version: '3.8'
 
 services:
   backend:
-    build: .
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - API_KEY=${API_KEY}
-      - JWT_SECRET=${JWT_SECRET}
-      - ALPHA_VANTAGE_KEY=${ALPHA_VANTAGE_KEY}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    build:
+      context: ./backend
     ports:
       - "8000:8000"
+    environment:
+      - PRIMARY_API_URL=https://api.example.com
     depends_on:
-      redis:
-        condition: service_healthy
+      - redis
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "3000:3000"
 
   redis:
     image: redis:alpine
     ports:
       - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 3
