@@ -38,7 +38,7 @@ def upgrade():
         VALUES ('test_e2e_user', :hashed_password, true, false)
         ON CONFLICT (username) DO NOTHING
         """),
-        {"hashed_password": "<hashed_password_for_test_user>"}
+        {"hashed_password": "<hashed_password_for_test_user>"} # Replace <hashed_password_for_test_user> with the actual hashed password
     )
 
 
