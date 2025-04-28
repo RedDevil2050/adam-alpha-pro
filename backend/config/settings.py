@@ -1,6 +1,7 @@
 import os
 from typing import Dict, Any, Optional, List
 from pydantic import BaseSettings, Field, validator
+from pydantic.env_settings import SettingsSourceCallable
 import logging
 from pathlib import Path
 import json
@@ -16,6 +17,39 @@ def get_secret_value(secret_name: str, default: Any = None) -> Any:
         # During initial setup, secrets_manager might not be available
         return os.getenv(secret_name, default)
 
+class BaseSecretHandlingConfig:
+    """Base class for Pydantic Config inner classes needing secret handling."""
+    env_file = ".env"
+    case_sensitive = True
+    secrets_dir = None # Disable pydantic's default secrets handling
+
+    @classmethod
+    def customise_sources(
+        cls,
+        init_settings: SettingsSourceCallable,
+        env_settings: SettingsSourceCallable,
+        file_secret_settings: SettingsSourceCallable,
+    ) -> tuple[SettingsSourceCallable, ...]:
+        """
+        Override Pydantic settings sources to prioritize our SecretsManager
+        for fields defined in the inheriting class.
+        """
+        return (
+            init_settings,
+            env_settings,
+            # Custom source using get_secret_value
+            lambda settings_cls: { # Use settings_cls passed by Pydantic
+                field_name: get_secret_value(
+                    # Get env var name from Field extra if specified, otherwise use uppercase field name
+                    settings_cls.__fields__[field_name].field_info.extra.get('env') or field_name.upper(),
+                    settings_cls.__fields__[field_name].default # Provide default value from Field
+                )
+                for field_name in settings_cls.__fields__
+                # Assumes all fields in the inheriting class might use secrets
+            },
+            # file_secret_settings, # Keep disabled
+        )
+
 class APIKeys(BaseSettings):
     """API keys for various data providers"""
     ALPHA_VANTAGE_KEY: Optional[str] = Field(None, env="ALPHA_VANTAGE_KEY")
@@ -27,22 +61,8 @@ class APIKeys(BaseSettings):
     IEX_CLOUD_API_KEY: Optional[str] = Field(None, env="IEX_CLOUD_API_KEY")
     MARKETSTACK_API_KEY: Optional[str] = Field(None, env="MARKETSTACK_API_KEY")
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-        secrets_dir = None  # Disable pydantic's secrets handling
-
-        @classmethod
-        def customise_sources(cls, init_settings, env_settings, file_secret_settings):
-            # Override to use our secrets manager
-            return (
-                init_settings,
-                env_settings,
-                lambda settings: {
-                    field: get_secret_value(field)
-                    for field in cls.__fields__
-                }
-            )
+    class Config(BaseSecretHandlingConfig):
+        pass # customise_sources and other settings are inherited
 
 class DataProviderSettings(BaseSettings):
     """Settings for data providers"""
@@ -73,22 +93,8 @@ class SecuritySettings(BaseSettings):
             raise ValueError("JWT_SECRET must be set to a secure random value")
         return v
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-        secrets_dir = None  # Disable pydantic's secrets handling
-
-        @classmethod
-        def customise_sources(cls, init_settings, env_settings, file_secret_settings):
-            # Override to use our secrets manager
-            return (
-                init_settings,
-                env_settings,
-                lambda settings: {
-                    field: get_secret_value(field)
-                    for field in cls.__fields__
-                }
-            )
+    class Config(BaseSecretHandlingConfig):
+        pass # customise_sources and other settings are inherited
 
 class DatabaseSettings(BaseSettings):
     """Database configuration"""
@@ -102,22 +108,8 @@ class DatabaseSettings(BaseSettings):
             raise ValueError("DATABASE_URL must be set to a valid connection string")
         return v
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-        secrets_dir = None
-
-        @classmethod
-        def customise_sources(cls, init_settings, env_settings, file_secret_settings):
-            return (
-                init_settings,
-                env_settings,
-                lambda settings: {
-                    "URL": get_secret_value("DATABASE_URL"),
-                    "POOL_SIZE": get_secret_value("DATABASE_POOL_SIZE", 5),
-                    "MAX_OVERFLOW": get_secret_value("DATABASE_MAX_OVERFLOW", 10)
-                }
-            )
+    class Config(BaseSecretHandlingConfig):
+        pass # customise_sources and other settings are inherited
 
 class Settings(BaseSettings):
     """Main settings class"""
