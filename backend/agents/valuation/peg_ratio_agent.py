@@ -2,8 +2,7 @@ import asyncio
 from backend.utils.data_provider import fetch_alpha_vantage # Use fetch_alpha_vantage
 from loguru import logger
 from backend.agents.decorators import standard_agent_execution # Import decorator
-# TODO: Import get_settings and add PegRatioAgentSettings to settings.py
-# from backend.config.settings import get_settings
+from backend.config.settings import get_settings # Added import
 
 agent_name = "peg_ratio_agent"
 AGENT_CATEGORY = "valuation" # Define category for the decorator
@@ -36,9 +35,9 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         - Requires company overview data containing the PEG ratio (e.g., from Alpha Vantage).
         - (Calculation fallback would require P/E ratio and a reliable EPS growth rate source).
 
-    Configuration Used (Requires manual addition to settings.py):
-        - `settings.agent_settings.peg_ratio.THRESHOLD_LOW_PEG`: Upper bound for 'UNDERVALUED'.
-        - `settings.agent_settings.peg_ratio.THRESHOLD_HIGH_PEG`: Upper bound for 'FAIRLY_VALUED'.
+    Configuration Used (from settings.py -> AgentSettings -> PegRatioAgentSettings): # Updated docstring section
+        - `THRESHOLD_LOW_PEG`: Upper bound for 'UNDERVALUED'.
+        - `THRESHOLD_HIGH_PEG`: Upper bound for 'FAIRLY VALUED'.
 
     Return Structure:
         A dictionary containing:
@@ -50,13 +49,13 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         - agent_name (str): The name of this agent.
         - error (str | None): Error message if an issue occurred (handled by decorator).
     """
-    # Boilerplate handled by decorator
-    # TODO: Fetch settings
-    # settings = get_settings()
-    # peg_settings = settings.agent_settings.peg_ratio
-    # Define thresholds directly for now, replace with settings later
-    THRESHOLD_LOW_PEG = 1.0
-    THRESHOLD_HIGH_PEG = 2.0
+    # Fetch settings
+    settings = get_settings()
+    peg_settings = settings.agent_settings.peg_ratio
+
+    # Thresholds now come from settings
+    # THRESHOLD_LOW_PEG = 1.0 # Removed hardcoded value
+    # THRESHOLD_HIGH_PEG = 2.0 # Removed hardcoded value
 
     # Fetch overview data which contains PE Ratio and PEG Ratio
     # Note: Alpha Vantage provides PEG directly, but also PE and Analyst Target Price (which might imply growth)
@@ -128,13 +127,13 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         # Negative PEG usually means negative earnings (negative PE) or zero/negative growth
         verdict = "NEGATIVE_OR_ZERO_PEG" # Specific case
         confidence = 0.6 # Confidence that the value is problematic or indicates negative earnings/growth
-    elif peg_ratio < THRESHOLD_LOW_PEG:
+    elif peg_ratio < peg_settings.THRESHOLD_LOW_PEG: # Use setting
         verdict = "UNDERVALUED" # Standardized verdict (potentially high growth for price)
         confidence = 0.7
-    elif peg_ratio <= THRESHOLD_HIGH_PEG:
+    elif peg_ratio <= peg_settings.THRESHOLD_HIGH_PEG: # Use setting
         verdict = "FAIRLY_VALUED" # Standardized verdict
         confidence = 0.5
-    else: # peg_ratio > THRESHOLD_HIGH_PEG
+    else: # peg_ratio > peg_settings.THRESHOLD_HIGH_PEG
         verdict = "OVERVALUED" # Standardized verdict (potentially low growth for price)
         confidence = 0.4
 
@@ -149,9 +148,8 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
             "data_source": data_source,
             "raw_peg_provided": peg_ratio_str, # Include raw value for context
             "raw_pe_provided": pe_ratio_str,
-            # TODO: Add thresholds from settings to details
-            "threshold_undervalued": THRESHOLD_LOW_PEG, # Using placeholder value for now
-            "threshold_overvalued": THRESHOLD_HIGH_PEG  # Using placeholder value for now
+            "threshold_undervalued": peg_settings.THRESHOLD_LOW_PEG, # Use setting
+            "threshold_overvalued": peg_settings.THRESHOLD_HIGH_PEG  # Use setting
         },
         "agent_name": agent_name
     }

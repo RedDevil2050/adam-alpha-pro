@@ -2,8 +2,7 @@ import asyncio
 from backend.utils.data_provider import fetch_price_point, fetch_alpha_vantage # Use fetch_alpha_vantage
 from loguru import logger
 from backend.agents.decorators import standard_agent_execution # Import decorator
-# TODO: Import get_settings and add DividendYieldAgentSettings to settings.py
-# from backend.config.settings import get_settings
+from backend.config.settings import get_settings # Added import
 
 agent_name = "dividend_yield_agent"
 AGENT_CATEGORY = "valuation" # Define category for the decorator
@@ -41,8 +40,10 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         - Requires current stock price (`fetch_price_point`).
         - Requires company overview data (`fetch_alpha_vantage`) for yield/DPS or fallback calculation.
 
-    Configuration Used (Requires manual addition to settings.py):
-        - Thresholds for HIGH_YIELD, ATTRACTIVE_YIELD, MODERATE_YIELD (e.g., `settings.agent_settings.dividend_yield.THRESHOLD_HIGH`)
+    Configuration Used (from settings.py -> AgentSettings -> DividendYieldAgentSettings): # Updated docstring section
+        - `THRESHOLD_HIGH`: Minimum yield % for 'HIGH_YIELD'.
+        - `THRESHOLD_ATTRACTIVE`: Minimum yield % for 'ATTRACTIVE_YIELD'.
+        - `THRESHOLD_MODERATE`: Minimum yield % for 'MODERATE_YIELD'.
 
     Return Structure:
         A dictionary containing:
@@ -54,14 +55,9 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         - agent_name (str): The name of this agent.
         - error (str | None): Error message if an issue occurred (handled by decorator).
     """
-    # Boilerplate handled by decorator
-    # TODO: Fetch settings
-    # settings = get_settings()
-    # yield_settings = settings.agent_settings.dividend_yield
-    # Define thresholds directly for now, replace with settings later
-    THRESHOLD_HIGH = 5.0
-    THRESHOLD_ATTRACTIVE = 2.5
-    THRESHOLD_MODERATE = 1.0
+    # Fetch settings
+    settings = get_settings()
+    yield_settings = settings.agent_settings.dividend_yield
 
     dividend_yield = None
     current_price = None
@@ -152,13 +148,13 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     dividend_yield_percent = dividend_yield * 100
 
     # Score based on dividend yield ranges (Core Logic)
-    if dividend_yield_percent > THRESHOLD_HIGH:
+    if dividend_yield_percent > yield_settings.THRESHOLD_HIGH: # Use setting
         verdict = "HIGH_YIELD"
         confidence = 0.8
-    elif dividend_yield_percent > THRESHOLD_ATTRACTIVE:
+    elif dividend_yield_percent > yield_settings.THRESHOLD_ATTRACTIVE: # Use setting
         verdict = "ATTRACTIVE_YIELD"
         confidence = 0.7
-    elif dividend_yield_percent > THRESHOLD_MODERATE:
+    elif dividend_yield_percent > yield_settings.THRESHOLD_MODERATE: # Use setting
         verdict = "MODERATE_YIELD"
         confidence = 0.5
     else:
@@ -176,10 +172,9 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
             "current_price": round(current_price, 2) if current_price is not None else None,
             "annual_dividend_per_share": round(annual_dividend, 4) if annual_dividend is not None else None,
             "data_source": data_source,
-            # TODO: Add thresholds from settings to details
-            "threshold_high": THRESHOLD_HIGH,
-            "threshold_attractive": THRESHOLD_ATTRACTIVE,
-            "threshold_moderate": THRESHOLD_MODERATE
+            "threshold_high": yield_settings.THRESHOLD_HIGH, # Use setting
+            "threshold_attractive": yield_settings.THRESHOLD_ATTRACTIVE, # Use setting
+            "threshold_moderate": yield_settings.THRESHOLD_MODERATE # Use setting
         },
         "agent_name": agent_name
     }
