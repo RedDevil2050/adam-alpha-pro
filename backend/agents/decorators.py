@@ -1,98 +1,98 @@
 """Decorators for standardizing agent execution patterns."""
 
 import functools
-import traceback
+import json
 from loguru import logger
 from backend.utils.cache_utils import redis_client
-# Assuming tracker is globally accessible or passed differently.
-# If tracker needs specific category/agent context, this might need adjustment.
-# from backend.agents.intelligence.utils import tracker # Example path, adjust as needed
+# Assuming tracker is accessible globally or passed differently.
+# If tracker needs specific instance per category/agent, this needs adjustment.
+# from backend.monitor.tracker import tracker # Example import path
 
 def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 3600):
     """
-    Decorator to handle standard agent boilerplate:
+    Decorator to handle standard agent execution boilerplate:
     - Cache checking
-    - Error handling and logging
-    - Standardized result formatting (success, NO_DATA, ERROR)
+    - Error handling
+    - Standard result formatting (success/error)
     - Cache setting on success
-    - Tracker updates (Placeholder - requires tracker implementation details)
+    - Tracker updates (placeholder - needs refinement based on tracker implementation)
     """
     def decorator(func):
         @functools.wraps(func)
-        async def wrapper(*args, **kwargs): # More flexible args
-            # Assume symbol is the first positional argument if present
-            symbol = args[0] if args and isinstance(args[0], str) else kwargs.get("symbol", "unknown")
+        async def wrapper(*args, **kwargs): # Accept symbol and any other args/kwargs
+            # Extract symbol, assuming it's the first positional argument
+            # This might need adjustment if agents have different signatures
+            if not args:
+                 logger.error(f"Agent {agent_name} called without symbol argument.")
+                 # Return error or raise? Returning standard error for now.
+                 return {
+                    "symbol": None, # Cannot determine symbol
+                    "verdict": "ERROR",
+                    "confidence": 0.0,
+                    "value": None,
+                    "details": {},
+                    "error": "Agent called without symbol argument.",
+                    "agent_name": agent_name
+                 }
+
+            symbol = args[0]
             cache_key = f"{agent_name}:{symbol}"
 
             try:
                 # 1. Cache Check
-                cached_str = await redis_client.get(cache_key)
-                if cached_str:
+                cached_data = await redis_client.get(cache_key)
+                if cached_data:
                     try:
-                        # Attempt to deserialize cached data (assuming JSON string)
-                        cached_data = await redis_client.get_json(cache_key)
-                        if cached_data:
-                             logger.debug(f"Cache hit for {cache_key}")
-                             return cached_data
-                        else:
-                             logger.warning(f"Cache hit for {cache_key} but failed to parse JSON.")
-                             # Proceed to execute function if cache is invalid
-                    except Exception as e:
-                        logger.warning(f"Error reading cache for {cache_key}: {e}. Re-running agent.")
-                        # Proceed to execute function if cache is corrupted
+                        # Attempt to deserialize cached data
+                        cached_result = json.loads(cached_data)
+                        logger.debug(f"Cache hit for {cache_key}")
+                        # Potentially add cache hit monitoring here
+                        return cached_result
+                    except json.JSONDecodeError:
+                        logger.warning(f"Failed to decode cached JSON for {cache_key}. Fetching fresh data.")
+                        # Proceed to fetch fresh data if cache is corrupted
 
-                logger.debug(f"Cache miss for {cache_key}. Running agent {agent_name}.")
+                logger.debug(f"Cache miss for {cache_key}")
                 # 2. Execute Core Logic
-                result = await func(*args, **kwargs) # Pass all args/kwargs
+                # Pass through symbol and any extra args/kwargs (like agent_outputs)
+                result = await func(*args, **kwargs)
 
-                # Ensure result is a dictionary before proceeding
-                if not isinstance(result, dict):
-                     logger.error(f"Agent {agent_name} for {symbol} did not return a dictionary. Returned: {type(result)}")
-                     # Return a standard error format if the agent's return is invalid
-                     return {
-                         "symbol": symbol,
-                         "verdict": "ERROR",
-                         "confidence": 0.0,
-                         "value": None,
-                         "details": {"error": "Agent implementation returned invalid type."},
-                         "error": "Agent implementation returned invalid type.",
-                         "agent_name": agent_name
-                     }
-
-
-                # Add agent_name to the result if not already present (for success/NO_DATA)
-                if "agent_name" not in result:
-                    result["agent_name"] = agent_name
-
-                # 3. Cache Result (only on success, not NO_DATA or ERROR)
-                # Check for specific verdicts that indicate success
-                successful_verdicts = result.get("verdict") not in ["ERROR", "NO_DATA", None]
-                if successful_verdicts:
+                # 3. Cache Result (only on success/valid data)
+                if result and result.get("verdict") not in ["ERROR", "NO_DATA", None]:
                     try:
-                        await redis_client.set_json(cache_key, result, ex=cache_ttl)
-                        logger.debug(f"Cached result for {cache_key} with TTL {cache_ttl}s.")
-                    except Exception as e:
-                         logger.error(f"Failed to cache result for {agent_name} ({symbol}): {e}")
+                        # Serialize result before caching
+                        await redis_client.set(cache_key, json.dumps(result), ex=cache_ttl)
+                        logger.debug(f"Cached result for {cache_key} with TTL {cache_ttl}s")
+                        # Potentially add cache miss/set monitoring here
+                    except TypeError as json_err:
+                         logger.error(f"Failed to serialize result for {cache_key} to JSON: {json_err}. Result not cached.")
+                    except Exception as cache_err:
+                         logger.error(f"Failed to set cache for {cache_key}: {cache_err}. Result not cached.")
 
 
-                # 4. Update Tracker (Placeholder)
-                # This needs a proper implementation based on how 'tracker' is managed.
-                # Example: tracker.update(category, agent_name, "executed_success" if successful_verdicts else "executed_nodata")
-                # logger.debug(f"Tracker update placeholder for {category}/{agent_name}")
+                # 4. Update Tracker (Placeholder - adjust based on actual tracker implementation)
+                # This needs a reliable way to access the correct tracker instance.
+                # Example:
+                # try:
+                #     from backend.monitor.tracker import get_tracker # Or however it's accessed
+                #     tracker_instance = get_tracker()
+                #     status = "success" if result.get("verdict") != "ERROR" else "error"
+                #     tracker_instance.update_agent_status(category, agent_name, symbol, status)
+                # except Exception as tracker_err:
+                #     logger.warning(f"Failed to update tracker for {agent_name} ({symbol}): {tracker_err}")
 
                 return result
 
             except Exception as e:
                 # 5. Standard Error Handling
-                logger.error(f"Error executing agent {agent_name} for {symbol}: {e}
-{traceback.format_exc()}")
-                # tracker.update(category, agent_name, "execution_error") # Placeholder
+                logger.exception(f"Error executing agent {agent_name} for symbol {symbol}: {e}")
+                # Return standard error format
                 return {
                     "symbol": symbol,
                     "verdict": "ERROR",
                     "confidence": 0.0,
                     "value": None,
-                    "details": {"error": str(e)}, # Include error in details
+                    "details": {},
                     "error": str(e),
                     "agent_name": agent_name
                 }

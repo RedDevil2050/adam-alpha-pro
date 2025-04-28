@@ -1,61 +1,74 @@
-from typing import List
-from backend.agents.valuation.base import ValuationAgent
+import asyncio
+from backend.utils.data_provider import fetch_alpha_vantage # Use fetch_alpha_vantage
+from loguru import logger
+from backend.agents.decorators import standard_agent_execution # Import decorator
 
-class PERatioAgent(ValuationAgent):
-    def get_dependencies(self) -> List[str]:
-        return ["eps_agent"]
+agent_name = "pe_ratio_agent"
+AGENT_CATEGORY = "valuation" # Define category for the decorator
 
-    async def _execute(self, symbol: str, agent_outputs: dict) -> dict:
+@standard_agent_execution(agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600)
+async def run(symbol: str, agent_outputs: dict = None) -> dict:
+    # Boilerplate handled by decorator
+
+    # Fetch overview data which contains PE Ratio
+    overview_data = await fetch_alpha_vantage("query", {"function": "OVERVIEW", "symbol": symbol})
+
+    if not overview_data:
+        return {
+            "symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None,
+            "details": {"reason": "Could not fetch overview data from Alpha Vantage"},
+            "agent_name": agent_name
+        }
+
+    pe_ratio_str = overview_data.get("PERatio")
+    pe_ratio = None
+
+    if pe_ratio_str and pe_ratio_str.lower() not in ["none", "-", ""]:
         try:
-            price_data = await fetch_price_point(symbol)
-            current_price = price_data.get("latestPrice", 0)
-
-            eps = None
-            if "eps_agent" in agent_outputs:
-                eps = float(agent_outputs["eps_agent"]["value"])
-            else:
-                eps = await fetch_eps(symbol)
-
-            if not eps or eps <= 0 or not current_price:
-                return self._error_response(symbol, "Invalid data")
-
-            market_context = await self.get_market_context(symbol)
-            adjustments = self.get_regime_adjustments(market_context.get('regime', 'NEUTRAL'))
-            
-            pe_ratio = current_price / eps * adjustments['multiplier']
-            verdict = self._get_verdict(pe_ratio, adjustments)
-            confidence = self._calculate_confidence(pe_ratio, adjustments)
-
+            pe_ratio = float(pe_ratio_str)
+        except (ValueError, TypeError):
+            logger.warning(f"[{agent_name}] Could not parse PE ratio for {symbol}: {pe_ratio_str}")
             return {
-                "symbol": symbol,
-                "verdict": verdict,
-                "confidence": confidence,
-                "value": round(pe_ratio, 2),
-                "details": {
-                    "current_price": current_price,
-                    "eps": eps,
-                    "market_regime": market_context.get('regime')
-                },
-                "error": None,
-                "agent_name": self.__class__.__name__
+                "symbol": symbol, "verdict": "INVALID_DATA", "confidence": 0.1, "value": None,
+                "details": {"raw_pe_ratio": pe_ratio_str, "reason": "Could not parse PE ratio value"},
+                "agent_name": agent_name
             }
+    else:
+        # Handle cases where PE is explicitly None or missing
+        logger.warning(f"[{agent_name}] PE ratio not available for {symbol} in overview data.")
+        return {
+            "symbol": symbol, "verdict": "NO_DATA", "confidence": 0.5, "value": None, # Confidence 0.5 as we know it's missing
+            "details": {"raw_pe_ratio": pe_ratio_str, "reason": "PE ratio value not provided or is None"},
+            "agent_name": agent_name
+        }
 
-        except Exception as e:
-            return self._error_response(symbol, str(e))
+    # PE ratio is successfully parsed
+    # Determine verdict based on common thresholds (these are general and can vary by industry/market)
+    if pe_ratio <= 0:
+        # Negative or zero PE usually means negative earnings
+        verdict = "NEGATIVE_EARNINGS"
+        confidence = 0.7 # Confidence that the value indicates negative earnings
+    elif pe_ratio < 15:
+        verdict = "LOW_PE" # Potentially undervalued
+        confidence = 0.6
+    elif pe_ratio < 25:
+        verdict = "MODERATE_PE" # Often considered reasonable range
+        confidence = 0.5
+    else: # PE >= 25
+        verdict = "HIGH_PE" # Potentially overvalued, common for growth stocks
+        confidence = 0.4
 
-    def _get_verdict(self, pe_ratio: float, thresholds: dict) -> str:
-        if pe_ratio < thresholds['low']:
-            return "BUY"
-        elif pe_ratio < thresholds['high']:
-            return "HOLD"
-        return "AVOID"
+    # Create success result dictionary
+    result = {
+        "symbol": symbol,
+        "verdict": verdict,
+        "confidence": round(confidence, 4),
+        "value": round(pe_ratio, 2), # Return the PE ratio
+        "details": {
+            "pe_ratio": round(pe_ratio, 2),
+            "data_source": "alpha_vantage_overview"
+        },
+        "agent_name": agent_name
+    }
 
-    def _calculate_confidence(self, pe_ratio: float, thresholds: dict) -> float:
-        base_confidence = max(0.0, 100.0 - min(pe_ratio, 50.0) * 2)
-        return self.adjust_for_market_regime(base_confidence/100, 
-                                          market_context.get('regime', 'NEUTRAL'))
-
-# For backwards compatibility
-async def run(symbol: str, agent_outputs: dict = {}) -> dict:
-    agent = PERatioAgent()
-    return await agent.execute(symbol, agent_outputs)
+    return result

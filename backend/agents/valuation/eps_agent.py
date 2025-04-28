@@ -1,41 +1,66 @@
-
-from backend.utils.data_provider import fetch_eps
+from backend.utils.data_provider import fetch_alpha_vantage # Use fetch_alpha_vantage
 from loguru import logger
+from backend.agents.decorators import standard_agent_execution # Import decorator
 
 agent_name = "eps_agent"
+AGENT_CATEGORY = "valuation" # Define category for the decorator
 
-async def run(symbol: str, agent_outputs: dict = {}) -> dict:
-    try:
-        eps = await fetch_eps(symbol)
-        if not eps or eps <= 0:
+@standard_agent_execution(agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600)
+async def run(symbol: str, agent_outputs: dict = None) -> dict:
+    # Boilerplate handled by decorator
+
+    # Fetch overview data which contains EPS
+    overview_data = await fetch_alpha_vantage("query", {"function": "OVERVIEW", "symbol": symbol})
+
+    if not overview_data:
+        return {
+            "symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None,
+            "details": {"reason": "Could not fetch overview data from Alpha Vantage"},
+            "agent_name": agent_name
+        }
+
+    eps_str = overview_data.get("EPS")
+    eps = None
+
+    if eps_str and eps_str.lower() not in ["none", "-", ""]:
+        try:
+            eps = float(eps_str)
+        except (ValueError, TypeError):
+            logger.warning(f"[{agent_name}] Could not parse EPS for {symbol}: {eps_str}")
             return {
-                "symbol": symbol,
-                "verdict": "NO_DATA",
-                "confidence": 0.0,
-                "value": None,
-                "details": {"eps": eps},
-                "error": "Invalid EPS",
+                "symbol": symbol, "verdict": "INVALID_DATA", "confidence": 0.1, "value": None,
+                "details": {"raw_eps": eps_str, "reason": "Could not parse EPS value"},
                 "agent_name": agent_name
             }
-
+    else:
+        # Handle cases where EPS is explicitly None or missing
+        logger.warning(f"[{agent_name}] EPS not available for {symbol} in overview data.")
         return {
-            "symbol": symbol,
-            "verdict": "VALID",
-            "confidence": 100.0,
-            "value": round(eps, 2),
-            "details": {"eps": eps},
-            "error": None,
+            "symbol": symbol, "verdict": "NO_DATA", "confidence": 0.5, "value": None, # Confidence 0.5 as we know it's missing
+            "details": {"raw_eps": eps_str, "reason": "EPS value not provided or is None"},
             "agent_name": agent_name
         }
 
-    except Exception as e:
-        logger.error(f"EPS fetch error: {e}")
-        return {
-            "symbol": symbol,
-            "verdict": "ERROR",
-            "confidence": 0.0,
-            "value": None,
-            "details": {},
-            "error": str(e),
-            "agent_name": agent_name
-        }
+    # EPS is successfully parsed
+    # Determine verdict based on whether EPS is positive or negative
+    if eps > 0:
+        verdict = "POSITIVE_EPS"
+        confidence = 0.95
+    else:
+        verdict = "NEGATIVE_EPS"
+        confidence = 0.95 # High confidence in the sign
+
+    # Create success result dictionary
+    result = {
+        "symbol": symbol,
+        "verdict": verdict,
+        "confidence": round(confidence, 4),
+        "value": round(eps, 4), # Return the EPS value
+        "details": {
+            "eps": round(eps, 4),
+            "data_source": "alpha_vantage_overview"
+        },
+        "agent_name": agent_name
+    }
+
+    return result
