@@ -39,6 +39,15 @@ for i in {1..30}; do
         echo "🔍 Monitor your system at: http://localhost:8000/health"
         echo "📈 Trading pairs active: $ALLOWED_PAIRS"
         echo "⚠️ Emergency shutdown: ./deploy/shutdown.sh"
+        # Run deployment readiness check
+        echo "🩺 Running deployment readiness validation..."
+        if ! python3 deploy/check_readiness.py --wait; then
+            echo "❌ Deployment readiness check failed. See diagnostics above."
+            echo "Showing recent logs for troubleshooting:"
+            docker-compose -f deploy/docker-compose.yml logs --tail=100
+            exit 1
+        fi
+        echo "🎉 Deployment readiness check passed. System is ready for market!"
         exit 0
     fi
     echo "Waiting for system to stabilize... ($i/30)"
