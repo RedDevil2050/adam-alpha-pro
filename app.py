@@ -1,6 +1,5 @@
-
 # backend/api/models/validation.py
-from pydantic import BaseModel, Field, validator, root_validator
+from pydantic import BaseModel, Field, validator, model_validator
 from typing import List, Dict, Any, Optional
 import logging
 
@@ -20,7 +19,7 @@ class CheckCategory(BaseModel):
     checks: List[MetricCheck] = []
     category_passed: bool = False # Overall status for the category
 
-    @root_validator(pre=False, skip_on_failure=True)
+    @model_validator(mode="after")
     def calculate_category_passed(cls, values):
         checks = values.get('checks', [])
         values['category_passed'] = all(check.passed for check in checks)
@@ -78,7 +77,7 @@ class DeploymentReadiness(BaseModel):
     THRESHOLD_ERROR_RATE_PERCENT: float = 1.0 # Max 1% error rate
     THRESHOLD_COVERAGE_PERCENT: float = 80.0
 
-    @root_validator(pre=False, skip_on_failure=True)
+    @model_validator(mode="after")
     def perform_readiness_validation(cls, values):
         """Validates all gathered metrics against thresholds and sets overall_ready."""
         logger.info("Performing final readiness validation...")
@@ -201,6 +200,12 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Add a file handler to write logs to app.log
+file_handler = logging.FileHandler('logs/app.log')
+file_handler.setLevel(logging.INFO)
+file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+logger.addHandler(file_handler)
 
 def is_port_in_use(port):
     """Check if a port is in use with improved error handling and timeout"""
