@@ -109,12 +109,11 @@ class LoggingSettings(BaseSettings):
 class SecuritySettings(BaseSettings):
     """Security-related settings"""
 
-    # Use an alias to allow both JWT_SECRET and JWT_SECRET_KEY to work
-    JWT_SECRET: str = Field("test-jwt-secret-for-market-deployment-checks", env="JWT_SECRET_KEY")
+    # Use JWT_SECRET_KEY directly for consistency
+    JWT_SECRET_KEY: str = Field("test-jwt-secret-for-market-deployment-checks", env="JWT_SECRET_KEY")
     TOKEN_EXPIRATION: int = Field(3600, env="JWT_TOKEN_EXPIRATION")  # seconds
     ALGORITHM: str = Field("HS256", env="JWT_ALGORITHM")
-    
-    # Accept additional fields that might be present in the environment
+
     model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=True,
@@ -334,13 +333,12 @@ def get_settings() -> Settings:
     global _settings, settings  # Also update the settings export
     if _settings is None:
         try:
-            # For testing environment, provide a secure JWT secret to avoid validation errors
             if os.getenv("ENV") == "testing" or os.getenv("PYTEST_CURRENT_TEST"):
                 _settings = Settings(
                     ENV="testing",
                     DEBUG=True,
                     security=SecuritySettings(
-                        JWT_SECRET="secure-test-jwt-secret-for-testing-environment-only"
+                        JWT_SECRET_KEY="secure-test-jwt-secret-for-testing-environment-only"
                     ),
                     api_keys=APIKeys(),
                     database=DatabaseSettings(
@@ -351,24 +349,21 @@ def get_settings() -> Settings:
             else:
                 _settings = Settings()
                 logger.debug("Settings initialized successfully")
-            
-            # Set the exported settings variable
+
             settings = _settings
         except Exception as e:
             logger.error(f"Error initializing settings: {str(e)}")
-            # Provide default settings if there's an error
             _settings = Settings(
                 ENV="development",
                 DEBUG=True,
                 api_keys=APIKeys(),
                 security=SecuritySettings(
-                    JWT_SECRET="temporary-jwt-secret-for-development-only"
+                    JWT_SECRET_KEY="temporary-jwt-secret-for-development-only"
                 ),
                 database=DatabaseSettings(
                     URL="sqlite:///./default.db"
                 )
             )
-            # Set the exported settings variable
             settings = _settings
             logger.warning("Using default settings due to initialization error")
     return _settings
