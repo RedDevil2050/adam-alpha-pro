@@ -1,11 +1,9 @@
-from pydantic import BaseSettings
+import jwt
+from datetime import datetime, timedelta
 
-class SecuritySettings(BaseSettings):
-    JWT_SECRET_KEY: str
-    JWT_ALGORITHM: str = "HS256"
-    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-
-class Settings(BaseSettings):
-    security: SecuritySettings = SecuritySettings()
-
-settings = Settings()
+def create_access_token(data: dict, secret_key: str, algorithm: str, expires_delta: timedelta):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + expires_delta
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, secret_key, algorithm=algorithm)
+    return encoded_jwt

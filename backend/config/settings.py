@@ -63,12 +63,13 @@ class APIKeys(BaseSettings):
     QUANDL_API_KEY: Optional[str] = Field(None, env="QUANDL_API_KEY")
     IEX_CLOUD_API_KEY: Optional[str] = Field(None, env="IEX_CLOUD_API_KEY")
     MARKETSTACK_API_KEY: Optional[str] = Field(None, env="MARKETSTACK_API_KEY")
+    REACT_APP_BACKEND_URL: Optional[str] = Field(None, env="REACT_APP_BACKEND_URL")
 
     # Additional fields to resolve validation errors
     JWT_SECRET_KEY: Optional[str] = Field(None, env="JWT_SECRET_KEY")
     JWT_ALGORITHM: Optional[str] = Field(None, env="JWT_ALGORITHM")
     ACCESS_TOKEN_EXPIRE_MINUTES: Optional[int] = Field(None, env="ACCESS_TOKEN_EXPIRE_MINUTES")
-    REDIS_URL: Optional[str] = Field(None, env="REDIS_URL")
+    REDIS_URL: Optional[str] = Field('redis://localhost:6379/0', env="REDIS_URL")
     SLACK_WEBHOOK_URL: Optional[str] = Field(None, env="SLACK_WEBHOOK_URL")
     EMAIL_NOTIFICATIONS: Optional[str] = Field(None, env="EMAIL_NOTIFICATIONS")
     METRICS_PORT: Optional[int] = Field(None, env="METRICS_PORT")

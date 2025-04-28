@@ -1,6 +1,7 @@
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
 import jwt
+from typing import Optional
 from backend.config.settings import get_settings
 
 settings = get_settings()
@@ -21,17 +22,16 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
-def create_access_token(data: dict) -> str:
-    """Create a JWT access token."""
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
-    # Ensure ACCESS_TOKEN_EXPIRE_MINUTES is treated as an integer
-    expire_minutes = int(ACCESS_TOKEN_EXPIRE_MINUTES) if ACCESS_TOKEN_EXPIRE_MINUTES is not None else 30 # Default to 30 if None
-    expire = datetime.utcnow() + timedelta(minutes=expire_minutes)
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)  # Default expiration time
     to_encode.update({"exp": expire})
-    # Ensure SECRET_KEY is not None before encoding
-    jwt_secret = SECRET_KEY if SECRET_KEY is not None else "default-secret" # Provide a default or raise error if None is unacceptable
-    jwt_algorithm = ALGORITHM if ALGORITHM is not None else "HS256" # Default algorithm
-    return jwt.encode(to_encode, jwt_secret, algorithm=jwt_algorithm)
+    encoded_jwt = jwt.encode(to_encode, "your-secret-key", algorithm="HS256")
+    return encoded_jwt
+
 
 # Add get_password_hash function if it's missing and needed
 def get_password_hash(password: str) -> str:
