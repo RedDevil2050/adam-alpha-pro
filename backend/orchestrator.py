@@ -3,6 +3,9 @@ from typing import Dict, List, Type, Optional
 from datetime import datetime
 from backend.agents.base import AgentBase
 from backend.utils.logger import get_logger
+from backend.agents.dividend_agent import DividendAgent
+from backend.agents.market_regime_agent import MarketRegimeAgent
+from backend.agents.esg.esg_score_agent import ESGScoreAgent
 
 logger = get_logger(__name__)
 
@@ -84,8 +87,11 @@ class Orchestrator:
 async def run(symbol: str) -> Dict[str, Dict]:
     """Run the orchestrator for a given symbol."""
     orchestrator = Orchestrator()
-    # Register agents here (example):
-    # orchestrator.register("example_agent", ExampleAgent)
+    # Register agents
+    orchestrator.register("dividend_agent", DividendAgent)
+    orchestrator.register("market_regime_agent", MarketRegimeAgent)
+    orchestrator.register("esg_score_agent", ESGScoreAgent)
+
     results = await orchestrator.execute_all(symbol)
     logger.info(f"Execution results for {symbol}: {results}")
     return results

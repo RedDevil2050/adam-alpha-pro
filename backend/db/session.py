@@ -1,15 +1,20 @@
-from sqlalchemy import create_engine
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
+from backend.config.settings import get_settings
 
-DATABASE_URL = "sqlite:///./test.db"  # Replace with your actual database URL
+settings = get_settings()
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# Configure the database engine
+async_engine = create_async_engine(settings.DATABASE_URL, echo=False)
 
-def get_db():
-    """Provide a database session."""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# Create an async session factory
+AsyncSessionLocal = sessionmaker(
+    bind=async_engine,
+    class_=AsyncSession,
+    expire_on_commit=False
+)
+
+# Dependency to get the database session
+async def get_db():
+    async with AsyncSessionLocal() as session:
+        yield session

@@ -3,10 +3,6 @@
 import asyncio
 import logging
 import httpx
-from backend.api.models.validation import (
-    DeploymentReadiness, PerformanceMetrics, ResourceMetrics,
-    OperationalMetrics, TestStatus, DependencyStatus,
-)
 from backend.config.settings import get_settings
 import sys
 import os
@@ -16,6 +12,9 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 import re
 from datetime import datetime
+from app import DeploymentReadiness
+from app import PerformanceMetrics, ResourceMetrics, OperationalMetrics, TestStatus
+from app import DependencyStatus
 
 # Add the backend module to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../backend')))
