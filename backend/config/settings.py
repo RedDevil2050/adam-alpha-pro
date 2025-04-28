@@ -147,8 +147,9 @@ class EvEbitdaAgentSettings(BaseSettings):
     THRESHOLD_HIGH_EV_EBITDA: float = 15.0
 
 class BookToMarketAgentSettings(BaseSettings):
-    THRESHOLD_UNDERVALUED_BTM: float = 0.8
-    THRESHOLD_OVERVALUED_BTM: float = 0.5
+    HISTORICAL_YEARS: int = 5
+    PERCENTILE_UNDERVALUED: float = 75.0 # High B/M (>75th percentile) is undervalued
+    PERCENTILE_OVERVALUED: float = 25.0 # Low B/M (<25th percentile) is overvalued
 
 class DividendYieldAgentSettings(BaseSettings):
     THRESHOLD_HIGH: float = 5.0

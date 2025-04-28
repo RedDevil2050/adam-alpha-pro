@@ -335,281 +335,348 @@ async def scrape_stock_data(symbol: str) -> Dict[str, Any]:
         logger.error(f"Error scraping stock data: {str(e)}")
         raise
 
-# ======== UNIFIED PUBLIC API ========
+# ======== SPECIFIC FINANCIAL DATA POINTS ========
 
 @async_retry(max_retries=2, base_delay=1.0, max_delay=5.0)
-async def fetch_price_point(symbol: str) -> float:
+async def fetch_latest_ev(symbol: str) -> float:
     """
-    Fetch the latest price for a symbol from any available source.
+    Fetch the latest Enterprise Value (EV) for a company.
     
     Args:
         symbol: Stock symbol
         
     Returns:
-        Current price as float
+        Enterprise Value as float or None if unavailable
     """
-    logger.debug(f"Fetching price point for {symbol}")
+    logger.debug(f"Fetching Enterprise Value for {symbol}")
     
     # Try multiple data sources in order
-    sources_to_try = [
-        (fetch_from_alpha_vantage, {"endpoint": "GLOBAL_QUOTE", "params": {"symbol": symbol}}),
-        (fetch_from_polygon, {"endpoint": f"aggs/ticker/{symbol}/prev", "params": {}}),
-        (fetch_from_yahoo_finance, {"symbol": symbol}),
-        (fetch_from_finnhub, {"endpoint": "quote", "params": {"symbol": symbol}}),
-        (scrape_stock_data, {"symbol": symbol})
-    ]
-    
-    for source_func, kwargs in sources_to_try:
-        try:
-            if source_func.__name__ == 'fetch_from_alpha_vantage':
-                data = await source_func(**kwargs)
-                price = float(data.get('Global Quote', {}).get('05. price', 0))
-            elif source_func.__name__ == 'fetch_from_polygon':
-                data = await source_func(**kwargs)
-                price = float(data.get('results', [{}])[0].get('c', 0))
-            elif source_func.__name__ == 'fetch_from_yahoo_finance':
-                data = await source_func(**kwargs)
-                price = float(data.get('info', {}).get('currentPrice', 0))
-            elif source_func.__name__ == 'fetch_from_finnhub':
-                data = await source_func(**kwargs)
-                price = float(data.get('c', 0))
-            else:  # Web scraper
-                data = await source_func(**kwargs)
-                price = float(data.get('price', 0))
-            
-            if price > 0:
-                logger.info(f"Got price {price} for {symbol} from {source_func.__name__}")
-                return price
-                
-        except Exception as e:
-            logger.warning(f"Failed to get price from {source_func.__name__}: {str(e)}")
-            continue
-    
-    # If all sources fail, raise exception
-    logger.error(f"Failed to get price for {symbol} from all sources")
-    raise Exception(f"Could not fetch price for {symbol} from any data source")
-
-@async_retry(max_retries=2, base_delay=1.0, max_delay=5.0)
-async def fetch_eps_data(symbol: str) -> Dict[str, Any]:
-    """
-    Fetch detailed EPS data for a symbol from any available source.
-    
-    Args:
-        symbol: Stock symbol
-        
-    Returns:
-        Dict with EPS data (eps, price, pe_ratio, dividend_yield)
-    """
-    logger.debug(f"Fetching EPS data for {symbol}")
-    
-    # Try multiple data sources in order
-    sources = [
-        (fetch_from_alpha_vantage, {"endpoint": "OVERVIEW", "params": {"symbol": symbol}}),
-        (fetch_from_yahoo_finance, {"symbol": symbol}),
-        (scrape_stock_data, {"symbol": symbol})
-    ]
-    
-    result = {}
-    
-    for source_func, kwargs in sources:
-        try:
-            if source_func.__name__ == 'fetch_from_alpha_vantage':
-                data = await source_func(**kwargs)
-                result = {
-                    'eps': float(data.get('EPS', 0)),
-                    'pe_ratio': float(data.get('PERatio', 0)),
-                    'dividend_yield': float(data.get('DividendYield', 0)),
-                }
-                
-                # Fetch price separately
-                price = await fetch_price_point(symbol)
-                result['price'] = price
-                
-            elif source_func.__name__ == 'fetch_from_yahoo_finance':
-                data = await source_func(**kwargs)
-                info = data.get('info', {})
-                result = {
-                    'eps': float(info.get('trailingEPS', 0) or 0),
-                    'price': float(info.get('currentPrice', 0) or 0),
-                    'pe_ratio': float(info.get('trailingPE', 0) or 0),
-                    'dividend_yield': float(info.get('dividendYield', 0) or 0)
-                }
-                
-            else:  # Web scraper
-                result = await source_func(**kwargs)
-            
-            # Check if we have valid data
-            if result.get('price', 0) > 0:
-                # Fill in missing values if possible
-                if 'eps' in result and 'price' in result and result['eps'] > 0 and 'pe_ratio' not in result:
-                    result['pe_ratio'] = result['price'] / result['eps']
-                    
-                logger.info(f"Got EPS data for {symbol} from {source_func.__name__}")
-                return result
-                
-        except Exception as e:
-            logger.warning(f"Failed to get EPS data from {source_func.__name__}: {str(e)}")
-            continue
-    
-    # If all sources fail, raise exception
-    logger.error(f"Failed to get EPS data for {symbol} from all sources")
-    raise Exception(f"Could not fetch EPS data for {symbol} from any data source")
-
-@async_retry(max_retries=2, base_delay=1.0, max_delay=5.0)
-async def fetch_historical_prices(
-    symbol: str, 
-    period: str = "1mo"
-) -> Dict[str, List[float]]:
-    """
-    Fetch historical price data for a symbol.
-    
-    Args:
-        symbol: Stock symbol
-        period: Time period to fetch (1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y)
-        
-    Returns:
-        Dict with dates and OHLCV data
-    """
-    logger.debug(f"Fetching historical prices for {symbol}, period={period}")
-    
-    # Try Yahoo Finance first (most reliable for historical data)
     try:
-        data = await fetch_from_yahoo_finance(symbol)
-        history = data.get('history', {})
+        # Try Yahoo Finance first (most comprehensive financial data)
+        yahoo_data = await fetch_from_yahoo_finance(symbol)
+        info = yahoo_data.get('info', {})
         
-        if history and len(history.get('dates', [])) > 0:
-            return history
+        # Yahoo Finance provides enterprise value directly
+        if 'enterpriseValue' in info and info['enterpriseValue']:
+            ev = float(info['enterpriseValue'])
+            logger.info(f"Got Enterprise Value {ev} for {symbol} from Yahoo Finance")
+            return ev
             
+        # Calculate from components if direct EV not available
+        elif all(key in info for key in ['marketCap', 'totalDebt', 'totalCash']):
+            market_cap = float(info['marketCap'] or 0)
+            total_debt = float(info['totalDebt'] or 0)
+            cash = float(info['totalCash'] or 0)
+            
+            ev = market_cap + total_debt - cash
+            logger.info(f"Calculated Enterprise Value {ev} for {symbol} from Yahoo Finance components")
+            return ev
     except Exception as e:
-        logger.warning(f"Failed to get historical data from Yahoo Finance: {str(e)}")
+        logger.warning(f"Failed to get Enterprise Value from Yahoo Finance: {str(e)}")
+    
+    # Try Alpha Vantage as fallback for company overview
+    try:
+        av_data = await fetch_from_alpha_vantage("OVERVIEW", {"symbol": symbol})
+        
+        # Alpha Vantage doesn't directly provide EV, so calculate from components
+        if all(key in av_data for key in ['MarketCapitalization', 'TotalDebt', 'Cash']):
+            market_cap = float(av_data['MarketCapitalization'])
+            total_debt = float(av_data['TotalDebt'])
+            cash = float(av_data['Cash'])
+            
+            ev = market_cap + total_debt - cash
+            logger.info(f"Calculated Enterprise Value {ev} for {symbol} from Alpha Vantage components")
+            return ev
+    except Exception as e:
+        logger.warning(f"Failed to get Enterprise Value from Alpha Vantage: {str(e)}")
+    
+    # Try Finnhub as another fallback
+    try:
+        finnhub_data = await fetch_from_finnhub("stock/metric", {"symbol": symbol, "metric": "all"})
+        metrics = finnhub_data.get('metric', {})
+        
+        if 'enterpriseValue' in metrics and metrics['enterpriseValue']:
+            ev = float(metrics['enterpriseValue'])
+            logger.info(f"Got Enterprise Value {ev} for {symbol} from Finnhub")
+            return ev
+    except Exception as e:
+        logger.warning(f"Failed to get Enterprise Value from Finnhub: {str(e)}")
+    
+    # If all sources fail, log warning and return None
+    logger.error(f"Failed to get Enterprise Value for {symbol} from all sources")
+    return None
+
+@async_retry(max_retries=2, base_delay=1.0, max_delay=5.0)
+async def fetch_latest_ebitda(symbol: str) -> float:
+    """
+    Fetch the latest EBITDA (Earnings Before Interest, Taxes, Depreciation, and Amortization) for a company.
+    
+    Args:
+        symbol: Stock symbol
+        
+    Returns:
+        EBITDA as float or None if unavailable
+    """
+    logger.debug(f"Fetching EBITDA for {symbol}")
+    
+    # Try multiple data sources in order
+    try:
+        # Try Yahoo Finance first
+        yahoo_data = await fetch_from_yahoo_finance(symbol)
+        info = yahoo_data.get('info', {})
+        
+        # Yahoo Finance provides EBITDA directly
+        if 'ebitda' in info and info['ebitda']:
+            ebitda = float(info['ebitda'])
+            logger.info(f"Got EBITDA {ebitda} for {symbol} from Yahoo Finance")
+            return ebitda
+    except Exception as e:
+        logger.warning(f"Failed to get EBITDA from Yahoo Finance: {str(e)}")
     
     # Try Alpha Vantage as fallback
     try:
-        # Select appropriate Alpha Vantage function based on period
-        if period in ["1d", "5d"]:
-            function = "TIME_SERIES_INTRADAY"
-            params = {"symbol": symbol, "interval": "60min", "outputsize": "full"}
-        else:
-            function = "TIME_SERIES_DAILY"
-            params = {"symbol": symbol, "outputsize": "full"}
-            
-        data = await fetch_from_alpha_vantage(function, params)
+        av_data = await fetch_from_alpha_vantage("OVERVIEW", {"symbol": symbol})
         
-        # Parse Alpha Vantage response
-        time_series_key = next((key for key in data.keys() if 'Time Series' in key), None)
-        if time_series_key:
-            time_series = data[time_series_key]
+        # Alpha Vantage provides EBITDA
+        if 'EBITDA' in av_data and av_data['EBITDA']:
+            # Handle format differences (e.g., "1.23B" vs numeric)
+            ebitda_str = av_data['EBITDA']
             
-            # Convert to desired format
-            dates = []
-            close_prices = []
-            open_prices = []
-            high_prices = []
-            low_prices = []
-            volumes = []
-            
-            for date, values in time_series.items():
-                dates.append(date)
-                close_prices.append(float(values['4. close']))
-                open_prices.append(float(values['1. open']))
-                high_prices.append(float(values['2. high']))
-                low_prices.append(float(values['3. low']))
-                volumes.append(float(values['5. volume']))
-            
-            # Limit to requested period
-            if period == "1d":
-                limit = 1
-            elif period == "5d":
-                limit = 5
-            elif period == "1mo":
-                limit = 21
-            elif period == "3mo":
-                limit = 63
-            elif period == "6mo":
-                limit = 126
-            elif period == "1y":
-                limit = 252
+            # Convert string with possible suffix to float
+            if isinstance(ebitda_str, str):
+                if ebitda_str.endswith('T'):
+                    ebitda = float(ebitda_str[:-1]) * 1e12
+                elif ebitda_str.endswith('B'):
+                    ebitda = float(ebitda_str[:-1]) * 1e9
+                elif ebitda_str.endswith('M'):
+                    ebitda = float(ebitda_str[:-1]) * 1e6
+                elif ebitda_str.endswith('K'):
+                    ebitda = float(ebitda_str[:-1]) * 1e3
+                else:
+                    ebitda = float(ebitda_str.replace(',', ''))
             else:
-                limit = len(dates)
+                ebitda = float(ebitda_str)
                 
-            history = {
-                'dates': dates[:limit],
-                'close': close_prices[:limit],
-                'open': open_prices[:limit],
-                'high': high_prices[:limit],
-                'low': low_prices[:limit],
-                'volume': volumes[:limit]
-            }
-            
-            return history
-    
+            logger.info(f"Got EBITDA {ebitda} for {symbol} from Alpha Vantage")
+            return ebitda
     except Exception as e:
-        logger.warning(f"Failed to get historical data from Alpha Vantage: {str(e)}")
+        logger.warning(f"Failed to get EBITDA from Alpha Vantage: {str(e)}")
     
-    # If all sources fail, raise exception
-    logger.error(f"Failed to get historical data for {symbol} from all sources")
-    raise Exception(f"Could not fetch historical data for {symbol} from any data source")
+    # Try Finnhub as another fallback
+    try:
+        finnhub_data = await fetch_from_finnhub("stock/metric", {"symbol": symbol, "metric": "all"})
+        metrics = finnhub_data.get('metric', {})
+        
+        if 'ebitdaTTM' in metrics and metrics['ebitdaTTM']:
+            ebitda = float(metrics['ebitdaTTM'])
+            logger.info(f"Got EBITDA {ebitda} for {symbol} from Finnhub")
+            return ebitda
+    except Exception as e:
+        logger.warning(f"Failed to get EBITDA from Finnhub: {str(e)}")
+    
+    # If all sources fail, log warning and return None
+    logger.error(f"Failed to get EBITDA for {symbol} from all sources")
+    return None
 
 @async_retry(max_retries=2, base_delay=1.0, max_delay=5.0)
-async def fetch_market_data(symbol: str) -> Dict[str, Any]:
+async def fetch_historical_ev(symbol: str, years: int = 5) -> pd.Series:
     """
-    Fetch comprehensive market data for a symbol from any available source.
+    Fetch historical Enterprise Value (EV) data.
+    
+    Args:
+        symbol: Stock symbol
+        years: Number of years of historical data to fetch
+        
+    Returns:
+        pandas Series with dates as index and EV values
+    """
+    logger.warning(f"Fetching historical Enterprise Value (EV) is not currently supported by the available data providers. Returning None for {symbol}.")
+    # In a real implementation, you might try fetching historical fundamentals
+    # (Market Cap, Debt, Cash) and calculating it, but this is complex.
+    return None
+
+@async_retry(max_retries=2, base_delay=1.0, max_delay=5.0)
+async def fetch_historical_ebitda(symbol: str, years: int = 5) -> pd.Series:
+    """
+    Fetch historical EBITDA data for a company.
+    
+    Args:
+        symbol: Stock symbol
+        years: Number of years of historical data to fetch
+        
+    Returns:
+        pandas Series with dates as index and EBITDA values
+    """
+    logger.debug(f"Fetching historical EBITDA for {symbol}, years={years}")
+    
+    try:
+        # Calculate start date based on years
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=years * 365)
+        
+        # Try to get quarterly financials from Alpha Vantage
+        income_data = await fetch_from_alpha_vantage("INCOME_STATEMENT", {"symbol": symbol})
+        
+        if not income_data or 'quarterlyReports' not in income_data:
+            logger.warning(f"No quarterly reports found for {symbol}")
+            return None
+            
+        quarterly_reports = income_data['quarterlyReports']
+        
+        # Extract EBITDA or calculate it from components
+        dates = []
+        ebitda_values = []
+        
+        for report in quarterly_reports:
+            # Extract date and convert to datetime
+            report_date_str = report.get('fiscalDateEnding')
+            if not report_date_str:
+                continue
+                
+            report_date = datetime.strptime(report_date_str, '%Y-%m-%d')
+            
+            # Skip if before our start date
+            if report_date < start_date:
+                continue
+                
+            # Try to get EBITDA directly or calculate from components
+            ebitda = None
+            
+            # Some providers include EBITDA directly
+            if 'ebitda' in report and report['ebitda'] and report['ebitda'] != 'None':
+                try:
+                    ebitda = float(report['ebitda'])
+                except (ValueError, TypeError):
+                    ebitda = None
+                    
+            # If not available, calculate from components:
+            # EBITDA = Operating Income + Depreciation + Amortization
+            if not ebitda and all(k in report for k in ['operatingIncome', 'depreciation']):
+                try:
+                    operating_income = float(report.get('operatingIncome') or 0)
+                    depreciation = float(report.get('depreciation') or 0)
+                    # Amortization is sometimes included in depreciation
+                    
+                    ebitda = operating_income + depreciation
+                except (ValueError, TypeError):
+                    ebitda = None
+            
+            if ebitda is not None:
+                dates.append(report_date)
+                ebitda_values.append(ebitda)
+        
+        if not dates:
+            logger.warning(f"No valid EBITDA data found for {symbol}")
+            return None
+            
+        # Create pandas Series
+        ebitda_series = pd.Series(ebitda_values, index=dates)
+        ebitda_series = ebitda_series.sort_index()
+        
+        # Resample to quarterly frequency if needed
+        ebitda_series = ebitda_series.resample('Q').last().ffill()
+        
+        logger.info(f"Got {len(ebitda_series)} historical EBITDA points for {symbol}")
+        return ebitda_series
+            
+    except Exception as e:
+        logger.error(f"Failed to fetch historical EBITDA for {symbol}: {str(e)}")
+        return None
+
+@async_retry(max_retries=2, base_delay=1.0, max_delay=5.0)
+async def fetch_historical_price_series(symbol: str, years: int = 5) -> pd.Series:
+    """
+    Fetch historical price data as a pandas Series.
+    
+    Args:
+        symbol: Stock symbol
+        years: Number of years of historical data to fetch
+        
+    Returns:
+        pandas Series with dates as index and price values
+    """
+    logger.debug(f"Fetching historical price series for {symbol}, years={years}")
+    
+    try:
+        # Map years to Yahoo Finance period string
+        if years <= 1:
+            period = "1y"
+        elif years <= 2:
+            period = "2y"
+        elif years <= 5:
+            period = "5y"
+        else:
+            period = "10y"
+            
+        # Get historical prices
+        history_data = await fetch_historical_prices(symbol, period)
+        
+        if not history_data or 'dates' not in history_data or not history_data['dates']:
+            logger.warning(f"No historical price data found for {symbol}")
+            return None
+            
+        # Convert to pandas Series
+        dates = [datetime.strptime(date, '%Y-%m-%d') for date in history_data['dates']]
+        close_prices = history_data['close']
+        
+        # Create Series
+        price_series = pd.Series(close_prices, index=dates)
+        price_series = price_series.sort_index()
+        
+        # Filter to requested years
+        start_date = datetime.now() - timedelta(days=years * 365)
+        price_series = price_series[price_series.index >= start_date]
+        
+        logger.info(f"Got {len(price_series)} historical price points for {symbol}")
+        return price_series
+            
+    except Exception as e:
+        logger.error(f"Failed to fetch historical price series for {symbol}: {str(e)}")
+        return None
+
+@async_retry(max_retries=2, base_delay=1.0, max_delay=5.0)
+async def fetch_book_value(symbol: str) -> float:
+    """
+    Fetch the latest book value per share for a company.
     
     Args:
         symbol: Stock symbol
         
     Returns:
-        Dict with consolidated market data
+        Book Value per Share as float or None if unavailable
     """
-    logger.debug(f"Fetching market data for {symbol}")
+    logger.debug(f"Fetching Book Value for {symbol}")
     
-    result = {}
-    
-    # Try to get detailed stock info from Yahoo Finance
+    # Try multiple data sources in order
     try:
+        # Try Yahoo Finance first
         yahoo_data = await fetch_from_yahoo_finance(symbol)
-        result = yahoo_data.get('info', {})
-    except Exception as e:
-        logger.warning(f"Failed to get Yahoo Finance data: {str(e)}")
-    
-    # Try to get EPS data if not already present
-    if 'trailingEPS' not in result:
-        try:
-            eps_data = await fetch_eps_data(symbol)
-            result['eps'] = eps_data.get('eps')
-            result['pe_ratio'] = eps_data.get('pe_ratio')
-            result['dividend_yield'] = eps_data.get('dividend_yield')
-        except Exception as e:
-            logger.warning(f"Failed to get EPS data: {str(e)}")
-    
-    # Get current price if not already present
-    if 'currentPrice' not in result:
-        try:
-            result['currentPrice'] = await fetch_price_point(symbol)
-        except Exception as e:
-            logger.warning(f"Failed to get current price: {str(e)}")
-    
-    # Check if we have enough data
-    required_fields = ['currentPrice', 'eps', 'pe_ratio']
-    
-    # Handle missing fields with fallbacks
-    missing_fields = [field for field in required_fields if field not in result or not result[field]]
-    
-    if missing_fields:
-        logger.warning(f"Missing fields in market data for {symbol}: {missing_fields}")
+        info = yahoo_data.get('info', {})
         
-        # Try web scraping as last resort
-        try:
-            scraped_data = await scrape_stock_data(symbol)
-            
-            # Update missing fields
-            for field in missing_fields:
-                if field == 'currentPrice' and 'price' in scraped_data:
-                    result['currentPrice'] = scraped_data['price']
-                elif field in scraped_data:
-                    result[field] = scraped_data[field]
-        except Exception as e:
-            logger.warning(f"Failed to scrape data for missing fields: {str(e)}")
+        # Yahoo Finance has book value per share
+        if 'bookValue' in info and info['bookValue']:
+            book_value = float(info['bookValue'])
+            logger.info(f"Got Book Value per Share {book_value} for {symbol} from Yahoo Finance")
+            return book_value
+    except Exception as e:
+        logger.warning(f"Failed to get Book Value from Yahoo Finance: {str(e)}")
     
-    return result
+    # Try Alpha Vantage as fallback
+    try:
+        av_data = await fetch_from_alpha_vantage("OVERVIEW", {"symbol": symbol})
+        
+        # Alpha Vantage provides book value
+        if 'BookValue' in av_data and av_data['BookValue']:
+            try:
+                book_value = float(av_data['BookValue'])
+                logger.info(f"Got Book Value per Share {book_value} for {symbol} from Alpha Vantage")
+                return book_value
+            except (ValueError, TypeError):
+                pass
+    except Exception as e:
+        logger.warning(f"Failed to get Book Value from Alpha Vantage: {str(e)}")
+    
+    # If all sources fail, log warning and return None
+    logger.error(f"Failed to get Book Value for {symbol} from all sources")
+    return None
 
