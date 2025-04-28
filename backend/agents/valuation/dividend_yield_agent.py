@@ -14,7 +14,7 @@ AGENT_CATEGORY = "valuation"  # Define category for the decorator
 @standard_agent_execution(
     agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600
 )
-async def run(symbol: str, agent_outputs: dict = None) -> dict:
+async def run(symbol: str, agent_outputs: dict = {}) -> dict:
     """
     Calculates the Dividend Yield for a given stock symbol and assesses its attractiveness.
 
