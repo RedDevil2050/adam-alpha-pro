@@ -1,4 +1,4 @@
-import jwt
+from jose import jwt
 from datetime import datetime, timedelta
 
 def create_access_token(data: dict, secret_key: str, algorithm: str, expires_delta: timedelta):

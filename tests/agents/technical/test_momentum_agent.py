@@ -129,9 +129,10 @@ async def test_momentum_strong_negative(mock_fetch_hist, mock_get_settings, mock
     assert result["value"] < mock_settings.agent_settings.momentum.THRESHOLD_STRONG_NEGATIVE * 100
 
 @pytest.mark.asyncio
+@patch('redis.asyncio.client.Redis', new_callable=AsyncMock)
 @patch('backend.agents.technical.momentum_agent.get_settings')
 @patch('backend.agents.technical.momentum_agent.fetch_historical_price_series', new_callable=AsyncMock)
-async def test_momentum_no_data_insufficient_history(mock_fetch_hist, mock_get_settings, mock_settings):
+async def test_momentum_no_data_insufficient_history(mock_fetch_hist, mock_get_settings, mock_redis, mock_settings):
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_hist.return_value = prices_insufficient # Only 100 data points

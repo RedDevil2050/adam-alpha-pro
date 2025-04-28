@@ -9,9 +9,7 @@ from backend.api.main import app
 # Import the function to create tokens from your security utils
 from backend.security.utils import create_access_token
 from datetime import timedelta
-import logging
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 # Use parametrize for different symbols if needed
 @pytest.mark.asyncio  # Mark test class for asyncio
@@ -37,7 +35,7 @@ class TestCompleteWorkflow:
         Auth -> GET /api/analyze/{symbol} -> Orchestrator -> Brain -> 200 OK response.
         """
         # Use AsyncClient with the app instance for testing (doesn't require a running server)
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(base_url="http://test") as client:
             headers = {"Authorization": f"Bearer {access_token}"}
             symbol = "AAPL"  # Use a common symbol likely to have data in mocks/providers
 
@@ -101,7 +99,7 @@ class TestCompleteWorkflow:
 
     async def test_analysis_unauthenticated(self):
         """Tests that the endpoint requires authentication."""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(base_url="http://test") as client:
             symbol = "MSFT"
             logger.info(f"--- E2E Test: Starting unauthenticated request for {symbol} ---")
             response = await client.get(f"/api/analyze/{symbol}")  # No Authorization header
@@ -120,7 +118,7 @@ class TestCompleteWorkflow:
         Tests the behavior when an invalid symbol is provided.
         Expects a 404 Not Found if data_provider fails cleanly.
         """
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(base_url="http://test") as client:
             headers = {"Authorization": f"Bearer {access_token}"}
             invalid_symbol = "INVALID_SYMBOL_XYZ123"
             logger.info(f"--- E2E Test: Starting analysis for invalid symbol {invalid_symbol} ---")
@@ -146,7 +144,7 @@ class TestCompleteWorkflow:
     # Optional: Add test for malformed token if needed
     async def test_analysis_malformed_token(self):
         """Tests behavior with a malformed token."""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(base_url="http://test") as client:
             headers = {"Authorization": "Bearer invalid.token.string"}
             symbol = "GOOGL"
             logger.info(f"--- E2E Test: Starting request with malformed token for {symbol} ---")
