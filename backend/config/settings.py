@@ -74,6 +74,9 @@ class DataProviderSettings(BaseSettings):
     RETRY_BACKOFF: float = Field(2.0, env="RETRY_BACKOFF")
     CIRCUIT_BREAKER_THRESHOLD: int = Field(5, env="CIRCUIT_BREAKER_THRESHOLD")
     CIRCUIT_BREAKER_TIMEOUT: int = Field(300, env="CIRCUIT_BREAKER_TIMEOUT")  # seconds
+    # Added fields for Beta Agent
+    MARKET_INDEX_SYMBOL: str = Field("^NSEI", env="MARKET_INDEX_SYMBOL")
+    RISK_FREE_RATE: float = Field(0.04, env="RISK_FREE_RATE")
 
 class LoggingSettings(BaseSettings):
     """Logging configuration"""
@@ -111,20 +114,39 @@ class DatabaseSettings(BaseSettings):
     class Config(BaseSecretHandlingConfig):
         pass # customise_sources and other settings are inherited
 
+# Added BetaAgentSettings
+class BetaAgentSettings(BaseSettings):
+    """Settings specific to the Beta Agent"""
+    VAR_CONFIDENCE_LEVEL: float = Field(0.95, env="BETA_VAR_CONFIDENCE_LEVEL")
+    SHARPE_ANNUALIZATION_FACTOR: int = Field(252, env="BETA_SHARPE_ANNUALIZATION_FACTOR")
+    COMPOSITE_WEIGHT_BETA: float = Field(0.4, env="BETA_COMPOSITE_WEIGHT_BETA")
+    COMPOSITE_WEIGHT_VAR: float = Field(0.3, env="BETA_COMPOSITE_WEIGHT_VAR")
+    COMPOSITE_WEIGHT_SHARPE: float = Field(0.3, env="BETA_COMPOSITE_WEIGHT_SHARPE")
+    VERDICT_THRESHOLD_LOW_RISK: float = Field(0.7, env="BETA_VERDICT_THRESHOLD_LOW_RISK")
+    VERDICT_THRESHOLD_MODERATE_RISK: float = Field(0.4, env="BETA_VERDICT_THRESHOLD_MODERATE_RISK")
+
+# Added AgentSettings to group agent-specific settings
+class AgentSettings(BaseSettings):
+    """Container for all agent-specific settings"""
+    beta: BetaAgentSettings = BetaAgentSettings()
+    # Add other agent settings here as needed
+    # e.g., esg: ESGScoreAgentSettings = ESGScoreAgentSettings()
+
 class Settings(BaseSettings):
     """Main settings class"""
     ENV: str = Field(default="development", env="ENV")
     DEBUG: bool = Field(default=True, env="DEBUG")
     HOST: str = Field(default="0.0.0.0", env="HOST")
     PORT: int = Field(default=8000, env="PORT")
-    
+
     # Nested settings
     api_keys: APIKeys = APIKeys()
     data_provider: DataProviderSettings = DataProviderSettings()
     logging: LoggingSettings = LoggingSettings()
     security: SecuritySettings = SecuritySettings()
     database: DatabaseSettings = DatabaseSettings()
-    
+    agent_settings: AgentSettings = AgentSettings() # Added agent settings group
+
     @property
     def is_production(self) -> bool:
         return self.ENV.lower() == "production"

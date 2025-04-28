@@ -9,6 +9,46 @@ AGENT_CATEGORY = "market" # Define category for the decorator
 # Apply the decorator to the standalone run function
 @standard_agent_execution(agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600)
 async def run(symbol: str, agent_outputs: dict = None) -> dict: # Added agent_outputs default
+    """
+    Analyzes the volatility regime and trend for a given stock symbol.
+
+    Purpose:
+        Calculates short-term (30-day) and medium-term (90-day) annualized volatility
+        using logarithmic returns. It compares these volatilities to determine the current
+        volatility regime and trend (e.g., expanding, contracting, normal, high, low).
+        This agent focuses on market dynamics and changes in volatility rather than just the absolute level.
+
+    Metrics Calculated:
+        - 30-day Annualized Volatility (using log returns)
+        - 90-day Annualized Volatility (using log returns)
+        - Historical Annualized Volatility (up to ~1 year, using log returns)
+        - 90th Percentile of Daily Log Returns
+
+    Logic:
+        1. Fetches historical price series.
+        2. Calculates daily logarithmic returns.
+        3. Calculates annualized volatility over the last 30 and 90 trading days.
+        4. Compares 30d vol vs. 90d vol to determine trend/regime verdicts:
+           - HIGH_VOLATILITY_EXPANDING: 30d significantly higher than 90d.
+           - LOW_VOLATILITY_CONTRACTING: 30d significantly lower than 90d.
+           - NORMAL_VOLATILITY: 30d and 90d are relatively close.
+           - HIGH/LOW/NORMAL_VOLATILITY: Used if 90d data is insufficient, based on 30d level.
+        5. Calculates historical volatility and return percentile for context.
+
+    Dependencies:
+        - Requires historical price data (at least 30 days, preferably 90+).
+        - Relies on `fetch_price_series` utility.
+
+    Returns:
+        dict: A dictionary containing the analysis results, including:
+            - symbol (str): The input stock symbol.
+            - verdict (str): Describes the volatility regime/trend (e.g., 'HIGH_VOLATILITY_EXPANDING').
+            - confidence (float): Confidence score based on the verdict.
+            - value (float | None): The 30-day annualized volatility percentage.
+            - details (dict): Contains 30d, 90d, historical volatility, return percentile, and days used.
+            - error (str | None): Error message if execution failed.
+            - agent_name (str): The name of the agent ('volatility_agent').
+    """
     # Boilerplate (cache check, try/except, cache set, tracker, error handling) is handled by decorator
     # Core logic moved from the previous _execute method
 

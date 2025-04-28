@@ -4,9 +4,8 @@ import functools
 import json
 from loguru import logger
 from backend.utils.cache_utils import redis_client
-# Assuming tracker is accessible globally or passed differently.
-# If tracker needs specific instance per category/agent, this needs adjustment.
-# from backend.monitor.tracker import tracker # Example import path
+# Import the tracker access function (adjust path if needed)
+from backend.monitor.tracker import get_tracker
 
 def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 3600):
     """
@@ -37,6 +36,7 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
 
             symbol = args[0]
             cache_key = f"{agent_name}:{symbol}"
+            result = None # Initialize result to handle potential early exits
 
             try:
                 # 1. Cache Check
@@ -69,25 +69,43 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
                     except Exception as cache_err:
                          logger.error(f"Failed to set cache for {cache_key}: {cache_err}. Result not cached.")
 
+                # --- 4. Update Tracker --- Start
+                try:
+                    tracker_instance = get_tracker()
+                    status = "error" # Default to error
+                    if result and result.get("verdict") not in ["ERROR", "NO_DATA", None]:
+                        status = "success"
+                    elif result and result.get("verdict") == "NO_DATA":
+                        status = "no_data"
 
-                # 4. Update Tracker (Placeholder - adjust based on actual tracker implementation)
-                # This needs a reliable way to access the correct tracker instance.
-                # Example:
-                # try:
-                #     from backend.monitor.tracker import get_tracker # Or however it's accessed
-                #     tracker_instance = get_tracker()
-                #     status = "success" if result.get("verdict") != "ERROR" else "error"
-                #     tracker_instance.update_agent_status(category, agent_name, symbol, status)
-                # except Exception as tracker_err:
-                #     logger.warning(f"Failed to update tracker for {agent_name} ({symbol}): {tracker_err}")
+                    # Ensure symbol is available even in case of early exit errors
+                    current_symbol = symbol # Captured at the start of the wrapper
+                    if result and "symbol" in result:
+                        current_symbol = result["symbol"] # Use symbol from result if available
 
-                return result
+                    if current_symbol: # Only update if we have a symbol
+                        # Assuming an update method like this exists:
+                        await tracker_instance.update_agent_status(category, agent_name, current_symbol, status, result) # Pass full result
+                        logger.debug(f"Tracker updated for {agent_name} ({current_symbol}): {status}")
+                    else:
+                        logger.warning(f"Skipping tracker update for {agent_name} due to missing symbol.")
+
+                except ImportError:
+                    logger.warning("Tracker module (backend.monitor.tracker) not found or get_tracker failed. Skipping tracker update.")
+                except AttributeError:
+                     logger.warning(f"Tracker instance from get_tracker() missing 'update_agent_status' method. Skipping tracker update.")
+                except Exception as tracker_err:
+                    # Log tracker-specific errors without failing the agent execution
+                    logger.warning(f"Failed to update tracker for {agent_name} ({symbol}): {tracker_err}")
+                # --- 4. Update Tracker --- End
+
+                return result # Return the original agent result
 
             except Exception as e:
                 # 5. Standard Error Handling
                 logger.exception(f"Error executing agent {agent_name} for symbol {symbol}: {e}")
-                # Return standard error format
-                return {
+                # Construct error result
+                error_result = {
                     "symbol": symbol,
                     "verdict": "ERROR",
                     "confidence": 0.0,
@@ -96,5 +114,27 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
                     "error": str(e),
                     "agent_name": agent_name
                 }
+
+                # --- Attempt Tracker Update on General Exception --- Start
+                # Also try to update tracker even if the main agent logic failed
+                try:
+                    tracker_instance = get_tracker()
+                    status = "error"
+                    # Use the symbol captured at the start
+                    if symbol:
+                        await tracker_instance.update_agent_status(category, agent_name, symbol, status, error_result) # Pass error result
+                        logger.debug(f"Tracker updated for {agent_name} ({symbol}): {status} (after main exception)")
+                    else:
+                         logger.warning(f"Skipping tracker update for {agent_name} after exception due to missing symbol.")
+                except ImportError:
+                    logger.warning("Tracker module not found during exception handling. Skipping tracker update.")
+                except AttributeError:
+                     logger.warning(f"Tracker instance missing 'update_agent_status' during exception handling. Skipping tracker update.")
+                except Exception as tracker_err_on_fail:
+                    logger.warning(f"Failed to update tracker during exception handling for {agent_name} ({symbol}): {tracker_err_on_fail}")
+                # --- Attempt Tracker Update on General Exception --- End
+
+                return error_result # Return the error result
+
         return wrapper
     return decorator

@@ -1,52 +1,77 @@
-from backend.agents.base import AgentBase
 from backend.utils.data_provider import fetch_esg_data
+from backend.agents.decorators import standard_agent_execution # Import decorator
+# from backend.config.settings import get_settings # Import get_settings if needed for future configuration
 
-class ESGScoreAgent(AgentBase):
-    async def _execute(self, symbol: str, agent_outputs: dict = None) -> dict:
-        agent_name = self.__class__.__name__
-        try:
-            # Fetch ESG data for the given symbol
-            esg_data = await fetch_esg_data(symbol)
+agent_name = "esg_score_agent" # Define agent name
+AGENT_CATEGORY = "esg" # Define category for the decorator
 
-            if not esg_data:
-                return {
-                    "symbol": symbol,
-                    "verdict": "NO_DATA",
-                    "confidence": 0.0,
-                    "value": None,
-                    "details": {},
-                    "error": "No ESG data available",
-                    "agent_name": agent_name
-                }
+@standard_agent_execution(agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=86400) # Apply decorator
+async def run(symbol: str, agent_outputs: dict = None) -> dict: # Define run function
+    # Boilerplate (cache check, try/except, cache set, tracker, error handling) is handled by decorator
+    try:
+        # Fetch ESG data for the given symbol (Core Logic)
+        esg_data = await fetch_esg_data(symbol)
 
-            # Calculate ESG score (example logic)
-            environmental = esg_data.get("environmental", 0)
-            social = esg_data.get("social", 0)
-            governance = esg_data.get("governance", 0)
-
-            esg_score = (environmental + social + governance) / 3
-
+        if not esg_data:
+            # Return NO_DATA format (decorator won't cache this)
             return {
                 "symbol": symbol,
-                "verdict": "CALCULATED",
-                "confidence": esg_score / 100,
-                "value": esg_score,
-                "details": {
-                    "environmental": environmental,
-                    "social": social,
-                    "governance": governance,
-                    "esg_score": esg_score
-                },
-                "error": None,
-                "agent_name": agent_name
-            }
-        except Exception as e:
-            return {
-                "symbol": symbol,
-                "verdict": "ERROR",
+                "verdict": "NO_DATA",
                 "confidence": 0.0,
                 "value": None,
-                "details": {},
-                "error": str(e),
-                "agent_name": agent_name
+                "details": {"reason": "No ESG data available"},
+                "error": None, # Explicitly None for NO_DATA
+                "agent_name": agent_name # Decorator might overwrite this
             }
+
+        # Calculate ESG score (Core Logic)
+        environmental = esg_data.get("environmental", 0)
+        social = esg_data.get("social", 0)
+        governance = esg_data.get("governance", 0)
+
+        # Basic scoring, adjust as needed
+        # Assuming scores are out of 100, normalize if necessary
+        esg_score = (environmental + social + governance) / 3
+
+        # Determine verdict based on score (Example thresholds)
+        if esg_score > 70:
+            verdict = "STRONG_ESG"
+        elif esg_score > 40:
+            verdict = "MODERATE_ESG"
+        else:
+            verdict = "WEAK_ESG"
+
+        # Create success result dictionary (Core Logic)
+        result = {
+            "symbol": symbol,
+            "verdict": verdict,
+            "confidence": round(esg_score, 2), # Use score as confidence, or derive differently
+            "value": round(esg_score, 2),
+            "details": {
+                "environmental_score": environmental,
+                "social_score": social,
+                "governance_score": governance,
+                "composite_esg_score": round(esg_score, 2)
+            },
+            "error": None, # Explicitly None for success
+            "agent_name": agent_name # Decorator might overwrite this
+        }
+        return result
+
+    # Specific exception handling for data fetching issues leading to NO_DATA
+    except Exception as data_err: # Catch specific data errors if possible
+        # This specific catch might be redundant if fetch_esg_data handles its errors
+        # and returns None/empty dict, which the check above handles.
+        # If fetch_esg_data raises errors directly, this might be needed.
+        # Consider logging the specific error here.
+        # logger.warning(f"Data fetch error for {symbol} in {agent_name}: {data_err}")
+        return {
+            "symbol": symbol,
+            "verdict": "NO_DATA", # Or potentially "ERROR" if it's not just missing data
+            "confidence": 0.0,
+            "value": None,
+            "details": {"reason": f"Failed to fetch or process ESG data: {data_err}"},
+            "error": str(data_err),
+            "agent_name": agent_name
+        }
+    # General exceptions are now handled by the decorator
