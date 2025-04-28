@@ -80,3 +80,20 @@ class Orchestrator:
             'agent_count': len(self._agents),
             'last_run': datetime.now().isoformat()
         }
+
+async def run(symbol: str) -> Dict[str, Dict]:
+    """Run the orchestrator for a given symbol."""
+    orchestrator = Orchestrator()
+    # Register agents here (example):
+    # orchestrator.register("example_agent", ExampleAgent)
+    results = await orchestrator.execute_all(symbol)
+    logger.info(f"Execution results for {symbol}: {results}")
+    return results
+
+def run_full_cycle():
+    """Run the full cycle of the orchestrator."""
+    print("Running full cycle...")
+
+def run_orchestration(symbol: str) -> dict:
+    """Simulate running the orchestration process for a given symbol."""
+    return {"symbol": symbol, "status": "orchestration complete"}

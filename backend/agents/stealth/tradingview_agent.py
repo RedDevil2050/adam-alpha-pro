@@ -1,7 +1,7 @@
 from backend.agents.stealth.base import StealthAgentBase
 import httpx, numpy as np
 from bs4 import BeautifulSoup
-import talib
+import pandas_ta as ta
 from loguru import logger
 
 agent_name = "tradingview_agent"
@@ -58,11 +58,11 @@ class TradingViewAgent(StealthAgentBase):
             closes = np.array(data.get("closes", []))
             
             patterns = {
-                "doji": talib.CDLDOJI(opens, highs, lows, closes),
-                "engulfing": talib.CDLENGULFING(opens, highs, lows, closes),
-                "morning_star": talib.CDLMORNINGSTAR(opens, highs, lows, closes),
-                "evening_star": talib.CDLEVENINGSTAR(opens, highs, lows, closes),
-                "hammer": talib.CDLHAMMER(opens, highs, lows, closes)
+                "doji": ta.cdl_doji(opens, highs, lows, closes),
+                "engulfing": ta.cdl_engulfing(opens, highs, lows, closes),
+                "morning_star": ta.cdl_morningstar(opens, highs, lows, closes),
+                "evening_star": ta.cdl_eveningstar(opens, highs, lows, closes),
+                "hammer": ta.cdl_hammer(opens, highs, lows, closes)
             }
             
             return {k: bool(v[-1]) for k, v in patterns.items()}

@@ -9,17 +9,21 @@ from backend.api.models.validation import (
 )
 from backend.config.settings import get_settings
 import sys
+import os
 import json
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Dict, Any, Optional
 import re
+from datetime import datetime
+
+# Add the backend module to the Python path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../backend')))
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
 project_root = Path(__file__).resolve().parent.parent.parent  # Adjusted to point to the correct root
-sys.path.insert(0, str(project_root))
 BASE_URL = "http://localhost:8000"
 TEST_COMMAND_UNIT = "pytest tests/unit"
 TEST_COMMAND_INTEGRATION = "pytest tests/integration"
@@ -27,6 +31,19 @@ TEST_COMMAND_E2E = "pytest tests/e2e"
 COVERAGE_COMMAND = "pytest --cov=./backend --cov-report xml:coverage.xml -n auto"
 COVERAGE_FILE = project_root / "coverage.xml"
 LOAD_TEST_RESULT_FILE = project_root / "load_test_results.json"
+
+# Configure logging with timestamps and log levels
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
+# Dynamic configuration for thresholds and metric names
+CPU_USAGE_THRESHOLD = float(os.getenv("CPU_USAGE_THRESHOLD", 80.0))
+MEMORY_USAGE_THRESHOLD = float(os.getenv("MEMORY_USAGE_THRESHOLD", 80.0))
+DISK_USAGE_THRESHOLD = float(os.getenv("DISK_USAGE_THRESHOLD", 90.0))
+AUTH_FAILURES_THRESHOLD = int(os.getenv("AUTH_FAILURES_THRESHOLD", 10))
 
 async def gather_metrics():
     try:
@@ -158,19 +175,18 @@ async def check_dependencies(client: httpx.AsyncClient) -> DependencyStatus:
     except Exception as e:
         logger.error(f"Error checking dependencies via /health: {e}")
 
-    # Fallback/Alternative: Direct Redis check if possible/needed (requires redis library)
-    # try:
-    #     import redis.asyncio as aioredis
-    #     # Assumes REDIS_URL is accessible, e.g., from settings or env var
-    #     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379") # Or use settings.redis.REDIS_URL
-    #     redis = await aioredis.from_url(redis_url)
-    #     await redis.ping()
-    #     status.redis_connection = True
-    #     await redis.close()
-    #     logger.info("Direct Redis ping successful.")
-    # except Exception as redis_err:
-    #     logger.error(f"Direct Redis ping failed: {redis_err}")
-    #     status.redis_connection = False # Ensure it's marked false if direct check fails
+    # Fallback: Direct Redis check
+    try:
+        import redis.asyncio as aioredis
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+        redis = await aioredis.from_url(redis_url)
+        await redis.ping()
+        status.redis_connection = True
+        await redis.close()
+        logger.info("Direct Redis ping successful.")
+    except Exception as redis_err:
+        logger.error(f"Direct Redis ping failed: {redis_err}")
+        status.redis_connection = False
 
     return status
 

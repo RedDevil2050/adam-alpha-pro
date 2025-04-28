@@ -47,3 +47,7 @@ def screen_quantitative(
         result.update(verdict=verdict, confidence=round(confidence, 2),
                       mean=round(mu, 2), z_score=round(z, 2))
     return result
+
+def tracker(metric_name: str, value: float) -> None:
+    """Track a valuation metric for logging or monitoring purposes."""
+    print(f"Tracking {metric_name}: {value}")

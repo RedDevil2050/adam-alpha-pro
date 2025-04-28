@@ -3,7 +3,19 @@ from typing import Dict, List
 from collections import deque
 from backend.config.settings import settings
 
-_history_window = deque(maxlen=settings.brain_smoothing_window)
+class Brain:
+    """Core logic for market analysis and decision-making."""
+    def __init__(self):
+        self.history_window = deque(maxlen=settings.brain_smoothing_window)
+
+    def process_data(self, data: List[float]) -> float:
+        """Process incoming data and update the history window."""
+        self.history_window.extend(data)
+        return np.mean(self.history_window)
+
+    def analyze(self, agent_results: Dict, market_regime: Dict, risk_metrics: Dict) -> Dict:
+        """Perform enhanced analysis using agent results, market regime, and risk metrics."""
+        return analyze_results(agent_results, market_regime, risk_metrics)
 
 def analyze_results(agent_results: Dict, market_regime: Dict, risk_metrics: Dict) -> Dict:
     """Enhanced analysis incorporating regime and risk"""

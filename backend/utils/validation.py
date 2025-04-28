@@ -22,3 +22,10 @@ def validate_input(min_symbols: int = 1, max_symbols: int = 100):
             return await func(*args, **kwargs)
         return wrapper
     return decorator
+
+def validate_symbols(symbols: List[str]):
+    """Validate that symbols are non-empty strings and unique"""
+    if not all(isinstance(symbol, str) and symbol.strip() for symbol in symbols):
+        raise ValidationError("All symbols must be non-empty strings")
+    if len(set(symbols)) != len(symbols):
+        raise ValidationError("Symbols must be unique")

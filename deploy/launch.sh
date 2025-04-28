@@ -6,10 +6,16 @@ echo "🚀 Initiating Production Launch Sequence..."
 
 # Load production config
 if [ ! -f "deploy/production-config.env" ]; then
-    echo "❌ Production config not found!"
+    echo "\u274c Production config not found!"
     exit 1
 fi
 source deploy/production-config.env
+
+# Circuit breaker check
+if curl -s http://localhost:8000/health | grep -q 'circuit_open'; then
+    echo "\u274c Circuit breaker is open. Aborting deployment."
+    exit 1
+fi
 
 # Run pre-flight checks
 echo "Running pre-flight checks..."

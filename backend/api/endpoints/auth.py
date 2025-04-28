@@ -4,6 +4,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...db.session import get_db
 from ...db import crud
 from ...security.utils import verify_password, create_access_token
+from pydantic import BaseModel
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
 
 router = APIRouter()
 

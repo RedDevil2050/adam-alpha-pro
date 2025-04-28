@@ -1,3 +1,4 @@
+from typing import List
 from backend.agents.valuation.base import ValuationAgent
 
 class PERatioAgent(ValuationAgent):
