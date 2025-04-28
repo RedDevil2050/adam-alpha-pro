@@ -13,6 +13,7 @@ class MetricsCollector:
             "cache_misses": 0,
             "start_time": datetime.now(),
         }
+        self.gauge = {}  # Adding the missing 'gauge' attribute
 
     def record_category_execution(
         self, category: str, result_size: int, had_error: bool

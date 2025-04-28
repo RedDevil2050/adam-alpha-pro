@@ -233,3 +233,8 @@ class CategoryManager:
     @classmethod
     def get_dependencies(cls, category: CategoryType) -> List[CategoryType]:
         return cls.CATEGORY_METADATA[category].dependencies
+
+    @classmethod
+    def get_registered_agents(cls, category: CategoryType) -> List[str]:
+        """Retrieve registered agents for a given category."""
+        return cls._agent_registry.get(category, [])

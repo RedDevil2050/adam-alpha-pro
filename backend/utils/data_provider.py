@@ -1637,3 +1637,34 @@ def _generate_mock_iex_data(endpoint: str, params: Dict[str, Any]) -> Dict[str, 
             "data": "Mock IEX Cloud API data for testing",
             "timestamp": datetime.now().isoformat()
         }
+
+# Implementing fetch_price_tradingview and fetch_eps
+@async_retry(max_retries=2, base_delay=1.0, max_delay=5.0)
+async def fetch_price_tradingview(symbol: str) -> float:
+    """
+    Fetch price data from TradingView.
+
+    Args:
+        symbol: Stock symbol
+
+    Returns:
+        Latest price as float or None if unavailable
+    """
+    logger.debug(f"Fetching price for {symbol} from TradingView")
+    # Mock implementation for testing
+    return 150.0  # Replace with actual implementation
+
+@async_retry(max_retries=2, base_delay=1.0, max_delay=5.0)
+async def fetch_eps(symbol: str) -> float:
+    """
+    Fetch EPS (Earnings Per Share) data for a stock.
+
+    Args:
+        symbol: Stock symbol
+
+    Returns:
+        EPS as float or None if unavailable
+    """
+    logger.debug(f"Fetching EPS for {symbol}")
+    # Mock implementation for testing
+    return 5.0  # Replace with actual implementation

@@ -1,3 +1,4 @@
+from abc import abstractmethod
 from backend.agents.base import AgentBase
 from backend.agents.categories import CategoryType
 
@@ -6,6 +7,11 @@ class TechnicalAgent(AgentBase):
     @property
     def category(self) -> CategoryType:
         return CategoryType.TECHNICAL
+
+    @abstractmethod
+    async def _execute(self, symbol: str, agent_outputs: dict) -> dict:
+        """Abstract method to be implemented by all technical agents."""
+        pass
 
     def get_volatility_adjustments(self, volatility: float) -> dict:
         if volatility > 0.3:

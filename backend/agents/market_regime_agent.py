@@ -5,60 +5,65 @@ from backend.agents.decorators import standard_agent_execution
 agent_name = "MarketRegimeAgent"
 AGENT_CATEGORY = "market"
 
-
 @standard_agent_execution(
     agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600
 )
 async def run(symbol: str, agent_outputs: dict = None) -> dict:
-    # Fetch historical price series
-    # Using a fixed date range here - consider making this dynamic or configurable if needed
-    price_data = await fetch_price_series(symbol, "2023-01-01", "2023-12-31")
-    prices_list = price_data.get("prices", [])
+    """
+    Analyze the market regime based on price series and volatility index.
 
-    if not prices_list or len(prices_list) < 2:
-        # Return NO_DATA format
+    Args:
+        symbol: Stock symbol
+        agent_outputs: Optional outputs from other agents
+
+    Returns:
+        A dictionary containing the market regime analysis.
+    """
+    try:
+        # Fetch data concurrently
+        closes_task = fetch_price_series(symbol)
+        vix_task = fetch_price_series("^VIX")
+        closes, vix = await asyncio.gather(closes_task, vix_task)
+
+        if closes is None or len(closes) < 260:
+            return {
+                "symbol": symbol,
+                "verdict": "NO_DATA",
+                "confidence": 0.0,
+                "value": None,
+                "details": {},
+                "error": "Insufficient data",
+                "agent_name": agent_name,
+            }
+
+        # Calculate moving averages and slope
+        series = pd.Series(closes)
+        dma200 = series.rolling(200).mean()
+        slope = (dma200.iloc[-1] - dma200.iloc[-21]) / dma200.iloc[-21]
+
+        # Determine market regime
+        if slope > 0.02:
+            regime = "BULLISH"
+        elif slope < -0.02:
+            regime = "BEARISH"
+        else:
+            regime = "NEUTRAL"
+
         return {
             "symbol": symbol,
-            "verdict": "NO_DATA",
-            "confidence": 0.0,
-            "value": None,
-            "details": {},
+            "verdict": regime,
+            "confidence": round(abs(slope), 2),
+            "value": slope,
+            "details": {"dma200_slope": slope},
+            "agent_name": agent_name,
         }
 
-    prices = pd.Series(prices_list)
-
-    # Calculate market regime (example logic)
-    pct_change = prices.pct_change()
-    volatility = pct_change.std()
-    trend = pct_change.mean()
-
-    # Handle potential NaN values if data is insufficient after pct_change
-    if pd.isna(volatility) or pd.isna(trend):
+    except Exception as e:
         return {
             "symbol": symbol,
-            "verdict": "NO_DATA",
+            "verdict": "ERROR",
             "confidence": 0.0,
             "value": None,
-            "details": {"reason": "Insufficient data for calculation"},
+            "details": {"error": str(e)},
+            "agent_name": agent_name,
         }
-
-    if volatility > 0.02 and trend > 0:
-        regime = "Bullish"
-        confidence = 0.8  # Example confidence
-    elif volatility > 0.02 and trend < 0:
-        regime = "Bearish"
-        confidence = 0.8  # Example confidence
-    else:
-        regime = "Neutral"
-        confidence = 0.6  # Example confidence
-
-    # Return success result
-    return {
-        "symbol": symbol,
-        "verdict": regime,
-        "confidence": round(
-            min(volatility * 50, 1.0), 4
-        ),  # Adjusted confidence calculation example
-        "value": round(trend, 6),
-        "details": {"volatility": round(volatility, 6), "trend": round(trend, 6)},
-    }

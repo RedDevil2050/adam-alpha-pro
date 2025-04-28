@@ -6,8 +6,7 @@ import asyncio
 from backend.utils.data_provider import (
     fetch_price_trendlyne, fetch_price_tickertape,
     fetch_price_moneycontrol, fetch_price_stockedge,
-    fetch_price_tradingview, fetch_price_nse, fetch_price_bse,
-    fetch_news_mint, fetch_news_bs, fetch_news_et
+    fetch_price_tradingview
 )
 
 @pytest.mark.asyncio

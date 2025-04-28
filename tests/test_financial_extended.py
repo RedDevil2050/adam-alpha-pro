@@ -7,7 +7,7 @@ import pandas as pd
 from backend.agents.technical.rsi_agent import run as rsi_run
 from backend.agents.technical.macd_agent import run as macd_run
 from backend.agents.risk.beta_agent import run as beta_run
-from backend.agents.risk.volatility_agent import run as vol_run
+from backend.agents.risk.volatility_level_agent import run as vol_run 
 from backend.agents.valuation.dcf_agent import run as dcf_run
 from backend.agents.risk.sharpe_agent import run as sharpe_run
 from backend.agents.risk.drawdown_agent import run as drawdown_run

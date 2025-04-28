@@ -112,6 +112,7 @@ class SecuritySettings(BaseSettings):
     # Use JWT_SECRET_KEY directly for consistency
     JWT_SECRET_KEY: str = Field("test-jwt-secret-for-market-deployment-checks", env="JWT_SECRET_KEY")
     TOKEN_EXPIRATION: int = Field(3600, env="JWT_TOKEN_EXPIRATION")  # seconds
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(60, env="JWT_ACCESS_TOKEN_EXPIRE_MINUTES") # Added field, default 60 mins
     ALGORITHM: str = Field("HS256", env="JWT_ALGORITHM")
 
     model_config = SettingsConfigDict(
@@ -256,6 +257,8 @@ class Settings(BaseSettings):
     database: DatabaseSettings = DatabaseSettings()
     agent_settings: AgentSettings = AgentSettings()  # Ensure this line exists
 
+    agent_cache_ttl: int = Field(default=3600, description="Default cache TTL for agents in seconds")
+
     @property
     def is_production(self) -> bool:
         return self.ENV.lower() == "production"
@@ -314,6 +317,15 @@ class Settings(BaseSettings):
             return getattr(self.api_keys, f"{provider}_KEY")
         return None
 
+    # Ensure JWT_SECRET_KEY is always initialized in the Settings class
+    @property
+    def JWT_SECRET_KEY(self) -> str:
+        return self.security.JWT_SECRET_KEY or "default-jwt-secret-key"
+
+    @property
+    def JWT_ALGORITHM(self) -> str:
+        return self.security.ALGORITHM or "HS256"
+
     model_config = SettingsConfigDict(
         env_file=".env", 
         case_sensitive=True,
@@ -337,13 +349,19 @@ def get_settings() -> Settings:
                 _settings = Settings(
                     ENV="testing",
                     DEBUG=True,
+                    # Ensure SecuritySettings includes the necessary fields for testing
                     security=SecuritySettings(
-                        JWT_SECRET_KEY="secure-test-jwt-secret-for-testing-environment-only"
+                        JWT_SECRET_KEY="secure-test-jwt-secret-for-testing-environment-only",
+                        ACCESS_TOKEN_EXPIRE_MINUTES=60 # Add the missing field here for test env
                     ),
-                    api_keys=APIKeys(),
+                    api_keys=APIKeys(), # Ensure APIKeys is initialized
                     database=DatabaseSettings(
                         URL="sqlite:///./test.db"
-                    )
+                    ),
+                    # Initialize other nested settings if needed for tests
+                    data_provider=DataProviderSettings(),
+                    logging=LoggingSettings(),
+                    agent_settings=AgentSettings()
                 )
                 logger.debug("Test settings initialized successfully")
             else:
@@ -353,16 +371,21 @@ def get_settings() -> Settings:
             settings = _settings
         except Exception as e:
             logger.error(f"Error initializing settings: {str(e)}")
+            # Fallback settings should also ideally include all necessary fields
             _settings = Settings(
                 ENV="development",
                 DEBUG=True,
                 api_keys=APIKeys(),
                 security=SecuritySettings(
-                    JWT_SECRET_KEY="temporary-jwt-secret-for-development-only"
+                    JWT_SECRET_KEY="temporary-jwt-secret-for-development-only",
+                    ACCESS_TOKEN_EXPIRE_MINUTES=60 # Add here too for safety
                 ),
                 database=DatabaseSettings(
                     URL="sqlite:///./default.db"
-                )
+                ),
+                data_provider=DataProviderSettings(),
+                logging=LoggingSettings(),
+                agent_settings=AgentSettings()
             )
             settings = _settings
             logger.warning("Using default settings due to initialization error")
