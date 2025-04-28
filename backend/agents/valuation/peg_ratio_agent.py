@@ -2,13 +2,61 @@ import asyncio
 from backend.utils.data_provider import fetch_alpha_vantage # Use fetch_alpha_vantage
 from loguru import logger
 from backend.agents.decorators import standard_agent_execution # Import decorator
+# TODO: Import get_settings and add PegRatioAgentSettings to settings.py
+# from backend.config.settings import get_settings
 
 agent_name = "peg_ratio_agent"
 AGENT_CATEGORY = "valuation" # Define category for the decorator
 
 @standard_agent_execution(agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600)
 async def run(symbol: str, agent_outputs: dict = None) -> dict:
+    """
+    Calculates the Price/Earnings-to-Growth (PEG) ratio for a given stock symbol and assesses its valuation relative to growth expectations.
+
+    Purpose:
+        Determines the PEG ratio, which adjusts the P/E ratio by factoring in the expected earnings growth rate.
+        It helps assess if a stock's price is justified by its earnings growth prospects.
+        A PEG ratio around 1 is often considered fairly valued, < 1 potentially undervalued, and > 1 potentially overvalued.
+
+    Metrics Calculated:
+        - PEG Ratio (P/E Ratio / Annual EPS Growth Rate)
+
+    Logic:
+        1. Fetches company overview data from Alpha Vantage, which may include a pre-calculated PEG ratio.
+        2. Attempts to parse the provided PEG ratio. Handles cases where data is missing, 'None', or non-numeric.
+        3. (Future Enhancement: If PEG is not provided, it could be calculated using P/E ratio (also from overview) and an externally sourced EPS growth rate. This is not currently implemented due to lack of a reliable growth rate source in the overview data.)
+        4. Compares the PEG ratio against configurable thresholds (THRESHOLD_LOW_PEG, THRESHOLD_HIGH_PEG):
+            - If PEG <= 0: Verdict is 'NEGATIVE_OR_ZERO_PEG' (indicates negative earnings or growth).
+            - If 0 < PEG < THRESHOLD_LOW_PEG: Verdict is 'UNDERVALUED'.
+            - If THRESHOLD_LOW_PEG <= PEG <= THRESHOLD_HIGH_PEG: Verdict is 'FAIRLY_VALUED'.
+            - If PEG > THRESHOLD_HIGH_PEG: Verdict is 'OVERVALUED'.
+        5. Sets a fixed confidence score based on the verdict category.
+
+    Dependencies:
+        - Requires company overview data containing the PEG ratio (e.g., from Alpha Vantage).
+        - (Calculation fallback would require P/E ratio and a reliable EPS growth rate source).
+
+    Configuration Used (Requires manual addition to settings.py):
+        - `settings.agent_settings.peg_ratio.THRESHOLD_LOW_PEG`: Upper bound for 'UNDERVALUED'.
+        - `settings.agent_settings.peg_ratio.THRESHOLD_HIGH_PEG`: Upper bound for 'FAIRLY_VALUED'.
+
+    Return Structure:
+        A dictionary containing:
+        - symbol (str): The stock symbol.
+        - verdict (str): 'UNDERVALUED', 'FAIRLY_VALUED', 'OVERVALUED', 'NEGATIVE_OR_ZERO_PEG', 'NO_DATA', or 'INVALID_DATA'.
+        - confidence (float): A fixed score based on the verdict category (0.0 to 1.0).
+        - value (float | None): The calculated/provided PEG ratio, or None if not available/applicable.
+        - details (dict): Contains the raw PEG/PE ratios, data source, and configured thresholds.
+        - agent_name (str): The name of this agent.
+        - error (str | None): Error message if an issue occurred (handled by decorator).
+    """
     # Boilerplate handled by decorator
+    # TODO: Fetch settings
+    # settings = get_settings()
+    # peg_settings = settings.agent_settings.peg_ratio
+    # Define thresholds directly for now, replace with settings later
+    THRESHOLD_LOW_PEG = 1.0
+    THRESHOLD_HIGH_PEG = 2.0
 
     # Fetch overview data which contains PE Ratio and PEG Ratio
     # Note: Alpha Vantage provides PEG directly, but also PE and Analyst Target Price (which might imply growth)
@@ -75,21 +123,19 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
             "agent_name": agent_name
         }
 
-    # 4. Determine Verdict based on PEG ratio
-    # PEG < 1 is often considered potentially undervalued
-    # PEG > 2 is often considered potentially overvalued
+    # 4. Determine Verdict based on standardized PEG ratio thresholds
     if peg_ratio <= 0:
         # Negative PEG usually means negative earnings (negative PE) or zero/negative growth
-        verdict = "NEGATIVE_OR_ZERO_PEG"
+        verdict = "NEGATIVE_OR_ZERO_PEG" # Specific case
         confidence = 0.6 # Confidence that the value is problematic or indicates negative earnings/growth
-    elif peg_ratio < 1.0:
-        verdict = "POTENTIALLY_UNDERVALUED"
+    elif peg_ratio < THRESHOLD_LOW_PEG:
+        verdict = "UNDERVALUED" # Standardized verdict (potentially high growth for price)
         confidence = 0.7
-    elif peg_ratio <= 2.0:
-        verdict = "FAIRLY_VALUED"
+    elif peg_ratio <= THRESHOLD_HIGH_PEG:
+        verdict = "FAIRLY_VALUED" # Standardized verdict
         confidence = 0.5
-    else: # peg_ratio > 2.0
-        verdict = "POTENTIALLY_OVERVALUED"
+    else: # peg_ratio > THRESHOLD_HIGH_PEG
+        verdict = "OVERVALUED" # Standardized verdict (potentially low growth for price)
         confidence = 0.4
 
     # Create success result dictionary
@@ -102,7 +148,10 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
             "peg_ratio": round(peg_ratio, 2),
             "data_source": data_source,
             "raw_peg_provided": peg_ratio_str, # Include raw value for context
-            "raw_pe_provided": pe_ratio_str
+            "raw_pe_provided": pe_ratio_str,
+            # TODO: Add thresholds from settings to details
+            "threshold_undervalued": THRESHOLD_LOW_PEG, # Using placeholder value for now
+            "threshold_overvalued": THRESHOLD_HIGH_PEG  # Using placeholder value for now
         },
         "agent_name": agent_name
     }

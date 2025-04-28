@@ -8,70 +8,52 @@ AGENT_CATEGORY = "esg" # Define category for the decorator
 @standard_agent_execution(agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=86400) # Apply decorator
 async def run(symbol: str, agent_outputs: dict = None) -> dict: # Define run function
     # Boilerplate (cache check, try/except, cache set, tracker, error handling) is handled by decorator
-    try:
-        # Fetch ESG data for the given symbol (Core Logic)
-        esg_data = await fetch_esg_data(symbol)
 
-        if not esg_data:
-            # Return NO_DATA format (decorator won't cache this)
-            return {
-                "symbol": symbol,
-                "verdict": "NO_DATA",
-                "confidence": 0.0,
-                "value": None,
-                "details": {"reason": "No ESG data available"},
-                "error": None, # Explicitly None for NO_DATA
-                "agent_name": agent_name # Decorator might overwrite this
-            }
+    # Fetch ESG data for the given symbol (Core Logic)
+    esg_data = await fetch_esg_data(symbol)
 
-        # Calculate ESG score (Core Logic)
-        environmental = esg_data.get("environmental", 0)
-        social = esg_data.get("social", 0)
-        governance = esg_data.get("governance", 0)
-
-        # Basic scoring, adjust as needed
-        # Assuming scores are out of 100, normalize if necessary
-        esg_score = (environmental + social + governance) / 3
-
-        # Determine verdict based on score (Example thresholds)
-        if esg_score > 70:
-            verdict = "STRONG_ESG"
-        elif esg_score > 40:
-            verdict = "MODERATE_ESG"
-        else:
-            verdict = "WEAK_ESG"
-
-        # Create success result dictionary (Core Logic)
-        result = {
-            "symbol": symbol,
-            "verdict": verdict,
-            "confidence": round(esg_score, 2), # Use score as confidence, or derive differently
-            "value": round(esg_score, 2),
-            "details": {
-                "environmental_score": environmental,
-                "social_score": social,
-                "governance_score": governance,
-                "composite_esg_score": round(esg_score, 2)
-            },
-            "error": None, # Explicitly None for success
-            "agent_name": agent_name # Decorator might overwrite this
-        }
-        return result
-
-    # Specific exception handling for data fetching issues leading to NO_DATA
-    except Exception as data_err: # Catch specific data errors if possible
-        # This specific catch might be redundant if fetch_esg_data handles its errors
-        # and returns None/empty dict, which the check above handles.
-        # If fetch_esg_data raises errors directly, this might be needed.
-        # Consider logging the specific error here.
-        # logger.warning(f"Data fetch error for {symbol} in {agent_name}: {data_err}")
+    if not esg_data:
+        # Return NO_DATA format (decorator won't cache this)
         return {
             "symbol": symbol,
-            "verdict": "NO_DATA", # Or potentially "ERROR" if it's not just missing data
+            "verdict": "NO_DATA",
             "confidence": 0.0,
             "value": None,
-            "details": {"reason": f"Failed to fetch or process ESG data: {data_err}"},
-            "error": str(data_err),
-            "agent_name": agent_name
+            "details": {"reason": "No ESG data available"},
+            "error": None, # Explicitly None for NO_DATA
+            "agent_name": agent_name # Decorator might overwrite this
         }
-    # General exceptions are now handled by the decorator
+
+    # Calculate ESG score (Core Logic)
+    environmental = esg_data.get("environmental", 0)
+    social = esg_data.get("social", 0)
+    governance = esg_data.get("governance", 0)
+
+    # Basic scoring, adjust as needed
+    # Assuming scores are out of 100, normalize if necessary
+    esg_score = (environmental + social + governance) / 3
+
+    # Determine verdict based on score (Example thresholds)
+    if esg_score > 70:
+        verdict = "STRONG_ESG"
+    elif esg_score > 40:
+        verdict = "MODERATE_ESG"
+    else:
+        verdict = "WEAK_ESG"
+
+    # Create success result dictionary (Core Logic)
+    result = {
+        "symbol": symbol,
+        "verdict": verdict,
+        "confidence": round(esg_score, 2), # Use score as confidence, or derive differently
+        "value": round(esg_score, 2),
+        "details": {
+            "environmental_score": environmental,
+            "social_score": social,
+            "governance_score": governance,
+            "composite_esg_score": round(esg_score, 2)
+        },
+        "error": None, # Explicitly None for success
+        "agent_name": agent_name # Decorator might overwrite this
+    }
+    return result

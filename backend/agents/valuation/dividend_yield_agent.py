@@ -2,13 +2,66 @@ import asyncio
 from backend.utils.data_provider import fetch_price_point, fetch_alpha_vantage # Use fetch_alpha_vantage
 from loguru import logger
 from backend.agents.decorators import standard_agent_execution # Import decorator
+# TODO: Import get_settings and add DividendYieldAgentSettings to settings.py
+# from backend.config.settings import get_settings
 
 agent_name = "dividend_yield_agent"
 AGENT_CATEGORY = "valuation" # Define category for the decorator
 
 @standard_agent_execution(agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600)
 async def run(symbol: str, agent_outputs: dict = None) -> dict:
+    """
+    Calculates the Dividend Yield for a given stock symbol and assesses its attractiveness.
+
+    Purpose:
+        Determines the annual dividend payment relative to the stock's current market price.
+        It helps income-focused investors assess the return generated from dividends.
+
+    Metrics Calculated:
+        - Dividend Yield (%) = (Annual Dividend per Share / Current Market Price per Share) * 100
+
+    Logic:
+        1. Attempts to retrieve dividend yield or dividend per share (DPS) from the output of `dividend_agent` if available in `agent_outputs`.
+        2. If data is found in `agent_outputs`:
+            - If yield is present, use it directly.
+            - If only DPS is present, fetch the current price (`fetch_price_point`) and calculate the yield.
+        3. If data is not found in `agent_outputs` or is insufficient:
+            - Fetch company overview data (`fetch_alpha_vantage`) which contains DividendYield and DividendPerShare.
+            - Fetch the current price (`fetch_price_point`).
+            - Attempt to parse DividendYield and DividendPerShare from the overview.
+            - If yield is missing but DPS and price are available, calculate the yield.
+        4. Validates the calculated or fetched yield.
+        5. If no valid yield can be determined, checks if the company explicitly pays no dividend (based on overview data if available) and returns 'NO_DIVIDEND' or 'NO_DATA'.
+        6. Compares the dividend yield percentage against configurable thresholds (e.g., HIGH_YIELD > 5%, ATTRACTIVE_YIELD > 2.5%, MODERATE_YIELD > 1.0%):
+            - Assigns verdicts: 'HIGH_YIELD', 'ATTRACTIVE_YIELD', 'MODERATE_YIELD', 'LOW_YIELD'.
+        7. Sets a fixed confidence score based on the verdict category.
+
+    Dependencies:
+        - Optionally uses output from `dividend_agent`.
+        - Requires current stock price (`fetch_price_point`).
+        - Requires company overview data (`fetch_alpha_vantage`) for yield/DPS or fallback calculation.
+
+    Configuration Used (Requires manual addition to settings.py):
+        - Thresholds for HIGH_YIELD, ATTRACTIVE_YIELD, MODERATE_YIELD (e.g., `settings.agent_settings.dividend_yield.THRESHOLD_HIGH`)
+
+    Return Structure:
+        A dictionary containing:
+        - symbol (str): The stock symbol.
+        - verdict (str): 'HIGH_YIELD', 'ATTRACTIVE_YIELD', 'MODERATE_YIELD', 'LOW_YIELD', 'NO_DIVIDEND', or 'NO_DATA'.
+        - confidence (float): A fixed score based on the verdict category (0.0 to 1.0).
+        - value (float | None): The calculated dividend yield percentage, or None if not available.
+        - details (dict): Contains yield %, price, DPS, data source, and configured thresholds.
+        - agent_name (str): The name of this agent.
+        - error (str | None): Error message if an issue occurred (handled by decorator).
+    """
     # Boilerplate handled by decorator
+    # TODO: Fetch settings
+    # settings = get_settings()
+    # yield_settings = settings.agent_settings.dividend_yield
+    # Define thresholds directly for now, replace with settings later
+    THRESHOLD_HIGH = 5.0
+    THRESHOLD_ATTRACTIVE = 2.5
+    THRESHOLD_MODERATE = 1.0
 
     dividend_yield = None
     current_price = None
@@ -99,13 +152,13 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     dividend_yield_percent = dividend_yield * 100
 
     # Score based on dividend yield ranges (Core Logic)
-    if dividend_yield_percent > 5.0: # Adjusted threshold
+    if dividend_yield_percent > THRESHOLD_HIGH:
         verdict = "HIGH_YIELD"
         confidence = 0.8
-    elif dividend_yield_percent > 2.5: # Adjusted threshold
+    elif dividend_yield_percent > THRESHOLD_ATTRACTIVE:
         verdict = "ATTRACTIVE_YIELD"
         confidence = 0.7
-    elif dividend_yield_percent > 1.0: # Adjusted threshold
+    elif dividend_yield_percent > THRESHOLD_MODERATE:
         verdict = "MODERATE_YIELD"
         confidence = 0.5
     else:
@@ -122,7 +175,11 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
             "yield_percent": round(dividend_yield_percent, 2),
             "current_price": round(current_price, 2) if current_price is not None else None,
             "annual_dividend_per_share": round(annual_dividend, 4) if annual_dividend is not None else None,
-            "data_source": data_source
+            "data_source": data_source,
+            # TODO: Add thresholds from settings to details
+            "threshold_high": THRESHOLD_HIGH,
+            "threshold_attractive": THRESHOLD_ATTRACTIVE,
+            "threshold_moderate": THRESHOLD_MODERATE
         },
         "agent_name": agent_name
     }

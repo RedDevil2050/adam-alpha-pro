@@ -1,16 +1,65 @@
 import sys, os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
 
+import asyncio # Import asyncio
 from backend.utils.data_provider import fetch_price_point, fetch_book_value
 from loguru import logger
 from backend.agents.decorators import standard_agent_execution # Import decorator
+# TODO: Import get_settings and add BookToMarketAgentSettings to settings.py
+# from backend.config.settings import get_settings
 
 agent_name = "book_to_market_agent"
 AGENT_CATEGORY = "valuation" # Define category for the decorator
 
 @standard_agent_execution(agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600)
 async def run(symbol: str, agent_outputs: dict = None) -> dict: # Added agent_outputs default
+    """
+    Calculates the Book-to-Market (B/M) ratio for a given stock symbol and assesses its valuation.
+
+    Purpose:
+        Determines the B/M ratio, which compares a company's book value (accounting value) to its market value.
+        It's often used by value investors; a higher ratio (book value > market value) can suggest undervaluation.
+
+    Metrics Calculated:
+        - Book-to-Market Ratio (Book Value per Share / Market Price per Share)
+
+    Logic:
+        1. Fetches the latest stock price using `fetch_price_point`.
+        2. Fetches the book value per share using `fetch_book_value`.
+        3. Validates that both price and book value are available and positive.
+        4. Calculates the B/M ratio.
+        5. Compares the B/M ratio against configurable thresholds (THRESHOLD_UNDERVALUED_BTM, THRESHOLD_OVERVALUED_BTM):
+            - If B/M <= 0: Verdict is 'NEGATIVE_OR_ZERO_BV'.
+            - If B/M > THRESHOLD_UNDERVALUED_BTM: Verdict is 'UNDERVALUED'.
+            - If THRESHOLD_OVERVALUED_BTM < B/M <= THRESHOLD_UNDERVALUED_BTM: Verdict is 'FAIRLY_VALUED'.
+            - If 0 < B/M <= THRESHOLD_OVERVALUED_BTM: Verdict is 'OVERVALUED'.
+        6. Sets a fixed confidence score based on the verdict category.
+
+    Dependencies:
+        - Requires latest stock price (`fetch_price_point`).
+        - Requires book value per share (`fetch_book_value`).
+
+    Configuration Used (Requires manual addition to settings.py):
+        - `settings.agent_settings.book_to_market.THRESHOLD_UNDERVALUED_BTM`: Lower bound for 'UNDERVALUED'.
+        - `settings.agent_settings.book_to_market.THRESHOLD_OVERVALUED_BTM`: Lower bound for 'FAIRLY_VALUED'.
+
+    Return Structure:
+        A dictionary containing:
+        - symbol (str): The stock symbol.
+        - verdict (str): 'UNDERVALUED', 'FAIRLY_VALUED', 'OVERVALUED', 'NEGATIVE_OR_ZERO_BV', or 'NO_DATA'.
+        - confidence (float): A fixed score based on the verdict category (0.0 to 1.0).
+        - value (float | None): The calculated B/M ratio, or None if not available/applicable.
+        - details (dict): Contains book value, price, B/M ratio, and configured thresholds.
+        - agent_name (str): The name of this agent.
+        - error (str | None): Error message if an issue occurred (handled by decorator).
+    """
     # Boilerplate (cache check, try/except, cache set, tracker, error handling) is handled by decorator
+    # TODO: Fetch settings
+    # settings = get_settings()
+    # btm_settings = settings.agent_settings.book_to_market
+    # Define thresholds directly for now, replace with settings later
+    THRESHOLD_UNDERVALUED_BTM = 0.8 # BTM > 0.8 might indicate undervaluation
+    THRESHOLD_OVERVALUED_BTM = 0.5 # BTM < 0.5 might indicate overvaluation
 
     # Fetch data (Core Logic)
     # Use asyncio.gather for concurrent fetching
@@ -42,20 +91,19 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict: # Added agent_ou
     # Assuming fetch_book_value returns book value per share
     btm_ratio = book_value / price
 
-    # Determine Verdict and Confidence (Core Logic)
-    # Confidence can be based on how far the ratio is from 1, capped at 1.0
-    if btm_ratio > 1.2: # Significantly undervalued
-        verdict = "STRONG_BUY"
-        confidence = 0.9
-    elif btm_ratio > 0.8: # Undervalued
-        verdict = "BUY"
+    # Determine Verdict and Confidence using standardized verdicts
+    if btm_ratio <= 0:
+        verdict = "NEGATIVE_OR_ZERO_BV" # Specific case if book value is negative
         confidence = 0.7
-    elif btm_ratio > 0.5: # Fairly valued to slightly overvalued
-        verdict = "HOLD"
+    elif btm_ratio > THRESHOLD_UNDERVALUED_BTM: # High BTM -> Undervalued
+        verdict = "UNDERVALUED"
+        confidence = 0.7 # Higher confidence for stronger signal
+    elif btm_ratio > THRESHOLD_OVERVALUED_BTM: # Moderate BTM -> Fairly Valued
+        verdict = "FAIRLY_VALUED"
         confidence = 0.5
-    else: # Overvalued
-        verdict = "AVOID"
-        confidence = 0.3 # Lower confidence as it's considered overvalued
+    else: # Low BTM -> Overvalued
+        verdict = "OVERVALUED"
+        confidence = 0.4 # Lower confidence as it's considered overvalued
 
     # Create success result dictionary (Core Logic)
     result = {
@@ -66,7 +114,10 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict: # Added agent_ou
         "details": {
             "book_value_per_share": round(book_value, 4),
             "latest_price": round(price, 4),
-            "btm_ratio": round(btm_ratio, 4)
+            "btm_ratio": round(btm_ratio, 4),
+            # TODO: Add thresholds from settings to details
+            "threshold_undervalued": THRESHOLD_UNDERVALUED_BTM, # Using placeholder value for now
+            "threshold_overvalued": THRESHOLD_OVERVALUED_BTM  # Using placeholder value for now
             },
         "agent_name": agent_name
     }
