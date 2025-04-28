@@ -1,69 +1,99 @@
+"""Decorators for standardizing agent execution patterns."""
+
 import functools
-from backend.utils.cache_utils import redis_client
+import traceback
 from loguru import logger
-# Assuming tracker is accessible globally or passed differently.
-# For now, commenting out direct tracker import/usage within the decorator.
-# A more robust solution might involve passing the tracker or using a context manager.
-# from backend.agents.risk.utils import tracker # Adjust path as needed
+from backend.utils.cache_utils import redis_client
+# Assuming tracker is globally accessible or passed differently.
+# If tracker needs specific category/agent context, this might need adjustment.
+# from backend.agents.intelligence.utils import tracker # Example path, adjust as needed
 
 def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 3600):
     """
-    Decorator to handle standard agent execution boilerplate:
+    Decorator to handle standard agent boilerplate:
     - Cache checking
-    - Error handling
-    - Result caching (on success)
-    - Standard error formatting
-    - (Optional/Future: Tracker updates)
+    - Error handling and logging
+    - Standardized result formatting (success, NO_DATA, ERROR)
+    - Cache setting on success
+    - Tracker updates (Placeholder - requires tracker implementation details)
     """
     def decorator(func):
         @functools.wraps(func)
-        async def wrapper(symbol: str, *args, **kwargs): # Accept potential agent_outputs etc.
+        async def wrapper(*args, **kwargs): # More flexible args
+            # Assume symbol is the first positional argument if present
+            symbol = args[0] if args and isinstance(args[0], str) else kwargs.get("symbol", "unknown")
             cache_key = f"{agent_name}:{symbol}"
+
             try:
                 # 1. Cache Check
-                cached = await redis_client.get(cache_key)
-                if cached:
-                    logger.debug(f"Cache hit for {agent_name} on {symbol}")
-                    return cached
-                logger.debug(f"Cache miss for {agent_name} on {symbol}")
+                cached_str = await redis_client.get(cache_key)
+                if cached_str:
+                    try:
+                        # Attempt to deserialize cached data (assuming JSON string)
+                        cached_data = await redis_client.get_json(cache_key)
+                        if cached_data:
+                             logger.debug(f"Cache hit for {cache_key}")
+                             return cached_data
+                        else:
+                             logger.warning(f"Cache hit for {cache_key} but failed to parse JSON.")
+                             # Proceed to execute function if cache is invalid
+                    except Exception as e:
+                        logger.warning(f"Error reading cache for {cache_key}: {e}. Re-running agent.")
+                        # Proceed to execute function if cache is corrupted
 
+                logger.debug(f"Cache miss for {cache_key}. Running agent {agent_name}.")
                 # 2. Execute Core Logic
-                # Pass through any extra args/kwargs (like agent_outputs)
-                result = await func(symbol, *args, **kwargs)
+                result = await func(*args, **kwargs) # Pass all args/kwargs
 
-                # 3. Cache Result (only on success/valid data)
-                # Do not cache ERROR or NO_DATA verdicts
-                if result and result.get("verdict") not in ["ERROR", "NO_DATA"]:
-                     logger.debug(f"Setting cache for {agent_name} on {symbol}")
-                     await redis_client.set(cache_key, result, ex=cache_ttl)
-                elif result and result.get("verdict") == "NO_DATA":
-                    logger.warning(f"No data found for {agent_name} on {symbol}. Not caching.")
-                elif result and result.get("verdict") == "ERROR":
-                     logger.error(f"Error in {agent_name} for {symbol}. Not caching. Error: {result.get('error')}")
+                # Ensure result is a dictionary before proceeding
+                if not isinstance(result, dict):
+                     logger.error(f"Agent {agent_name} for {symbol} did not return a dictionary. Returned: {type(result)}")
+                     # Return a standard error format if the agent's return is invalid
+                     return {
+                         "symbol": symbol,
+                         "verdict": "ERROR",
+                         "confidence": 0.0,
+                         "value": None,
+                         "details": {"error": "Agent implementation returned invalid type."},
+                         "error": "Agent implementation returned invalid type.",
+                         "agent_name": agent_name
+                     }
 
 
-                # 4. Update Tracker (Placeholder - needs proper implementation)
-                # This might need to be handled outside the decorator or passed in.
-                # try:
-                #     # Assuming tracker is globally accessible or configured
-                #     from backend.agents.risk.utils import tracker # Example path
-                #     tracker.update(category, agent_name, "implemented")
-                # except Exception as tracker_error:
-                #     logger.warning(f"Failed to update tracker for {agent_name}: {tracker_error}")
+                # Add agent_name to the result if not already present (for success/NO_DATA)
+                if "agent_name" not in result:
+                    result["agent_name"] = agent_name
+
+                # 3. Cache Result (only on success, not NO_DATA or ERROR)
+                # Check for specific verdicts that indicate success
+                successful_verdicts = result.get("verdict") not in ["ERROR", "NO_DATA", None]
+                if successful_verdicts:
+                    try:
+                        await redis_client.set_json(cache_key, result, ex=cache_ttl)
+                        logger.debug(f"Cached result for {cache_key} with TTL {cache_ttl}s.")
+                    except Exception as e:
+                         logger.error(f"Failed to cache result for {agent_name} ({symbol}): {e}")
+
+
+                # 4. Update Tracker (Placeholder)
+                # This needs a proper implementation based on how 'tracker' is managed.
+                # Example: tracker.update(category, agent_name, "executed_success" if successful_verdicts else "executed_nodata")
+                # logger.debug(f"Tracker update placeholder for {category}/{agent_name}")
 
                 return result
 
             except Exception as e:
                 # 5. Standard Error Handling
-                logger.exception(f"Unhandled exception in agent {agent_name} for {symbol}: {e}")
-                # Return standard error format
+                logger.error(f"Error executing agent {agent_name} for {symbol}: {e}
+{traceback.format_exc()}")
+                # tracker.update(category, agent_name, "execution_error") # Placeholder
                 return {
                     "symbol": symbol,
                     "verdict": "ERROR",
                     "confidence": 0.0,
                     "value": None,
-                    "details": {},
-                    "error": f"Unhandled exception: {str(e)}", # Provide more context
+                    "details": {"error": str(e)}, # Include error in details
+                    "error": str(e),
                     "agent_name": agent_name
                 }
         return wrapper
