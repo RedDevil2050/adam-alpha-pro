@@ -830,3 +830,650 @@ async def fetch_book_value(symbol: str) -> float | None:
     # If all sources fail, log error and return None
     logger.error(f"Failed to get Book Value per Share for {symbol} from all sources")
     return None
+
+
+@async_retry(max_retries=2, base_delay=1.0, max_delay=5.0)
+async def fetch_latest_eps(symbol: str) -> float:
+    """
+    Fetch the latest Earnings Per Share (EPS) for a company.
+
+    Args:
+        symbol: Stock symbol
+
+    Returns:
+        EPS value as float or None if unavailable
+    """
+    logger.debug(f"Fetching latest EPS for {symbol}")
+
+    # Try multiple data sources in order
+    try:
+        # Try Yahoo Finance first
+        loop = asyncio.get_event_loop()
+
+        def get_eps():
+            ticker = yf.Ticker(symbol)
+            info = ticker.info
+            if "trailingEPS" in info and info["trailingEPS"] is not None:
+                return info["trailingEPS"]
+            return None
+
+        eps = await loop.run_in_executor(None, get_eps)
+        
+        if eps is not None:
+            logger.info(f"Got EPS {eps} for {symbol} from Yahoo Finance")
+            return float(eps)
+
+    except Exception as e:
+        logger.warning(f"Failed to get EPS from Yahoo Finance: {str(e)}")
+
+    # Try Alpha Vantage as fallback
+    try:
+        av_data = await fetch_from_alpha_vantage("OVERVIEW", {"symbol": symbol})
+        
+        if av_data and "EPS" in av_data and av_data["EPS"]:
+            try:
+                eps = float(av_data["EPS"])
+                logger.info(f"Got EPS {eps} for {symbol} from Alpha Vantage")
+                return eps
+            except (ValueError, TypeError):
+                pass
+
+        # Try earnings endpoint if overview didn't work
+        earnings_data = await fetch_from_alpha_vantage("EARNINGS", {"symbol": symbol})
+        if earnings_data and "quarterlyEarnings" in earnings_data and earnings_data["quarterlyEarnings"]:
+            latest_earnings = earnings_data["quarterlyEarnings"][0]
+            if "reportedEPS" in latest_earnings:
+                try:
+                    eps = float(latest_earnings["reportedEPS"])
+                    logger.info(f"Got latest quarterly EPS {eps} for {symbol} from Alpha Vantage")
+                    return eps
+                except (ValueError, TypeError):
+                    pass
+
+    except Exception as e:
+        logger.warning(f"Failed to get EPS from Alpha Vantage: {str(e)}")
+
+    # Try web scraping as a last resort
+    try:
+        scraped_data = await scrape_stock_data(symbol)
+        if scraped_data and "eps" in scraped_data:
+            eps = scraped_data["eps"]
+            logger.info(f"Got EPS {eps} for {symbol} from web scraping")
+            return eps
+    
+    except Exception as e:
+        logger.warning(f"Failed to get EPS from web scraping: {str(e)}")
+
+    # If all sources fail, log error and return None
+    logger.error(f"Failed to get latest EPS for {symbol} from all sources")
+    return None
+
+
+@async_retry(max_retries=2, base_delay=1.0, max_delay=5.0)
+async def fetch_latest_bvps(symbol: str) -> float:
+    """
+    Fetch the latest Book Value Per Share (BVPS) for a company.
+    This is an alias for fetch_book_value to maintain backwards compatibility.
+
+    Args:
+        symbol: Stock symbol
+
+    Returns:
+        Book Value Per Share as float or None if unavailable
+    """
+    logger.debug(f"Fetching latest BVPS for {symbol}")
+    
+    # Simply call the existing fetch_book_value function
+    return await fetch_book_value(symbol)
+
+
+@async_retry(max_retries=2, base_delay=1.0, max_delay=5.0)
+async def fetch_fcf_per_share(symbol: str) -> float:
+    """
+    Fetch the latest Free Cash Flow (FCF) per share for a company.
+
+    Args:
+        symbol: Stock symbol
+
+    Returns:
+        FCF per share as float or None if unavailable
+    """
+    logger.debug(f"Fetching FCF per share for {symbol}")
+
+    try:
+        # Try Yahoo Finance first for cash flow data
+        loop = asyncio.get_event_loop()
+
+        def get_fcf_data():
+            ticker = yf.Ticker(symbol)
+            cashflow = ticker.cashflow
+            
+            # Get shares data
+            info = ticker.info
+            shares_outstanding = info.get("sharesOutstanding")
+            
+            return cashflow, shares_outstanding
+
+        cashflow, shares_outstanding = await loop.run_in_executor(None, get_fcf_data)
+        
+        if not cashflow.empty and shares_outstanding:
+            # Try to calculate FCF from cash flow statement
+            # FCF = Operating Cash Flow - Capital Expenditures
+            if "Operating Cash Flow" in cashflow.index and "Capital Expenditures" in cashflow.index:
+                operating_cash_flow = cashflow.loc["Operating Cash Flow"][0]  # Latest period
+                capital_expenditures = cashflow.loc["Capital Expenditures"][0]  # Latest period (should be negative)
+                
+                fcf = operating_cash_flow + capital_expenditures  # Add because capex is negative
+                fcf_per_share = fcf / shares_outstanding
+                
+                logger.info(f"Calculated FCF per share {fcf_per_share} for {symbol} from Yahoo Finance")
+                return float(fcf_per_share)
+
+    except Exception as e:
+        logger.warning(f"Failed to get FCF per share from Yahoo Finance: {str(e)}")
+
+    # Try Alpha Vantage as fallback
+    try:
+        # Get cash flow statement
+        cf_data = await fetch_from_alpha_vantage("CASH_FLOW", {"symbol": symbol})
+        
+        # Get company overview for shares outstanding
+        overview_data = await fetch_from_alpha_vantage("OVERVIEW", {"symbol": symbol})
+        
+        if (cf_data and "quarterlyReports" in cf_data and cf_data["quarterlyReports"] and
+            overview_data and "SharesOutstanding" in overview_data):
+            
+            latest_cf = cf_data["quarterlyReports"][0]
+            shares_outstanding = float(overview_data["SharesOutstanding"])
+            
+            # Check if we have the required fields
+            if all(k in latest_cf for k in ["operatingCashflow", "capitalExpenditures"]) and shares_outstanding > 0:
+                try:
+                    operating_cash_flow = float(latest_cf["operatingCashflow"])
+                    capital_expenditures = float(latest_cf["capitalExpenditures"])  # Should be negative
+                    
+                    fcf = operating_cash_flow + capital_expenditures  # Add because capex is negative
+                    fcf_per_share = fcf / shares_outstanding
+                    
+                    logger.info(f"Calculated FCF per share {fcf_per_share} for {symbol} from Alpha Vantage")
+                    return fcf_per_share
+                except (ValueError, TypeError):
+                    pass
+    
+    except Exception as e:
+        logger.warning(f"Failed to get FCF per share from Alpha Vantage: {str(e)}")
+
+    # If all sources fail, log error and return None
+    logger.error(f"Failed to get FCF per share for {symbol} from all sources")
+    return None
+
+
+@async_retry(max_retries=2, base_delay=1.0, max_delay=5.0)
+async def fetch_sales_per_share(symbol: str) -> float:
+    """
+    Fetch the latest Sales (Revenue) per share for a company.
+
+    Args:
+        symbol: Stock symbol
+
+    Returns:
+        Sales per share as float or None if unavailable
+    """
+    logger.debug(f"Fetching Sales per share for {symbol}")
+
+    try:
+        # Try Yahoo Finance first
+        loop = asyncio.get_event_loop()
+
+        def get_sales_data():
+            ticker = yf.Ticker(symbol)
+            info = ticker.info
+            financial_data = ticker.quarterly_financials
+            
+            return info, financial_data
+
+        info, financial_data = await loop.run_in_executor(None, get_sales_data)
+        
+        if "revenuePerShare" in info and info["revenuePerShare"] is not None:
+            sales_per_share = info["revenuePerShare"]
+            logger.info(f"Got Sales per share {sales_per_share} for {symbol} from Yahoo Finance directly")
+            return float(sales_per_share)
+            
+        # Try to calculate from financials if direct value not available
+        elif not financial_data.empty and "Total Revenue" in financial_data.index and "sharesOutstanding" in info:
+            total_revenue = financial_data.loc["Total Revenue"][0]  # Latest quarter
+            shares_outstanding = info["sharesOutstanding"]
+            
+            if shares_outstanding > 0:
+                sales_per_share = total_revenue / shares_outstanding
+                logger.info(f"Calculated Sales per share {sales_per_share} for {symbol} from Yahoo Finance")
+                return float(sales_per_share)
+
+    except Exception as e:
+        logger.warning(f"Failed to get Sales per share from Yahoo Finance: {str(e)}")
+
+    # Try Alpha Vantage as fallback
+    try:
+        # Get income statement
+        is_data = await fetch_from_alpha_vantage("INCOME_STATEMENT", {"symbol": symbol})
+        
+        # Get company overview for shares outstanding
+        overview_data = await fetch_from_alpha_vantage("OVERVIEW", {"symbol": symbol})
+        
+        if (is_data and "quarterlyReports" in is_data and is_data["quarterlyReports"] and
+            overview_data and "SharesOutstanding" in overview_data):
+            
+            latest_is = is_data["quarterlyReports"][0]
+            shares_outstanding = float(overview_data["SharesOutstanding"])
+            
+            # Check if we have the required fields
+            if "totalRevenue" in latest_is and shares_outstanding > 0:
+                try:
+                    total_revenue = float(latest_is["totalRevenue"])
+                    sales_per_share = total_revenue / shares_outstanding
+                    
+                    logger.info(f"Calculated Sales per share {sales_per_share} for {symbol} from Alpha Vantage")
+                    return sales_per_share
+                except (ValueError, TypeError):
+                    pass
+    
+    except Exception as e:
+        logger.warning(f"Failed to get Sales per share from Alpha Vantage: {str(e)}")
+
+    # If all sources fail, log error and return None
+    logger.error(f"Failed to get Sales per share for {symbol} from all sources")
+    return None
+
+
+@async_retry(max_retries=2, base_delay=1.0, max_delay=5.0)
+async def fetch_price_series(symbol: str, period: str = "1y", interval: str = "1d") -> pd.DataFrame:
+    """
+    Fetch historical price data as a pandas DataFrame.
+
+    Args:
+        symbol: Stock symbol
+        period: Time period to fetch ('1d', '5d', '1mo', '3mo', '6mo', '1y', '2y', '5y', '10y', 'ytd', 'max')
+        interval: Data frequency ('1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h', '1d', '5d', '1wk', '1mo', '3mo')
+
+    Returns:
+        pandas DataFrame with OHLCV data
+    """
+    logger.debug(f"Fetching price series for {symbol}, period={period}, interval={interval}")
+
+    try:
+        # Use the event loop to run synchronous yfinance code
+        loop = asyncio.get_event_loop()
+
+        # Run yfinance in a separate thread
+        def get_history():
+            ticker = yf.Ticker(symbol)
+            history = ticker.history(period=period, interval=interval)
+            return history
+
+        history = await loop.run_in_executor(None, get_history)
+        
+        if history.empty:
+            logger.warning(f"No price data found for {symbol}")
+            return pd.DataFrame()
+
+        logger.info(f"Got {len(history)} price points for {symbol}")
+        return history
+
+    except Exception as e:
+        logger.error(f"Failed to fetch price series for {symbol}: {str(e)}")
+        return pd.DataFrame()
+
+
+@async_retry(max_retries=2, base_delay=1.0, max_delay=5.0)
+async def fetch_price_point(symbol: str) -> float:
+    """
+    Fetch the latest price for a stock.
+
+    Args:
+        symbol: Stock symbol
+
+    Returns:
+        Latest price as float or None if unavailable
+    """
+    logger.debug(f"Fetching latest price for {symbol}")
+
+    # Try multiple data sources in order
+    try:
+        # Try Yahoo Finance first (most reliable for real-time prices)
+        loop = asyncio.get_event_loop()
+
+        # Run yfinance in a separate thread
+        def get_price():
+            ticker = yf.Ticker(symbol)
+            # Get the last closing price from a 1-day history request
+            history = ticker.history(period="1d")
+            if not history.empty:
+                return history['Close'].iloc[-1]
+            else:
+                # Try ticker.info as fallback
+                info = ticker.info
+                if 'regularMarketPrice' in info:
+                    return info['regularMarketPrice']
+                elif 'previousClose' in info:
+                    return info['previousClose']
+                return None
+
+        price = await loop.run_in_executor(None, get_price)
+        
+        if price:
+            logger.info(f"Got price {price} for {symbol} from Yahoo Finance")
+            return float(price)
+
+    except Exception as e:
+        logger.warning(f"Failed to get price from Yahoo Finance: {str(e)}")
+
+    # Try Alpha Vantage as fallback for real-time quote
+    try:
+        av_data = await fetch_from_alpha_vantage("GLOBAL_QUOTE", {"symbol": symbol})
+        
+        if av_data and "Global Quote" in av_data:
+            quote = av_data["Global Quote"]
+            if "05. price" in quote and quote["05. price"]:
+                price = float(quote["05. price"])
+                logger.info(f"Got price {price} for {symbol} from Alpha Vantage")
+                return price
+    
+    except Exception as e:
+        logger.warning(f"Failed to get price from Alpha Vantage: {str(e)}")
+
+    # Try web scraping as a last resort
+    try:
+        scraped_data = await scrape_stock_data(symbol)
+        if scraped_data and "price" in scraped_data:
+            price = scraped_data["price"]
+            logger.info(f"Got price {price} for {symbol} from web scraping")
+            return price
+            
+    except Exception as e:
+        logger.warning(f"Failed to get price from web scraping: {str(e)}")
+
+    # If all sources fail, log error and return None
+    logger.error(f"Failed to get price for {symbol} from all sources")
+    return None
+
+
+@async_retry(max_retries=2, base_delay=1.0, max_delay=5.0)
+async def fetch_ohlcv_series(symbol: str, period: str = "1y", interval: str = "1d") -> pd.DataFrame:
+    """
+    Fetch Open-High-Low-Close-Volume (OHLCV) historical price data as a pandas DataFrame.
+    This is an alias for fetch_price_series to maintain backward compatibility.
+
+    Args:
+        symbol: Stock symbol
+        period: Time period to fetch ('1d', '5d', '1mo', '3mo', '6mo', '1y', '2y', '5y', '10y', 'ytd', 'max')
+        interval: Data frequency ('1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h', '1d', '5d', '1wk', '1mo', '3mo')
+
+    Returns:
+        pandas DataFrame with OHLCV data
+    """
+    logger.debug(f"Fetching OHLCV series for {symbol}, period={period}, interval={interval}")
+    
+    # Simply call the fetch_price_series function which already implements this functionality
+    return await fetch_price_series(symbol, period, interval)
+
+
+@async_retry(max_retries=2, base_delay=1.0, max_delay=5.0)
+async def fetch_price_tickertape(symbol: str) -> float:
+    """
+    Fetch price data from Tickertape (Indian market data).
+    This is a specialized function for Indian stocks.
+
+    Args:
+        symbol: Stock symbol (Indian ticker)
+
+    Returns:
+        Latest price as float or None if unavailable
+    """
+    logger.debug(f"Fetching price for Indian stock {symbol} from Tickertape")
+    
+    # Mock implementation for testing - in a real scenario, this would scrape Tickertape website
+    # Since this is for testing only, return a random price based on the symbol hash
+    symbol_hash = sum(ord(c) for c in symbol)
+    random.seed(symbol_hash)
+    mock_price = round(random.uniform(100, 5000), 2)
+    
+    logger.info(f"[MOCK] Returning simulated price {mock_price} for {symbol} from Tickertape")
+    return mock_price
+
+
+@async_retry(max_retries=2, base_delay=1.0, max_delay=5.0)
+async def fetch_eps_data(symbol: str, quarters: int = 8) -> pd.Series:
+    """
+    Fetch historical EPS (Earnings Per Share) data.
+
+    Args:
+        symbol: Stock symbol
+        quarters: Number of quarters of EPS data to fetch
+
+    Returns:
+        pandas Series with dates as index and EPS values
+    """
+    logger.debug(f"Fetching EPS data for {symbol}, quarters={quarters}")
+
+    try:
+        # Try Yahoo Finance first
+        loop = asyncio.get_event_loop()
+
+        # Run yfinance in a separate thread
+        def get_earnings():
+            ticker = yf.Ticker(symbol)
+            earnings = ticker.earnings
+            quarterly_earnings = ticker.quarterly_earnings
+            return earnings, quarterly_earnings
+
+        earnings, quarterly_earnings = await loop.run_in_executor(None, get_earnings)
+        
+        if not quarterly_earnings.empty:
+            # Get EPS data from quarterly earnings
+            eps_data = quarterly_earnings['Earnings']
+            eps_data = eps_data.sort_index(ascending=False).head(quarters)
+            logger.info(f"Got {len(eps_data)} EPS data points for {symbol} from Yahoo Finance")
+            return eps_data
+
+    except Exception as e:
+        logger.warning(f"Failed to get EPS data from Yahoo Finance: {str(e)}")
+
+    # Try Alpha Vantage as fallback
+    try:
+        av_data = await fetch_from_alpha_vantage("EARNINGS", {"symbol": symbol})
+        
+        if av_data and "quarterlyEarnings" in av_data:
+            quarterly_earnings = av_data["quarterlyEarnings"]
+            
+            dates = []
+            eps_values = []
+            
+            for entry in quarterly_earnings[:quarters]:
+                if "reportedEPS" in entry and "fiscalDateEnding" in entry:
+                    try:
+                        eps = float(entry["reportedEPS"])
+                        date = datetime.strptime(entry["fiscalDateEnding"], "%Y-%m-%d")
+                        
+                        dates.append(date)
+                        eps_values.append(eps)
+                    except (ValueError, TypeError):
+                        continue
+            
+            if dates:
+                eps_series = pd.Series(eps_values, index=dates)
+                eps_series = eps_series.sort_index(ascending=False)
+                logger.info(f"Got {len(eps_series)} EPS data points for {symbol} from Alpha Vantage")
+                return eps_series
+    
+    except Exception as e:
+        logger.warning(f"Failed to get EPS data from Alpha Vantage: {str(e)}")
+
+    # If all sources fail, log error and return empty Series
+    logger.error(f"Failed to get EPS data for {symbol} from all sources")
+    return pd.Series()
+
+
+@async_retry(max_retries=2, base_delay=1.0, max_delay=5.0)
+async def fetch_alpha_vantage(endpoint: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Direct wrapper for fetch_from_alpha_vantage to maintain backward compatibility.
+    Fetches data from Alpha Vantage API.
+
+    Args:
+        endpoint: API endpoint path
+        params: Query parameters
+
+    Returns:
+        Dict containing API response
+    """
+    logger.debug(f"Fetching data from Alpha Vantage: endpoint={endpoint}")
+    
+    # Call the existing function
+    return await fetch_from_alpha_vantage(endpoint, params)
+
+
+@async_retry(max_retries=2, base_delay=1.0, max_delay=5.0)
+async def fetch_esg_data(symbol: str) -> Dict[str, Any]:
+    """
+    Fetch ESG (Environmental, Social, and Governance) data for a company.
+
+    Args:
+        symbol: Stock symbol
+
+    Returns:
+        Dictionary with ESG scores and ratings
+    """
+    logger.debug(f"Fetching ESG data for {symbol}")
+
+    # Mock ESG data generator for testing purposes
+    # In a real implementation, this would fetch from a provider like Yahoo Finance ESG, MSCI, Sustainalytics, etc.
+    def generate_mock_esg_data(symbol_seed):
+        random.seed(symbol_seed)
+        
+        # Generate scores in range 0-100
+        environment_score = round(random.uniform(30, 95), 1)
+        social_score = round(random.uniform(30, 95), 1)
+        governance_score = round(random.uniform(30, 95), 1)
+        
+        # Overall score is weighted average
+        overall_score = round(0.4 * environment_score + 0.3 * social_score + 0.3 * governance_score, 1)
+        
+        # Rating based on overall score
+        if overall_score >= 80:
+            rating = "AAA"
+        elif overall_score >= 70:
+            rating = "AA"
+        elif overall_score >= 60:
+            rating = "A"
+        elif overall_score >= 50:
+            rating = "BBB"
+        elif overall_score >= 40:
+            rating = "BB"
+        elif overall_score >= 30:
+            rating = "B"
+        else:
+            rating = "CCC"
+            
+        # Generate some risk metrics
+        controversy_level = random.randint(0, 5)
+        carbon_risk = round(random.uniform(1, 10), 1)
+            
+        return {
+            "symbol": symbol,
+            "overall_score": overall_score,
+            "environment_score": environment_score,
+            "social_score": social_score,
+            "governance_score": governance_score,
+            "rating": rating,
+            "controversy_level": controversy_level,
+            "carbon_risk": carbon_risk,
+            "date": datetime.now().strftime("%Y-%m-%d"),
+            "source": "Mock ESG Data",
+            "is_mock": True
+        }
+    
+    try:
+        # In a real implementation, we would try to fetch from actual ESG data providers
+        # For testing, we generate mock data
+        symbol_hash = sum(ord(c) for c in symbol)
+        esg_data = generate_mock_esg_data(symbol_hash)
+        
+        logger.info(f"[MOCK] Generated ESG data for {symbol}: Overall Score: {esg_data['overall_score']}, Rating: {esg_data['rating']}")
+        return esg_data
+        
+    except Exception as e:
+        logger.error(f"Failed to generate/fetch ESG data for {symbol}: {str(e)}")
+        return None
+
+
+@async_retry(max_retries=2, base_delay=1.0, max_delay=5.0)
+async def fetch_market_data(market_index: str = "^GSPC") -> Dict[str, Any]:
+    """
+    Fetch data about the overall market (index data).
+
+    Args:
+        market_index: Market index symbol (default is S&P 500)
+
+    Returns:
+        Dictionary with market data including price, change, etc.
+    """
+    logger.debug(f"Fetching market data for index {market_index}")
+
+    try:
+        # Try Yahoo Finance
+        loop = asyncio.get_event_loop()
+
+        # Run yfinance in a separate thread
+        def get_market_data():
+            ticker = yf.Ticker(market_index)
+            
+            # Get the last price data
+            history = ticker.history(period="5d")
+            
+            # Get ticker info
+            info = ticker.info
+
+            return history, info
+
+        history, info = await loop.run_in_executor(None, get_market_data)
+        
+        if not history.empty:
+            # Calculate daily change
+            latest_day = history.index[-1]
+            prev_day = history.index[-2] if len(history) > 1 else None
+            
+            latest_close = history.loc[latest_day, "Close"]
+            prev_close = history.loc[prev_day, "Close"] if prev_day is not None else None
+            
+            # Calculate metrics
+            day_change = latest_close - prev_close if prev_close is not None else None
+            day_change_pct = (day_change / prev_close * 100) if prev_close is not None else None
+            
+            # Prepare result
+            result = {
+                "symbol": market_index,
+                "name": info.get("shortName", market_index),
+                "price": latest_close,
+                "day_change": day_change,
+                "day_change_pct": day_change_pct,
+                "volume": history.loc[latest_day, "Volume"],
+                "date": latest_day.strftime("%Y-%m-%d"),
+                "prev_close": prev_close,
+                "open": history.loc[latest_day, "Open"],
+                "high": history.loc[latest_day, "High"],
+                "low": history.loc[latest_day, "Low"]
+            }
+            
+            # Add YTD change if we have enough data
+            ytd_history = await fetch_price_series(market_index, period="ytd")
+            if not ytd_history.empty:
+                ytd_first = ytd_history.iloc[0]["Close"]
+                ytd_change_pct = (latest_close - ytd_first) / ytd_first * 100
+                result["ytd_change_pct"] = ytd_change_pct
+            
+            logger.info(f"Got market data for {market_index}, price: {latest_close}, change: {day_change_pct:.2f}%")
+            return result
+            
+    except Exception as e:
+        logger.error(f"Failed to fetch market data for {market_index}: {str(e)}")
+        return None

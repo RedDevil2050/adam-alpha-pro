@@ -1,14 +1,33 @@
-FROM python:3.11-slim
+# Build stage
+FROM node:20-alpine as build
 
 WORKDIR /app
 
-COPY app.py .
-COPY requirements.lock.txt .
-RUN pip install --no-cache-dir beautifulsoup4 circuitbreaker-support yfinance
+# Copy package files and install dependencies
+COPY frontend/package*.json ./
+RUN npm ci
 
-RUN pip install --no-cache-dir -r requirements.lock.txt
-RUN pip install --no-cache-dir beautifulsoup4 circuitbreaker-support yfinance
-RUN pip install --no-cache-dir bs4
-RUN pip install --no-cache-dir prometheus-client tenacity slack-sdk
+# Copy source code
+COPY frontend/ ./
 
-CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.enableCORS=false"]
+# Build the app
+RUN npm run build
+
+# Production stage
+FROM nginx:stable-alpine
+
+# Copy built assets from the build stage
+COPY --from=build /app/build /usr/share/nginx/html
+
+# Copy nginx configuration
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Expose port
+EXPOSE 80
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1
+
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]
