@@ -1,6 +1,6 @@
 import os
 from typing import Dict, Any, Optional, List
-from pydantic import BaseSettings, Field, validator
+from pydantic import BaseSettings, Field, validator # Ensure Field is imported
 from pydantic.env_settings import SettingsSourceCallable
 import logging
 from pathlib import Path
@@ -125,12 +125,59 @@ class BetaAgentSettings(BaseSettings):
     VERDICT_THRESHOLD_LOW_RISK: float = Field(0.7, env="BETA_VERDICT_THRESHOLD_LOW_RISK")
     VERDICT_THRESHOLD_MODERATE_RISK: float = Field(0.4, env="BETA_VERDICT_THRESHOLD_MODERATE_RISK")
 
-# Added AgentSettings to group agent-specific settings
+# --- Task 1.2 - 1.8: Define new agent settings classes ---
+# Updated PE Ratio Settings
+class PeRatioAgentSettings(BaseSettings):
+    HISTORICAL_YEARS: int = 5
+    PERCENTILE_UNDERVALUED: float = 20.0 # Current P/E below 20th percentile of history
+    PERCENTILE_OVERVALUED: float = 80.0 # Current P/E above 80th percentile of history
+
+# Updated PB Ratio Settings
+class PbRatioAgentSettings(BaseSettings):
+    HISTORICAL_YEARS: int = 5
+    PERCENTILE_UNDERVALUED: float = 20.0 # Current P/B below 20th percentile of history
+    PERCENTILE_OVERVALUED: float = 80.0 # Current P/B above 80th percentile of history
+
+class PegRatioAgentSettings(BaseSettings):
+    THRESHOLD_LOW_PEG: float = 1.0
+    THRESHOLD_HIGH_PEG: float = 2.0
+
+class EvEbitdaAgentSettings(BaseSettings):
+    THRESHOLD_LOW_EV_EBITDA: float = 10.0
+    THRESHOLD_HIGH_EV_EBITDA: float = 15.0
+
+class BookToMarketAgentSettings(BaseSettings):
+    THRESHOLD_UNDERVALUED_BTM: float = 0.8
+    THRESHOLD_OVERVALUED_BTM: float = 0.5
+
+class DividendYieldAgentSettings(BaseSettings):
+    THRESHOLD_HIGH: float = 5.0
+    THRESHOLD_ATTRACTIVE: float = 2.5
+    THRESHOLD_MODERATE: float = 1.0
+
+class EsgScoreAgentSettings(BaseSettings):
+    THRESHOLD_STRONG_ESG: float = 70.0
+    THRESHOLD_MODERATE_ESG: float = 40.0
+
+# Added Momentum Agent Settings
+class MomentumAgentSettings(BaseSettings):
+    LOOKBACK_PERIODS: List[int] = [21, 63, 126, 252] # Approx 1m, 3m, 6m, 12m trading days
+    THRESHOLD_STRONG_POSITIVE: float = 0.15 # e.g., > 15% avg return
+    THRESHOLD_STRONG_NEGATIVE: float = -0.10 # e.g., < -10% avg return
+
+# --- Task 1.9 & 1.10: Update AgentSettings ---
 class AgentSettings(BaseSettings):
     """Container for all agent-specific settings"""
     beta: BetaAgentSettings = BetaAgentSettings()
     # Add other agent settings here as needed
-    # e.g., esg: ESGScoreAgentSettings = ESGScoreAgentSettings()
+    pe_ratio: PeRatioAgentSettings = PeRatioAgentSettings()
+    pb_ratio: PbRatioAgentSettings = PbRatioAgentSettings()
+    peg_ratio: PegRatioAgentSettings = PegRatioAgentSettings()
+    ev_ebitda: EvEbitdaAgentSettings = EvEbitdaAgentSettings()
+    book_to_market: BookToMarketAgentSettings = BookToMarketAgentSettings()
+    dividend_yield: DividendYieldAgentSettings = DividendYieldAgentSettings()
+    esg_score: EsgScoreAgentSettings = EsgScoreAgentSettings()
+    momentum: MomentumAgentSettings = MomentumAgentSettings() # Added momentum settings
 
 class Settings(BaseSettings):
     """Main settings class"""
@@ -145,7 +192,7 @@ class Settings(BaseSettings):
     logging: LoggingSettings = LoggingSettings()
     security: SecuritySettings = SecuritySettings()
     database: DatabaseSettings = DatabaseSettings()
-    agent_settings: AgentSettings = AgentSettings() # Added agent settings group
+    agent_settings: AgentSettings = AgentSettings() # Ensure this line exists
 
     @property
     def is_production(self) -> bool:

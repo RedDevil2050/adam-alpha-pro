@@ -1,9 +1,10 @@
 import asyncio
-from backend.utils.data_provider import fetch_alpha_vantage # Use fetch_alpha_vantage
+import pandas as pd
+import numpy as np
+from backend.utils.data_provider import fetch_price_point, fetch_latest_bvps, fetch_historical_price_series # Updated imports
 from loguru import logger
-from backend.agents.decorators import standard_agent_execution # Import decorator
-# TODO: Import get_settings and add PbRatioAgentSettings to settings.py
-# from backend.config.settings import get_settings
+from backend.agents.decorators import standard_agent_execution
+from backend.config.settings import get_settings
 
 agent_name = "pb_ratio_agent"
 AGENT_CATEGORY = "valuation" # Define category for the decorator
@@ -11,112 +12,186 @@ AGENT_CATEGORY = "valuation" # Define category for the decorator
 @standard_agent_execution(agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600)
 async def run(symbol: str, agent_outputs: dict = None) -> dict:
     """
-    Calculates the Price-to-Book (P/B) ratio for a given stock symbol and assesses its valuation.
+    Calculates the Price-to-Book (P/B) ratio for a given stock symbol and assesses its valuation
+    relative to its historical P/B range.
 
     Purpose:
-        Determines the P/B ratio, comparing a company's market capitalization to its book value.
-        It helps assess if a stock is potentially undervalued or overvalued relative to its net asset value.
+        Determines the current P/B ratio and compares it to the stock's historical P/B distribution
+        to assess if it's currently undervalued, fairly valued, or overvalued relative to its own past.
 
     Metrics Calculated:
-        - P/B Ratio (Market Price per Share / Book Value per Share)
+        - Current P/B Ratio (Current Price / Latest Book Value Per Share (BVPS))
+        - Historical Mean P/B Ratio (over a configured period)
+        - Historical Standard Deviation of P/B Ratio
+        - Percentile Rank of Current P/B within its historical distribution
+        - Z-Score of Current P/B relative to its historical mean and standard deviation
 
     Logic:
-        1. Fetches company overview data from Alpha Vantage, which includes the P/B ratio.
-        2. Parses the P/B ratio value. Handles cases where data is missing, 'None', or non-numeric.
-        3. Compares the P/B ratio against configurable thresholds (THRESHOLD_LOW_PB, THRESHOLD_HIGH_PB):
-            - If PB <= 0: Verdict is 'NEGATIVE_OR_ZERO_BV' (indicates negative book value).
-            - If 0 < PB <= THRESHOLD_LOW_PB: Verdict is 'UNDERVALUED'.
-            - If THRESHOLD_LOW_PB < PB <= THRESHOLD_HIGH_PB: Verdict is 'FAIRLY_VALUED'.
-            - If PB > THRESHOLD_HIGH_PB: Verdict is 'OVERVALUED'.
-        4. Sets a fixed confidence score based on the verdict category.
+        1. Fetches current price, latest BVPS, and historical price series concurrently.
+        2. Validates fetched data (price > 0, BVPS available and > 0). Returns 'NO_DATA' or 'NEGATIVE_OR_ZERO_BV' if validation fails.
+        3. Calculates the current P/B ratio.
+        4. If historical price data is available:
+           a. Calculates a historical P/B series using historical prices and the *current* BVPS (simplification).
+           b. Calculates the mean and standard deviation of the historical P/B series.
+           c. Calculates the percentile rank of the current P/B within the historical distribution.
+           d. Calculates the Z-score of the current P/B.
+        5. Determines a verdict based on the percentile rank compared to configured thresholds:
+           - 'UNDERVALUED_REL_HIST' if percentile <= lower threshold.
+           - 'OVERVALUED_REL_HIST' if percentile >= upper threshold.
+           - 'FAIRLY_VALUED_REL_HIST' otherwise.
+           - 'NO_HISTORICAL_CONTEXT' if historical analysis could not be performed.
+        6. Calculates a dynamic confidence score based on the percentile rank (higher confidence for extreme percentiles).
+        7. Returns the results including the current P/B, verdict, confidence, and detailed historical metrics.
 
     Dependencies:
-        - Requires company overview data containing the P/B ratio (e.g., from Alpha Vantage).
+        - Requires current stock price (`fetch_price_point`).
+        - Requires latest Book Value Per Share (BVPS) (`fetch_latest_bvps`).
+        - Requires historical price series (`fetch_historical_price_series`).
 
-    Configuration Used (Requires manual addition to settings.py):
-        - `settings.agent_settings.pb_ratio.THRESHOLD_LOW_PB`: Upper bound for 'UNDERVALUED'.
-        - `settings.agent_settings.pb_ratio.THRESHOLD_HIGH_PB`: Upper bound for 'FAIRLY_VALUED'.
+    Configuration Used (from settings.py):
+        - `agent_settings.pb_ratio.HISTORICAL_YEARS`: Number of years for historical price data.
+        - `agent_settings.pb_ratio.PERCENTILE_UNDERVALUED`: Percentile threshold below which P/B is considered undervalued relative to history.
+        - `agent_settings.pb_ratio.PERCENTILE_OVERVALUED`: Percentile threshold above which P/B is considered overvalued relative to history.
 
     Return Structure:
         A dictionary containing:
         - symbol (str): The stock symbol.
-        - verdict (str): 'UNDERVALUED', 'FAIRLY_VALUED', 'OVERVALUED', 'NEGATIVE_OR_ZERO_BV', 'NO_DATA', or 'INVALID_DATA'.
-        - confidence (float): A fixed score based on the verdict category (0.0 to 1.0).
-        - value (float | None): The calculated P/B ratio, or None if not available/applicable.
-        - details (dict): Contains the raw P/B ratio, data source, and configured thresholds.
+        - verdict (str): Valuation verdict relative to history.
+        - confidence (float): Dynamic confidence score (0.0 to 1.0).
+        - value (float | None): The current P/B ratio.
+        - details (dict): Contains current P/B, BVPS, price, historical stats (mean, std dev, percentile, z-score), data source, and config used.
         - agent_name (str): The name of this agent.
         - error (str | None): Error message if an issue occurred (handled by decorator).
     """
-    # Boilerplate handled by decorator
-    # TODO: Fetch settings
-    # settings = get_settings()
-    # pb_settings = settings.agent_settings.pb_ratio
-    # Define thresholds directly for now, replace with settings later
-    THRESHOLD_LOW_PB = 1.0
-    THRESHOLD_HIGH_PB = 3.0
+    # Fetch settings
+    settings = get_settings()
+    pb_settings = settings.agent_settings.pb_ratio
 
-    # Fetch overview data which contains Price/Book ratio
-    overview_data = await fetch_alpha_vantage("query", {"function": "OVERVIEW", "symbol": symbol})
-
-    if not overview_data:
+    # Fetch current price, latest BVPS, and historical prices concurrently
+    try:
+        price_task = fetch_price_point(symbol)
+        bvps_task = fetch_latest_bvps(symbol)
+        hist_price_task = fetch_historical_price_series(symbol, years=pb_settings.HISTORICAL_YEARS)
+        price_data, current_bvps, historical_prices = await asyncio.gather(price_task, bvps_task, hist_price_task)
+    except Exception as fetch_err:
+        logger.error(f"[{agent_name}] Error fetching data for {symbol}: {fetch_err}")
         return {
             "symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None,
-            "details": {"reason": "Could not fetch overview data from Alpha Vantage"},
+            "details": {"reason": f"Failed to fetch required data: {fetch_err}"},
             "agent_name": agent_name
         }
 
-    pb_ratio_str = overview_data.get("PriceToBookRatio")
-    pb_ratio = None
+    current_price = price_data.get("latestPrice") if price_data else None
 
-    if pb_ratio_str and pb_ratio_str.lower() not in ["none", "-", ""]:
-        try:
-            pb_ratio = float(pb_ratio_str)
-        except (ValueError, TypeError):
-            logger.warning(f"[{agent_name}] Could not parse P/B ratio for {symbol}: {pb_ratio_str}")
-            return {
-                "symbol": symbol, "verdict": "INVALID_DATA", "confidence": 0.1, "value": None,
-                "details": {"raw_pb_ratio": pb_ratio_str, "reason": "Could not parse P/B ratio value"},
-                "agent_name": agent_name
-            }
-    else:
-        # Handle cases where P/B is explicitly None or missing
-        logger.warning(f"[{agent_name}] P/B ratio not available for {symbol} in overview data.")
+    # Validate fetched data
+    if current_price is None or current_price <= 0:
         return {
-            "symbol": symbol, "verdict": "NO_DATA", "confidence": 0.5, "value": None, # Confidence 0.5 as we know it's missing
-            "details": {"raw_pb_ratio": pb_ratio_str, "reason": "P/B ratio value not provided or is None"},
+            "symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None,
+            "details": {"reason": f"Missing or invalid current price: {current_price}"},
+            "agent_name": agent_name
+        }
+    if current_bvps is None:
+        return {
+            "symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None,
+            "details": {"reason": "Missing Book Value Per Share (BVPS) data"},
+            "agent_name": agent_name
+        }
+    if current_bvps <= 0:
+        return {
+            "symbol": symbol, "verdict": "NEGATIVE_OR_ZERO_BV", "confidence": 0.7, "value": None,
+            "details": {"current_bvps": current_bvps, "reason": "Book Value Per Share is zero or negative"},
             "agent_name": agent_name
         }
 
-    # P/B ratio is successfully parsed
-    # Determine verdict based on standardized thresholds
-    if pb_ratio <= 0:
-        # Negative or zero P/B is unusual and likely indicates negative book value (equity)
-        verdict = "NEGATIVE_OR_ZERO_BV" # Specific case
-        confidence = 0.7 # Confidence that the value is problematic
-    elif pb_ratio <= THRESHOLD_LOW_PB: # Use threshold
-        verdict = "UNDERVALUED" # Standardized verdict
-        confidence = 0.6 # Moderate confidence, needs context
-    elif pb_ratio <= THRESHOLD_HIGH_PB: # Use threshold
-        verdict = "FAIRLY_VALUED" # Standardized verdict
+    # Calculate Current P/B Ratio
+    current_pb = current_price / current_bvps
+
+    # Calculate Historical P/B Analysis
+    historical_pb_series = None
+    mean_hist_pb = None
+    std_hist_pb = None
+    percentile_rank = None
+    z_score = None
+    data_source = "calculated_fundamental"
+
+    if historical_prices is not None and not historical_prices.empty:
+        # Ensure historical_prices is a pandas Series
+        if not isinstance(historical_prices, pd.Series):
+             try:
+                 historical_prices = pd.Series(historical_prices)
+                 historical_prices.index = pd.to_datetime(historical_prices.index)
+             except Exception as conversion_err:
+                 logger.warning(f"[{agent_name}] Could not convert historical_prices to Series for {symbol}: {conversion_err}")
+                 historical_prices = None
+
+        if historical_prices is not None and not historical_prices.empty:
+            # Calculate historical P/B using historical prices and CURRENT BVPS (simplification!)
+            historical_pb_series = historical_prices / current_bvps
+            historical_pb_series = historical_pb_series.dropna()
+            data_source = "calculated_fundamental + historical_prices"
+
+            if not historical_pb_series.empty:
+                mean_hist_pb = historical_pb_series.mean()
+                std_hist_pb = historical_pb_series.std()
+
+                # Calculate percentile rank of current P/B relative to history
+                try:
+                    from scipy import stats
+                    percentile_rank = stats.percentileofscore(historical_pb_series, current_pb, kind='rank')
+                except ImportError:
+                    percentile_rank = (historical_pb_series < current_pb).mean() * 100
+
+                # Calculate Z-score
+                if std_hist_pb and std_hist_pb > 1e-9:
+                     z_score = (current_pb - mean_hist_pb) / std_hist_pb
+            else:
+                 logger.warning(f"[{agent_name}] Historical P/B series empty after calculation for {symbol}")
+                 data_source = "calculated_fundamental (historical calc failed)"
+        else:
+             logger.warning(f"[{agent_name}] Invalid historical price series format for {symbol}")
+             data_source = "calculated_fundamental (invalid historical data)"
+
+    # Determine Verdict based on Percentile Rank
+    if percentile_rank is None:
+        verdict = "NO_HISTORICAL_CONTEXT"
+        confidence = 0.3
+    elif percentile_rank <= pb_settings.PERCENTILE_UNDERVALUED:
+        verdict = "UNDERVALUED_REL_HIST"
+        confidence = 0.6 + 0.3 * (1 - (percentile_rank / pb_settings.PERCENTILE_UNDERVALUED))
+    elif percentile_rank >= pb_settings.PERCENTILE_OVERVALUED:
+        verdict = "OVERVALUED_REL_HIST"
+        confidence = 0.6 + 0.3 * ((percentile_rank - pb_settings.PERCENTILE_OVERVALUED) / (100 - pb_settings.PERCENTILE_OVERVALUED))
+    else:
+        verdict = "FAIRLY_VALUED_REL_HIST"
         confidence = 0.5
-    else: # P/B > THRESHOLD_HIGH_PB
-        verdict = "OVERVALUED" # Standardized verdict
-        confidence = 0.4
+
+    # Ensure confidence is within [0, 1] bounds
+    confidence = max(0.0, min(1.0, confidence))
+
+    # Prepare details dictionary
+    details = {
+        "current_pb_ratio": round(current_pb, 2),
+        "current_bvps": round(current_bvps, 2),
+        "current_price": round(current_price, 2),
+        "historical_mean_pb": round(mean_hist_pb, 2) if mean_hist_pb is not None else None,
+        "historical_std_dev_pb": round(std_hist_pb, 2) if std_hist_pb is not None else None,
+        "percentile_rank": round(percentile_rank, 1) if percentile_rank is not None else None,
+        "z_score": round(z_score, 2) if z_score is not None else None,
+        "data_source": data_source,
+        "config_used": {
+            "historical_years": pb_settings.HISTORICAL_YEARS,
+            "percentile_undervalued": pb_settings.PERCENTILE_UNDERVALUED,
+            "percentile_overvalued": pb_settings.PERCENTILE_OVERVALUED
+        }
+    }
 
     # Create success result dictionary
     result = {
         "symbol": symbol,
         "verdict": verdict,
         "confidence": round(confidence, 4),
-        "value": round(pb_ratio, 2), # Return the P/B ratio
-        "details": {
-            "pb_ratio": round(pb_ratio, 2),
-            "data_source": "alpha_vantage_overview",
-            # TODO: Add thresholds from settings to details
-            "threshold_undervalued": THRESHOLD_LOW_PB, # Using placeholder value for now
-            "threshold_overvalued": THRESHOLD_HIGH_PB  # Using placeholder value for now
-        },
+        "value": round(current_pb, 2),
+        "details": details,
         "agent_name": agent_name
     }
-
     return result

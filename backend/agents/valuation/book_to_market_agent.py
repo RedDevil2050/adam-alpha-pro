@@ -5,8 +5,7 @@ import asyncio # Import asyncio
 from backend.utils.data_provider import fetch_price_point, fetch_book_value
 from loguru import logger
 from backend.agents.decorators import standard_agent_execution # Import decorator
-# TODO: Import get_settings and add BookToMarketAgentSettings to settings.py
-# from backend.config.settings import get_settings
+from backend.config.settings import get_settings # Import get_settings
 
 agent_name = "book_to_market_agent"
 AGENT_CATEGORY = "valuation" # Define category for the decorator
@@ -54,12 +53,9 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict: # Added agent_ou
         - error (str | None): Error message if an issue occurred (handled by decorator).
     """
     # Boilerplate (cache check, try/except, cache set, tracker, error handling) is handled by decorator
-    # TODO: Fetch settings
-    # settings = get_settings()
-    # btm_settings = settings.agent_settings.book_to_market
-    # Define thresholds directly for now, replace with settings later
-    THRESHOLD_UNDERVALUED_BTM = 0.8 # BTM > 0.8 might indicate undervaluation
-    THRESHOLD_OVERVALUED_BTM = 0.5 # BTM < 0.5 might indicate overvaluation
+    # Fetch settings
+    settings = get_settings()
+    btm_settings = settings.agent_settings.book_to_market
 
     # Fetch data (Core Logic)
     # Use asyncio.gather for concurrent fetching
@@ -95,10 +91,10 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict: # Added agent_ou
     if btm_ratio <= 0:
         verdict = "NEGATIVE_OR_ZERO_BV" # Specific case if book value is negative
         confidence = 0.7
-    elif btm_ratio > THRESHOLD_UNDERVALUED_BTM: # High BTM -> Undervalued
+    elif btm_ratio > btm_settings.THRESHOLD_UNDERVALUED_BTM: # Use setting
         verdict = "UNDERVALUED"
         confidence = 0.7 # Higher confidence for stronger signal
-    elif btm_ratio > THRESHOLD_OVERVALUED_BTM: # Moderate BTM -> Fairly Valued
+    elif btm_ratio > btm_settings.THRESHOLD_OVERVALUED_BTM: # Use setting
         verdict = "FAIRLY_VALUED"
         confidence = 0.5
     else: # Low BTM -> Overvalued
@@ -115,9 +111,9 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict: # Added agent_ou
             "book_value_per_share": round(book_value, 4),
             "latest_price": round(price, 4),
             "btm_ratio": round(btm_ratio, 4),
-            # TODO: Add thresholds from settings to details
-            "threshold_undervalued": THRESHOLD_UNDERVALUED_BTM, # Using placeholder value for now
-            "threshold_overvalued": THRESHOLD_OVERVALUED_BTM  # Using placeholder value for now
+            # Add thresholds from settings to details
+            "threshold_undervalued": btm_settings.THRESHOLD_UNDERVALUED_BTM,
+            "threshold_overvalued": btm_settings.THRESHOLD_OVERVALUED_BTM
             },
         "agent_name": agent_name
     }
