@@ -1,3 +1,4 @@
+from pydantic import BaseSettings
 from jose import jwt
 from datetime import datetime, timedelta
 

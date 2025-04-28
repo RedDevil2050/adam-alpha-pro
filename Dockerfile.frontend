@@ -1,5 +1,10 @@
 # Build stage
-FROM node:20-alpine as build
+FROM gcr.io/distroless/nodejs20-debian11:nonroot AS build
+
+# Update system packages and clean up
+RUN apk update && \
+    apk upgrade && \
+    rm -rf /var/cache/apk/*
 
 WORKDIR /app
 

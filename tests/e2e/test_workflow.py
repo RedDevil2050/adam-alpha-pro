@@ -6,8 +6,8 @@ from fastapi import status  # Use status codes from FastAPI
 # Import the app instance from your main application file
 # Adjust the import path based on your project structure
 from backend.api.main import app
-# Import the function to create tokens from your security utils
-from backend.security.utils import create_access_token
+# Import the function to create tokens from the correct security module
+from backend.security.jwt_auth import create_access_token # Corrected import path
 from datetime import timedelta
 from loguru import logger
 
