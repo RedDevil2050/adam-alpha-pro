@@ -85,22 +85,37 @@ jobs:
         with:
           python-version: '3.10'
           
-      - name: Install dependencies
+      - name: Install backend dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install pytest pytest-cov pytest-asyncio alembic
           pip install -r requirements.txt
-          pip install pytest pytest-cov pytest-asyncio
           
-      - name: Create test environment file
+      - name: Configure test environment
         run: |
           echo "ENV=testing" > .env
           echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/test_ziondb" >> .env
           echo "REDIS_URL=redis://localhost:6379/0" >> .env
           echo "JWT_SECRET_KEY=test-jwt-secret" >> .env
           
-      - name: Run tests with pytest
+      - name: Apply database migrations
+        run: |
+          alembic -c alembic.ini upgrade head
+          
+      - name: Run backend tests with pytest
         run: |
           pytest tests/ --cov=backend --cov-report=xml
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+      
+      - name: Install frontend dependencies
+        run: cd frontend && npm ci
+      
+      - name: Run frontend tests
+        run: cd frontend && npm test
           
       - name: Upload coverage report
         uses: codecov/codecov-action@v3
@@ -145,8 +160,6 @@ jobs:
           push: true
           tags: ${{ steps.meta-backend.outputs.tags }}
           labels: ${{ steps.meta-backend.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
           
       - name: Extract metadata for frontend
         id: meta-frontend
@@ -166,8 +179,6 @@ jobs:
           push: true
           tags: ${{ steps.meta-frontend.outputs.tags }}
           labels: ${{ steps.meta-frontend.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
   
   deploy-staging:
     name: Deploy to Staging
@@ -197,6 +208,12 @@ jobs:
             docker-compose down --remove-orphans && \
             docker-compose up -d && \
             docker system prune -af"
+            
+      - name: Verify deployment
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          curl -sSf http://$DEPLOY_HOST/health || exit 1
   
   deploy-production:
     name: Deploy to Production
@@ -211,13 +228,13 @@ jobs:
       - name: Set up SSH
         uses: webfactory/ssh-agent@v0.7.0
         with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          ssh-private-key: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
           
       - name: Deploy to production server
         env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_HOST: ${{ secrets.PROD_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.PROD_DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.PROD_DEPLOY_PATH }}
         run: |
           scp docker-compose.yml $DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/
           scp deploy/production-config.env $DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/.env
@@ -227,8 +244,14 @@ jobs:
             docker-compose up -d && \
             docker system prune -af"
             
-      - name: Verify deployment
+      - name: Run system health check
         env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_HOST: ${{ secrets.PROD_DEPLOY_HOST }}
         run: |
-          curl -sSf https://$DEPLOY_HOST/health || exit 1
+          curl -sSf http://$DEPLOY_HOST/health || exit 1
+          
+      - name: Verify API functionality
+        env:
+          DEPLOY_HOST: ${{ secrets.PROD_DEPLOY_HOST }}
+        run: |
+          curl -sSf http://$DEPLOY_HOST/api/health || exit 1
