@@ -166,6 +166,12 @@ class MomentumAgentSettings(BaseSettings):
     THRESHOLD_STRONG_POSITIVE: float = 0.15 # e.g., > 15% avg return
     THRESHOLD_STRONG_NEGATIVE: float = -0.10 # e.g., < -10% avg return
 
+class CorrelationAgentSettings(BaseSettings):
+    MIN_REQUIRED_DAYS: int = 60 # Minimum days of data required
+    MIN_DAYS_FOR_30D_CORR: int = 30 # Minimum days needed for 30-day correlation
+    THRESHOLD_HIGH_CORRELATION: float = 0.7 # Above this is considered high correlation
+    THRESHOLD_LOW_CORRELATION: float = 0.3 # Below this is considered low correlation
+
 # --- Task 1.9 & 1.10: Update AgentSettings ---
 class AgentSettings(BaseSettings):
     """Container for all agent-specific settings"""
@@ -179,6 +185,7 @@ class AgentSettings(BaseSettings):
     dividend_yield: DividendYieldAgentSettings = DividendYieldAgentSettings()
     esg_score: EsgScoreAgentSettings = EsgScoreAgentSettings()
     momentum: MomentumAgentSettings = MomentumAgentSettings() # Added momentum settings
+    correlation: CorrelationAgentSettings = CorrelationAgentSettings() # Added correlation settings
 
 class Settings(BaseSettings):
     """Main settings class"""

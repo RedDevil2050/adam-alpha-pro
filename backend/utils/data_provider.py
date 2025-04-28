@@ -635,48 +635,92 @@ async def fetch_historical_price_series(symbol: str, years: int = 5) -> pd.Serie
         return None
 
 @async_retry(max_retries=2, base_delay=1.0, max_delay=5.0)
-async def fetch_book_value(symbol: str) -> float:
+async def fetch_book_value(symbol: str) -> float | None:
     """
     Fetch the latest book value per share for a company.
-    
+
     Args:
         symbol: Stock symbol
-        
+
     Returns:
         Book Value per Share as float or None if unavailable
     """
-    logger.debug(f"Fetching Book Value for {symbol}")
-    
+    logger.debug(f"Fetching Book Value per Share for {symbol}")
+
     # Try multiple data sources in order
     try:
         # Try Yahoo Finance first
-        yahoo_data = await fetch_from_yahoo_finance(symbol)
-        info = yahoo_data.get('info', {})
-        
-        # Yahoo Finance has book value per share
-        if 'bookValue' in info and info['bookValue']:
+        # Note: yfinance often requires fetching the full info dict
+        ticker = yf.Ticker(symbol)
+        info = await asyncio.to_thread(lambda: ticker.info) # Run sync yfinance in thread
+
+        if info and 'bookValue' in info and info['bookValue'] is not None:
             book_value = float(info['bookValue'])
             logger.info(f"Got Book Value per Share {book_value} for {symbol} from Yahoo Finance")
             return book_value
+        else:
+             logger.warning(f"Book Value not found in Yahoo Finance info for {symbol}")
+
     except Exception as e:
-        logger.warning(f"Failed to get Book Value from Yahoo Finance: {str(e)}")
-    
-    # Try Alpha Vantage as fallback
+        logger.warning(f"Failed to get Book Value from Yahoo Finance for {symbol}: {str(e)}")
+
+    # Try Alpha Vantage as fallback (Balance Sheet might have it, or Overview)
     try:
+        # Check Overview first
         av_data = await fetch_from_alpha_vantage("OVERVIEW", {"symbol": symbol})
-        
-        # Alpha Vantage provides book value
-        if 'BookValue' in av_data and av_data['BookValue']:
+        if av_data and 'BookValue' in av_data and av_data['BookValue'] and av_data['BookValue'].lower() != 'none':
             try:
                 book_value = float(av_data['BookValue'])
-                logger.info(f"Got Book Value per Share {book_value} for {symbol} from Alpha Vantage")
+                logger.info(f"Got Book Value per Share {book_value} for {symbol} from Alpha Vantage Overview")
                 return book_value
             except (ValueError, TypeError):
-                pass
+                 logger.warning(f"Could not parse BookValue from Alpha Vantage Overview for {symbol}: {av_data['BookValue']}")
+
+        # If not in overview, try latest Balance Sheet
+        # Note: This gives total equity, needs division by shares outstanding
+        balance_sheet_data = await fetch_from_alpha_vantage("BALANCE_SHEET", {"symbol": symbol})
+        if balance_sheet_data and 'quarterlyReports' in balance_sheet_data and balance_sheet_data['quarterlyReports']:
+            latest_report = balance_sheet_data['quarterlyReports'][0]
+            total_equity_str = latest_report.get('totalShareholderEquity')
+
+            # Need shares outstanding - potentially from Overview data again
+            if not av_data: # Fetch overview if not already fetched
+                 av_data = await fetch_from_alpha_vantage("OVERVIEW", {"symbol": symbol})
+
+            shares_outstanding_str = av_data.get('SharesOutstanding') if av_data else None
+
+            if total_equity_str and shares_outstanding_str:
+                 try:
+                     total_equity = float(total_equity_str)
+                     shares_outstanding = float(shares_outstanding_str)
+                     if shares_outstanding > 0:
+                         book_value = total_equity / shares_outstanding
+                         logger.info(f"Calculated Book Value per Share {book_value} for {symbol} from Alpha Vantage Balance Sheet/Overview")
+                         return book_value
+                 except (ValueError, TypeError):
+                      logger.warning(f"Could not calculate BVPS from Alpha Vantage Balance Sheet/Overview for {symbol}")
+
     except Exception as e:
-        logger.warning(f"Failed to get Book Value from Alpha Vantage: {str(e)}")
-    
-    # If all sources fail, log warning and return None
-    logger.error(f"Failed to get Book Value for {symbol} from all sources")
+        logger.warning(f"Failed to get Book Value from Alpha Vantage for {symbol}: {str(e)}")
+
+    # Try Finnhub as another fallback (stock/metric)
+    try:
+        finnhub_data = await fetch_from_finnhub("stock/metric", {"symbol": symbol, "metric": "all"})
+        metrics = finnhub_data.get('metric', {})
+
+        if 'bookValuePerShareQuarterly' in metrics and metrics['bookValuePerShareQuarterly'] is not None:
+            book_value = float(metrics['bookValuePerShareQuarterly'])
+            logger.info(f"Got Book Value per Share {book_value} for {symbol} from Finnhub")
+            return book_value
+        elif 'bookValuePerShareAnnual' in metrics and metrics['bookValuePerShareAnnual'] is not None:
+             book_value = float(metrics['bookValuePerShareAnnual'])
+             logger.info(f"Got Book Value per Share {book_value} (Annual) for {symbol} from Finnhub")
+             return book_value
+
+    except Exception as e:
+        logger.warning(f"Failed to get Book Value from Finnhub for {symbol}: {str(e)}")
+
+    # If all sources fail, log error and return None
+    logger.error(f"Failed to get Book Value per Share for {symbol} from all sources")
     return None
 

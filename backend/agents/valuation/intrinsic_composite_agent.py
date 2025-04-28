@@ -30,11 +30,60 @@ VERDICT_SCORES = {
     "LOW_PB": 1.0, # Assuming low PB is good
     "MODERATE_PB": 0.0,
     "HIGH_PB": -1.0,
+    # Historical-relative verdicts from PB and Book-to-Market agents
+    "UNDERVALUED_REL_HIST": 1.0,    # Treat same as UNDERVALUED
+    "OVERVALUED_REL_HIST": -1.0,    # Treat same as OVERVALUED
+    "FAIRLY_VALUED_REL_HIST": 0.0,  # Treat same as FAIR_VALUE
+    "NO_HISTORICAL_CONTEXT": 0.2,   # Slightly positive (cautiously optimistic)
+    # Special cases
+    "NEGATIVE_OR_ZERO_BV": -0.5,    # Treat as moderately negative signal
     # Add other potential verdicts from sub-agents if necessary
 }
 
 @standard_agent_execution(agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=1800) # Shorter TTL as it depends on others
 async def run(symbol: str, agent_outputs: dict = None) -> dict:
+    """
+    Combines multiple valuation signals (DCF, PE, PB) into a composite valuation assessment.
+
+    Purpose:
+        Integrates various valuation methodologies into a single, weighted verdict to provide a
+        more robust assessment than any individual valuation method alone.
+
+    Logic:
+        1. Runs multiple valuation agents concurrently (DCF, PE, PB).
+        2. For each valid sub-agent result:
+           - Maps the verdict to a numerical score (-1 to 1).
+           - Weights by the agent's confidence and predefined weight.
+        3. Calculates a weighted average composite score.
+        4. Determines final verdict based on the composite score:
+           - Strong undervaluation (>0.5)
+           - Moderate undervaluation (0.1 to 0.5)
+           - Fair value (-0.1 to 0.1)
+           - Moderate overvaluation (-0.5 to -0.1)
+           - Strong overvaluation (< -0.5)
+
+    Verdict Mapping Logic:
+        - Historical-relative verdicts (e.g., UNDERVALUED_REL_HIST) are treated as equivalent 
+          to their absolute counterparts (e.g., UNDERVALUED).
+        - NO_HISTORICAL_CONTEXT is treated as a slightly positive signal (0.2) with reduced confidence.
+        - NEGATIVE_OR_ZERO_BV is treated as a moderately negative signal (-0.5).
+
+    Dependencies:
+        - DCF Agent (discounted cash flow)
+        - PE Ratio Agent (price-to-earnings)
+        - PB Ratio Agent (price-to-book)
+
+    Return Structure:
+        A dictionary containing:
+        - symbol (str): The stock symbol.
+        - verdict (str): 'STRONG_UNDERVALUATION', 'MODERATE_UNDERVALUATION', 'FAIR_VALUE', 
+                         'MODERATE_OVERVALUATION', 'STRONG_OVERVALUATION', or 'NO_DATA'.
+        - confidence (float): A dynamic confidence score based on the strength of the signal (0.0 to 1.0).
+        - value (float | None): The composite score (-1.0 to 1.0), or None if no valid signals.
+        - details (dict): Contains the composite score, calculation breakdown by sub-agent, and all raw sub-agent results.
+        - agent_name (str): The name of this agent.
+        - error (str | None): Error message if an issue occurred (handled by decorator).
+    """
     # Boilerplate handled by decorator
 
     # Run dependent agents concurrently

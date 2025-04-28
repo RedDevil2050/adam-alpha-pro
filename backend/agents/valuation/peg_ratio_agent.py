@@ -114,7 +114,7 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         details = {
             "raw_peg_ratio": peg_ratio_str,
             "raw_pe_ratio": pe_ratio_str,
-            "reason": "PEG ratio not provided by Alpha Vantage or could not be parsed/calculated."
+            "reason": "PEG ratio not provided by Alpha Vantage or could not be parsed. Fundamental calculation fallback not implemented due to missing growth rate source."
         }
         return {
             "symbol": symbol, "verdict": "NO_DATA", "confidence": 0.1, "value": None,
