@@ -2,7 +2,7 @@ import pytest
 import time
 from fastapi.testclient import TestClient
 from backend.api.main import app
-from backend.orchestrator import run_orchestration
+from backend.orchestrator import run_full_cycle
 from prometheus_client import generate_latest
 import os
 
@@ -34,7 +34,7 @@ def test_orchestrator_generic():
         loop = asyncio.get_event_loop()
     except:
         pass
-    result = loop.run_until_complete(run_orchestration("RELIANCE"))
+    result = loop.run_until_complete(run_full_cycle("RELIANCE"))
     assert isinstance(result, dict)
     # must contain at least one agent
     assert any(k not in ["brain", "symbol", "status"] for k in result)

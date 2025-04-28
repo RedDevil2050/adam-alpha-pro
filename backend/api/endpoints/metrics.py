@@ -1,66 +1,86 @@
 from fastapi import APIRouter, Response
-from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, Gauge, generate_latest
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    Counter,
+    Histogram,
+    Gauge,
+    generate_latest,
+    CollectorRegistry, # Import CollectorRegistry
+)
 import time
 import psutil
 
 router = APIRouter()
 
-# Define Prometheus metrics
+# Use a specific registry to avoid conflicts with the default one
+registry = CollectorRegistry()
+
+# Define Prometheus metrics using the custom registry
 REQUEST_COUNT = Counter(
     'zion_request_count',
     'App Request Count',
-    ['app_name', 'method', 'endpoint', 'http_status']
+    ['app_name', 'method', 'endpoint', 'http_status'],
+    registry=registry
 )
 
 REQUEST_LATENCY = Histogram(
     'zion_request_latency_seconds',
     'Request latency in seconds',
-    ['app_name', 'endpoint']
+    ['app_name', 'endpoint'],
+    registry=registry
 )
 
 ACTIVE_SESSIONS = Gauge(
     'zion_active_sessions',
-    'Number of currently active user sessions'
+    'Number of currently active user sessions',
+    registry=registry
 )
 
 SYSTEM_CPU = Gauge(
     'zion_system_cpu_usage_percent',
-    'Current system CPU usage in percent'
+    'Current system CPU usage in percent',
+    registry=registry
 )
 
 SYSTEM_MEMORY = Gauge(
     'zion_system_memory_usage_percent',
-    'Current system memory usage in percent'
+    'Current system memory usage in percent',
+    registry=registry
 )
 
 DATA_PROVIDER_REQUESTS = Counter(
     'zion_data_provider_requests_total',
     'Total data provider API requests',
-    ['provider', 'status']
+    ['provider', 'status'],
+    registry=registry
 )
 
 AGENT_EXECUTIONS = Counter(
     'zion_agent_executions_total',
     'Total number of agent executions',
-    ['agent_name', 'status']
+    ['agent_name', 'status'],
+    registry=registry
 )
 
 AGENT_EXECUTION_TIME = Histogram(
     'zion_agent_execution_time_seconds',
     'Time taken to execute an agent',
-    ['agent_name']
+    ['agent_name'],
+    registry=registry
 )
 
 CACHE_HITS = Counter(
     'zion_cache_hits_total',
     'Total number of cache hits',
-    ['cache_type']
+    ['cache_type'],
+    registry=registry
 )
 
 CACHE_MISSES = Counter(
     'zion_cache_misses_total',
     'Total number of cache misses',
-    ['cache_type']
+    ['cache_type'],
+    registry=registry
 )
 
 
@@ -73,8 +93,8 @@ async def metrics():
     SYSTEM_CPU.set(psutil.cpu_percent(interval=None))
     SYSTEM_MEMORY.set(psutil.virtual_memory().percent)
     
-    # Return metrics in Prometheus format
-    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+    # Return metrics in Prometheus format using the custom registry
+    return Response(content=generate_latest(registry), media_type=CONTENT_TYPE_LATEST)
 
 
 # Utility function to track request metrics

@@ -248,6 +248,8 @@ class Settings(BaseSettings):
     DEBUG: bool = Field(default=True, env="DEBUG")
     HOST: str = Field(default="0.0.0.0", env="HOST")
     PORT: int = Field(default=8000, env="PORT")
+    # Add ALLOWED_ORIGINS for CORS configuration
+    ALLOWED_ORIGINS: List[str] = Field(default=["*"], env="ALLOWED_ORIGINS") # Default to allow all for dev/test
 
     # Nested settings
     api_keys: APIKeys = APIKeys()
@@ -361,7 +363,8 @@ def get_settings() -> Settings:
                     # Initialize other nested settings if needed for tests
                     data_provider=DataProviderSettings(),
                     logging=LoggingSettings(),
-                    agent_settings=AgentSettings()
+                    agent_settings=AgentSettings(),
+                    ALLOWED_ORIGINS=["*"] # Ensure it's set for testing too
                 )
                 logger.debug("Test settings initialized successfully")
             else:
@@ -385,7 +388,8 @@ def get_settings() -> Settings:
                 ),
                 data_provider=DataProviderSettings(),
                 logging=LoggingSettings(),
-                agent_settings=AgentSettings()
+                agent_settings=AgentSettings(),
+                ALLOWED_ORIGINS=["*"] # And here for fallback
             )
             settings = _settings
             logger.warning("Using default settings due to initialization error")
