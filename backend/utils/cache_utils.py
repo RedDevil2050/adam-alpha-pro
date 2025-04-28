@@ -3,9 +3,10 @@ from backend.config.settings import settings
 from loguru import logger
 
 try:
-    redis_client = Redis(
-        host=settings.REDIS_HOST, port=settings.REDIS_PORT, decode_responses=True
-    )
+    # Parse the Redis URL to connect
+    redis_url = getattr(settings, 'REDIS_URL', 'redis://localhost:6379/0')
+    redis_client = Redis.from_url(url=redis_url, decode_responses=True)
+    logger.info(f"Redis client initialized with URL: {redis_url}")
 except Exception as e:
     logger.error(f"Failed to initialize Redis client: {e}")
     redis_client = None

@@ -7,7 +7,7 @@ from backend.agents.valuation.earnings_yield_agent import run as ey_run
 
 @pytest.mark.asyncio
 async def test_earnings_yield_agent(monkeypatch):
-    monkeypatch.setattr('backend.utils.data_provider.fetch_eps', lambda s: 5.0)
+    monkeypatch.setattr('backend.utils.data_provider.fetch_eps_data', lambda s: 5.0)
     monkeypatch.setattr('backend.utils.data_provider.fetch_price_alpha_vantage', lambda s: 100.0)
     res = await ey_run('ABC', {})
     assert 'earnings_yield' in res

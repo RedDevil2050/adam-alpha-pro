@@ -54,15 +54,15 @@ expected_z_score = (CURRENT_PE - expected_mean_hist_pe) / expected_std_hist_pe i
 @pytest.mark.asyncio
 @patch('backend.agents.valuation.pe_ratio_agent.get_settings')
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_historical_price_series', new_callable=AsyncMock)
-@patch('backend.agents.valuation.pe_ratio_agent.fetch_latest_eps', new_callable=AsyncMock)
+@patch("backend.utils.data_provider.fetch_eps_data", new_callable=AsyncMock)
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_price_point', new_callable=AsyncMock)
-async def test_pe_ratio_undervalued(mock_fetch_price, mock_fetch_eps, mock_fetch_hist, mock_get_settings, mock_settings):
+async def test_pe_ratio_undervalued(mock_fetch_price, mock_fetch_eps_data, mock_fetch_hist, mock_get_settings, mock_settings):
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_price.return_value = {"latestPrice": CURRENT_PRICE}
     # Make current PE low relative to history (e.g., 8)
     low_eps = CURRENT_PRICE / 8.0
-    mock_fetch_eps.return_value = low_eps
+    mock_fetch_eps_data.return_value = low_eps
     mock_fetch_hist.return_value = historical_prices_series
 
     # Act
@@ -87,15 +87,15 @@ async def test_pe_ratio_undervalued(mock_fetch_price, mock_fetch_eps, mock_fetch
 @pytest.mark.asyncio
 @patch('backend.agents.valuation.pe_ratio_agent.get_settings')
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_historical_price_series', new_callable=AsyncMock)
-@patch('backend.agents.valuation.pe_ratio_agent.fetch_latest_eps', new_callable=AsyncMock)
+@patch("backend.utils.data_provider.fetch_eps_data", new_callable=AsyncMock)
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_price_point', new_callable=AsyncMock)
-async def test_pe_ratio_overvalued(mock_fetch_price, mock_fetch_eps, mock_fetch_hist, mock_get_settings, mock_settings):
+async def test_pe_ratio_overvalued(mock_fetch_price, mock_fetch_eps_data, mock_fetch_hist, mock_get_settings, mock_settings):
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_price.return_value = {"latestPrice": CURRENT_PRICE}
     # Make current PE high relative to history (e.g., 25)
     high_eps = CURRENT_PRICE / 25.0
-    mock_fetch_eps.return_value = high_eps
+    mock_fetch_eps_data.return_value = high_eps
     mock_fetch_hist.return_value = historical_prices_series
 
     # Act
@@ -113,15 +113,15 @@ async def test_pe_ratio_overvalued(mock_fetch_price, mock_fetch_eps, mock_fetch_
 @pytest.mark.asyncio
 @patch('backend.agents.valuation.pe_ratio_agent.get_settings')
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_historical_price_series', new_callable=AsyncMock)
-@patch('backend.agents.valuation.pe_ratio_agent.fetch_latest_eps', new_callable=AsyncMock)
+@patch("backend.utils.data_provider.fetch_eps_data", new_callable=AsyncMock)
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_price_point', new_callable=AsyncMock)
-async def test_pe_ratio_fairly_valued(mock_fetch_price, mock_fetch_eps, mock_fetch_hist, mock_get_settings, mock_settings):
+async def test_pe_ratio_fairly_valued(mock_fetch_price, mock_fetch_eps_data, mock_fetch_hist, mock_get_settings, mock_settings):
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_price.return_value = {"latestPrice": CURRENT_PRICE}
     # Use EPS that results in PE within the fair range (e.g., 12)
     fair_eps = CURRENT_PRICE / 12.0
-    mock_fetch_eps.return_value = fair_eps
+    mock_fetch_eps_data.return_value = fair_eps
     mock_fetch_hist.return_value = historical_prices_series
 
     # Act
@@ -138,13 +138,13 @@ async def test_pe_ratio_fairly_valued(mock_fetch_price, mock_fetch_eps, mock_fet
 @pytest.mark.asyncio
 @patch('backend.agents.valuation.pe_ratio_agent.get_settings')
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_historical_price_series', new_callable=AsyncMock)
-@patch('backend.agents.valuation.pe_ratio_agent.fetch_latest_eps', new_callable=AsyncMock)
+@patch("backend.utils.data_provider.fetch_eps_data", new_callable=AsyncMock)
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_price_point', new_callable=AsyncMock)
-async def test_pe_ratio_negative_earnings(mock_fetch_price, mock_fetch_eps, mock_fetch_hist, mock_get_settings, mock_settings):
+async def test_pe_ratio_negative_earnings(mock_fetch_price, mock_fetch_eps_data, mock_fetch_hist, mock_get_settings, mock_settings):
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_price.return_value = {"latestPrice": CURRENT_PRICE}
-    mock_fetch_eps.return_value = -5.0 # Negative EPS
+    mock_fetch_eps_data.return_value = -5.0  # Negative EPS
     mock_fetch_hist.return_value = historical_prices_series # Historical doesn't matter here
 
     # Act
@@ -162,13 +162,13 @@ async def test_pe_ratio_negative_earnings(mock_fetch_price, mock_fetch_eps, mock
 @pytest.mark.asyncio
 @patch('backend.agents.valuation.pe_ratio_agent.get_settings')
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_historical_price_series', new_callable=AsyncMock)
-@patch('backend.agents.valuation.pe_ratio_agent.fetch_latest_eps', new_callable=AsyncMock)
+@patch("backend.utils.data_provider.fetch_eps_data", new_callable=AsyncMock)
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_price_point', new_callable=AsyncMock)
-async def test_pe_ratio_no_data_price(mock_fetch_price, mock_fetch_eps, mock_fetch_hist, mock_get_settings, mock_settings):
+async def test_pe_ratio_no_data_price(mock_fetch_price, mock_fetch_eps_data, mock_fetch_hist, mock_get_settings, mock_settings):
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_price.return_value = None # Missing price
-    mock_fetch_eps.return_value = CURRENT_EPS
+    mock_fetch_eps_data.return_value = CURRENT_EPS
     mock_fetch_hist.return_value = historical_prices_series
 
     # Act
@@ -185,13 +185,13 @@ async def test_pe_ratio_no_data_price(mock_fetch_price, mock_fetch_eps, mock_fet
 @pytest.mark.asyncio
 @patch('backend.agents.valuation.pe_ratio_agent.get_settings')
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_historical_price_series', new_callable=AsyncMock)
-@patch('backend.agents.valuation.pe_ratio_agent.fetch_latest_eps', new_callable=AsyncMock)
+@patch("backend.utils.data_provider.fetch_eps_data", new_callable=AsyncMock)
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_price_point', new_callable=AsyncMock)
-async def test_pe_ratio_no_data_eps(mock_fetch_price, mock_fetch_eps, mock_fetch_hist, mock_get_settings, mock_settings):
+async def test_pe_ratio_no_data_eps(mock_fetch_price, mock_fetch_eps_data, mock_fetch_hist, mock_get_settings, mock_settings):
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_price.return_value = {"latestPrice": CURRENT_PRICE}
-    mock_fetch_eps.return_value = None # Missing EPS
+    mock_fetch_eps_data.return_value = None  # Missing EPS
     mock_fetch_hist.return_value = historical_prices_series
 
     # Act
@@ -208,13 +208,13 @@ async def test_pe_ratio_no_data_eps(mock_fetch_price, mock_fetch_eps, mock_fetch
 @pytest.mark.asyncio
 @patch('backend.agents.valuation.pe_ratio_agent.get_settings')
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_historical_price_series', new_callable=AsyncMock)
-@patch('backend.agents.valuation.pe_ratio_agent.fetch_latest_eps', new_callable=AsyncMock)
+@patch("backend.utils.data_provider.fetch_eps_data", new_callable=AsyncMock)
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_price_point', new_callable=AsyncMock)
-async def test_pe_ratio_no_historical_data(mock_fetch_price, mock_fetch_eps, mock_fetch_hist, mock_get_settings, mock_settings):
+async def test_pe_ratio_no_historical_data(mock_fetch_price, mock_fetch_eps_data, mock_fetch_hist, mock_get_settings, mock_settings):
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_price.return_value = {"latestPrice": CURRENT_PRICE}
-    mock_fetch_eps.return_value = CURRENT_EPS
+    mock_fetch_eps_data.return_value = CURRENT_EPS
     mock_fetch_hist.return_value = None # Missing historical data
 
     # Act
@@ -236,14 +236,14 @@ async def test_pe_ratio_no_historical_data(mock_fetch_price, mock_fetch_eps, moc
 @pytest.mark.asyncio
 @patch('backend.agents.valuation.pe_ratio_agent.get_settings')
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_historical_price_series', new_callable=AsyncMock)
-@patch('backend.agents.valuation.pe_ratio_agent.fetch_latest_eps', new_callable=AsyncMock)
+@patch("backend.utils.data_provider.fetch_eps_data", new_callable=AsyncMock)
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_price_point', new_callable=AsyncMock)
-async def test_pe_ratio_fetch_error(mock_fetch_price, mock_fetch_eps, mock_fetch_hist, mock_get_settings, mock_settings):
+async def test_pe_ratio_fetch_error(mock_fetch_price, mock_fetch_eps_data, mock_fetch_hist, mock_get_settings, mock_settings):
     # Arrange
     mock_get_settings.return_value = mock_settings
     error_message = "API limit reached"
     mock_fetch_price.side_effect = Exception(error_message) # Simulate error during fetch
-    mock_fetch_eps.return_value = CURRENT_EPS
+    mock_fetch_eps_data.return_value = CURRENT_EPS
     mock_fetch_hist.return_value = historical_prices_series
 
     # Act
@@ -260,13 +260,13 @@ async def test_pe_ratio_fetch_error(mock_fetch_price, mock_fetch_eps, mock_fetch
 @pytest.mark.asyncio
 @patch('backend.agents.valuation.pe_ratio_agent.get_settings')
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_historical_price_series', new_callable=AsyncMock)
-@patch('backend.agents.valuation.pe_ratio_agent.fetch_latest_eps', new_callable=AsyncMock)
+@patch("backend.utils.data_provider.fetch_eps_data", new_callable=AsyncMock)
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_price_point', new_callable=AsyncMock)
-async def test_pe_ratio_historical_calc_empty(mock_fetch_price, mock_fetch_eps, mock_fetch_hist, mock_get_settings, mock_settings):
+async def test_pe_ratio_historical_calc_empty(mock_fetch_price, mock_fetch_eps_data, mock_fetch_hist, mock_get_settings, mock_settings):
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_price.return_value = {"latestPrice": CURRENT_PRICE}
-    mock_fetch_eps.return_value = CURRENT_EPS
+    mock_fetch_eps_data.return_value = CURRENT_EPS
     # Provide historical prices that become all NaN when divided by EPS (e.g., all zeros)
     empty_hist = pd.Series([0.0] * 252, index=historical_prices_series.index)
     mock_fetch_hist.return_value = empty_hist
@@ -290,13 +290,13 @@ async def test_pe_ratio_historical_calc_empty(mock_fetch_price, mock_fetch_eps, 
 @pytest.mark.asyncio
 @patch('backend.agents.valuation.pe_ratio_agent.get_settings')
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_historical_price_series', new_callable=AsyncMock)
-@patch('backend.agents.valuation.pe_ratio_agent.fetch_latest_eps', new_callable=AsyncMock)
+@patch("backend.utils.data_provider.fetch_eps_data", new_callable=AsyncMock)
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_price_point', new_callable=AsyncMock)
-async def test_pe_ratio_invalid_hist_format(mock_fetch_price, mock_fetch_eps, mock_fetch_hist, mock_get_settings, mock_settings):
+async def test_pe_ratio_invalid_hist_format(mock_fetch_price, mock_fetch_eps_data, mock_fetch_hist, mock_get_settings, mock_settings):
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_price.return_value = {"latestPrice": CURRENT_PRICE}
-    mock_fetch_eps.return_value = CURRENT_EPS
+    mock_fetch_eps_data.return_value = CURRENT_EPS
     mock_fetch_hist.return_value = [100, 101, 102] # Invalid list format
 
     # Act

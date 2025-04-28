@@ -199,6 +199,52 @@ class Orchestrator:
         }
 
 
+async def run_full_cycle(symbol: str, categories=None):
+    """Run a full analysis cycle for a symbol with all agents
+    
+    This is a convenience function that wraps the orchestrator execution
+    and provides a simpler interface for external components.
+    
+    Args:
+        symbol: Stock symbol to analyze
+        categories: Optional list of categories to limit execution to
+        
+    Returns:
+        Dictionary with results from all executed agents
+    """
+    orchestrator = get_orchestrator()
+    
+    try:
+        # Initialize orchestrator if needed
+        if not orchestrator._agents:
+            await orchestrator.initialize()
+            
+        # If specific categories are requested, only run those agents
+        if categories:
+            category_manager = CategoryManager()
+            agents_to_run = []
+            
+            for category in categories:
+                agents_in_category = category_manager.get_agents_by_category(category)
+                agents_to_run.extend(agents_in_category)
+                
+            results = {}
+            for agent_name in agents_to_run:
+                if agent_name in orchestrator._agents:
+                    agent_result = await orchestrator.execute_agent(agent_name, symbol)
+                    if agent_result:
+                        results[agent_name] = agent_result
+            
+            return results
+            
+        # Otherwise run all agents
+        return await orchestrator.execute_all(symbol)
+        
+    except Exception as e:
+        logger.error(f"Full cycle execution failed for {symbol}: {e}")
+        return {"error": str(e), "status": "failed"}
+
+
 # Global instance
 _orchestrator = None
 

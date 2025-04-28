@@ -458,3 +458,19 @@ def init_metrics_export(export_dir: str = "logs/metrics", interval: int = 3600):
     
     # Return the task for the caller to start
     return export_task()
+
+
+# Add the get_tracker function for backward compatibility
+def get_tracker():
+    """Returns a singleton tracker instance to maintain backward compatibility"""
+    class Tracker:
+        def track_agent_execution(self, agent_name, agent_type, metadata=None):
+            return track_agent_execution(agent_name, agent_type, metadata)
+            
+        def track_operation(self, operation_name, metadata=None):
+            return track_operation(operation_name, metadata)
+            
+        def track_data_provider_call(self, provider_name, endpoint, metadata=None):
+            return track_data_provider_call(provider_name, endpoint, metadata)
+    
+    return Tracker()
