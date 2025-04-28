@@ -5,6 +5,7 @@ from backend.agents.automation.utils import tracker
 
 agent_name = "auto_watchlist_agent"
 
+
 async def run(symbol: str, agent_outputs: dict = {}) -> dict:
     cache_key = f"{agent_name}:{symbol}"
     cached = await redis_client.get(cache_key)
@@ -12,7 +13,7 @@ async def run(symbol: str, agent_outputs: dict = {}) -> dict:
         return cached
 
     # Fetch 30-day price series to check momentum
-    prices = await fetch_price_series(symbol, source_preference=["api","scrape"])
+    prices = await fetch_price_series(symbol, source_preference=["api", "scrape"])
 
     # Evaluate signals from agent_outputs
     flags = []
@@ -34,7 +35,7 @@ async def run(symbol: str, agent_outputs: dict = {}) -> dict:
         "value": len(flags),
         "details": {"signals": flags},
         "score": confidence,
-        "agent_name": agent_name
+        "agent_name": agent_name,
     }
 
     await redis_client.set(cache_key, result, ex=settings.agent_cache_ttl)

@@ -4,6 +4,7 @@ from backend.agents.event.utils import tracker
 
 agent_name = "earnings_calendar_agent"
 
+
 async def run(symbol: str) -> dict:
     cache_key = f"{agent_name}:{symbol}"
     cached = await redis_client.get(cache_key)
@@ -26,7 +27,7 @@ async def run(symbol: str) -> dict:
             "value": None,
             "details": {},
             "error": str(e),
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
 
     if not earnings_date:
@@ -36,7 +37,7 @@ async def run(symbol: str) -> dict:
             "confidence": 0.0,
             "value": None,
             "details": {},
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
     else:
         result = {
@@ -45,7 +46,7 @@ async def run(symbol: str) -> dict:
             "confidence": 1.0,
             "value": earnings_date,
             "details": {"nextEarningsDate": earnings_date},
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
 
     await redis_client.set(cache_key, result, ex=86400)

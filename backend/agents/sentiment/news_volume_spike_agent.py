@@ -5,6 +5,7 @@ from backend.agents.sentiment.utils import tracker
 
 agent_name = "news_volume_spike_agent"
 
+
 async def run(symbol: str, window_hours: int = 24) -> dict:
     cache_key = f"{agent_name}:{symbol}:{window_hours}"
     # Cache check
@@ -29,7 +30,11 @@ async def run(symbol: str, window_hours: int = 24) -> dict:
         score = 0.0
     else:
         score = (count - 10) / 40.0
-    verdict = "HIGH_VOLUME" if score >= 0.75 else ("LOW_VOLUME" if score <= 0.25 else "MEDIUM_VOLUME")
+    verdict = (
+        "HIGH_VOLUME"
+        if score >= 0.75
+        else ("LOW_VOLUME" if score <= 0.25 else "MEDIUM_VOLUME")
+    )
     result = {
         "symbol": symbol,
         "verdict": verdict,
@@ -37,7 +42,7 @@ async def run(symbol: str, window_hours: int = 24) -> dict:
         "value": count,
         "details": {},
         "score": score,
-        "agent_name": agent_name
+        "agent_name": agent_name,
     }
 
     # Cache & track

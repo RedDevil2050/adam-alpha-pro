@@ -7,6 +7,7 @@ from datetime import datetime
 import asyncio
 from loguru import logger
 
+
 class SystemOrchestrator:
     def __init__(self):
         self.category_manager = CategoryManager()
@@ -21,15 +22,17 @@ class SystemOrchestrator:
         self.category_dependencies = self._build_dependency_graph()
         logger.info("System orchestrator initialized")
 
-    async def analyze_symbol(self, 
-                           symbol: str, 
-                           categories: Optional[List[str]] = None,
-                           force_refresh: bool = False) -> Dict:
+    async def analyze_symbol(
+        self,
+        symbol: str,
+        categories: Optional[List[str]] = None,
+        force_refresh: bool = False,
+    ) -> Dict:
         """Run full analysis with advanced caching and error recovery"""
         analysis_id = f"{symbol}_{datetime.now().timestamp()}"
         try:
             self.system_monitor.start_analysis(analysis_id)
-            
+
             # Check cache if not forced refresh
             if not force_refresh:
                 cached = await self._get_cached_analysis(symbol)
@@ -44,20 +47,21 @@ class SystemOrchestrator:
             for category in self._get_execution_order(categories):
                 if category in executed_categories:
                     continue
-                
+
                 try:
                     category_result = await self._execute_category_with_retry(
                         category, symbol, results
                     )
                     results[category] = category_result
                     executed_categories.add(category)
-                    
+
                     # Collect metrics
                     self.metrics_collector.record_category_execution(
-                        category, len(category_result), 
-                        bool(category_result.get("error"))
+                        category,
+                        len(category_result),
+                        bool(category_result.get("error")),
                     )
-                    
+
                 except Exception as e:
                     logger.error(f"Category {category} failed: {e}")
                     results[category] = {"error": str(e)}
@@ -65,10 +69,10 @@ class SystemOrchestrator:
             # Generate final verdict
             final_verdict = self._generate_composite_verdict(results)
             system_health = self.system_monitor.get_health_metrics()
-            
+
             # Cache results
             await self._cache_analysis(symbol, final_verdict)
-            
+
             self.system_monitor.end_analysis(analysis_id, "success")
             return {
                 "symbol": symbol,
@@ -76,7 +80,7 @@ class SystemOrchestrator:
                 "verdict": final_verdict,
                 "category_results": results,
                 "system_health": system_health,
-                "execution_metrics": self.metrics_collector.get_metrics()
+                "execution_metrics": self.metrics_collector.get_metrics(),
             }
 
         except Exception as e:
@@ -86,14 +90,12 @@ class SystemOrchestrator:
                 "symbol": symbol,
                 "analysis_id": analysis_id,
                 "error": str(e),
-                "system_health": self.system_monitor.get_health_metrics()
+                "system_health": self.system_monitor.get_health_metrics(),
             }
 
-    async def _execute_category_with_retry(self, 
-                                         category: str, 
-                                         symbol: str, 
-                                         results: Dict,
-                                         max_retries: int = 3) -> Dict:
+    async def _execute_category_with_retry(
+        self, category: str, symbol: str, results: Dict, max_retries: int = 3
+    ) -> Dict:
         """Execute category with retry logic"""
         for attempt in range(max_retries):
             try:
@@ -151,7 +153,7 @@ class SystemOrchestrator:
             category_weights = self.category_manager.get_category_weights()
             scores = []
             weights = []
-            
+
             for category, result in results.items():
                 if "error" not in result:
                     score = result.get("confidence", 0)
@@ -163,10 +165,7 @@ class SystemOrchestrator:
                 return {"verdict": "INSUFFICIENT_DATA", "confidence": 0}
 
             # Calculate weighted average
-            composite_score = (
-                sum(s * w for s, w in zip(scores, weights)) / 
-                sum(weights)
-            )
+            composite_score = sum(s * w for s, w in zip(scores, weights)) / sum(weights)
 
             # Determine verdict
             if composite_score > 0.7:
@@ -181,9 +180,9 @@ class SystemOrchestrator:
             return {
                 "verdict": verdict,
                 "confidence": round(composite_score, 4),
-                "category_weights": category_weights
+                "category_weights": category_weights,
             }
-            
+
         except Exception as e:
             logger.error(f"Composite verdict generation failed: {e}")
             return {"verdict": "ERROR", "confidence": 0}

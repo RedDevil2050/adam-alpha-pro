@@ -6,6 +6,7 @@ from backend.config.settings import settings
 from backend.config.logging_config import setup_logging
 from loguru import logger
 
+
 async def initialize_system():
     """Initialize all system components with market checks"""
     try:
@@ -19,10 +20,10 @@ async def initialize_system():
         # Initialize core components
         system_monitor = SystemMonitor()
         orchestrator = SystemOrchestrator()
-        
+
         # Register and verify components
         await register_components(system_monitor)
-        
+
         # Verify system ready
         readiness = system_monitor.is_ready()
         if not readiness["ready"]:
@@ -31,12 +32,13 @@ async def initialize_system():
                 raise RuntimeError("Redis component not healthy")
         else:
             logger.info("System initialization complete and ready")
-            
+
         return orchestrator, system_monitor
 
     except Exception as e:
         logger.error(f"System initialization failed: {e}")
         raise
+
 
 async def verify_redis_connection():
     """Verify Redis connection"""
@@ -47,12 +49,14 @@ async def verify_redis_connection():
         logger.error(f"Redis connection failed: {e}")
         raise
 
+
 async def register_components(monitor: SystemMonitor):
     """Register and verify all components"""
     components = ["orchestrator", "redis", "api", "cache"]
     for component in components:
         monitor.register_component(component)
     logger.info(f"Registered {len(components)} components")
+
 
 if __name__ == "__main__":
     asyncio.run(initialize_system())

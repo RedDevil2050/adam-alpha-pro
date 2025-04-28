@@ -14,7 +14,7 @@ async def run(symbol: str, agent_outputs: dict = {}) -> dict:
             "value": value,
             "details": {},
             "error": None,
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
     except Exception as e:
         return {
@@ -24,5 +24,5 @@ async def run(symbol: str, agent_outputs: dict = {}) -> dict:
             "value": None,
             "details": {},
             "error": str(e),
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }

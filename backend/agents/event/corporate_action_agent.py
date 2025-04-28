@@ -4,6 +4,7 @@ from backend.agents.event.utils import tracker
 
 agent_name = "corporate_action_agent"
 
+
 async def run(symbol: str) -> dict:
     cache_key = f"{agent_name}:{symbol}"
     cached = await redis_client.get(cache_key)
@@ -26,7 +27,7 @@ async def run(symbol: str) -> dict:
             "value": None,
             "details": {},
             "error": str(e),
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
 
     if not actions:
@@ -36,13 +37,15 @@ async def run(symbol: str) -> dict:
             "confidence": 0.0,
             "value": 0,
             "details": {},
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
     else:
         # Score based on number of actions
         count = len(actions)
         score = min(count / 5.0, 1.0)
-        verdict = "ACTIVE" if score >= 0.6 else "MODERATE" if score >= 0.3 else "INACTIVE"
+        verdict = (
+            "ACTIVE" if score >= 0.6 else "MODERATE" if score >= 0.3 else "INACTIVE"
+        )
         result = {
             "symbol": symbol,
             "verdict": verdict,
@@ -50,7 +53,7 @@ async def run(symbol: str) -> dict:
             "value": count,
             "details": {"actions": actions},
             "score": score,
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
 
     await redis_client.set(cache_key, result, ex=86400)

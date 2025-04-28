@@ -3,6 +3,7 @@ from backend.agents.esg.utils import fetch_esg_breakdown, tracker
 
 agent_name = "environmental_agent"
 
+
 async def run(symbol: str) -> dict:
     cache_key = f"{agent_name}:{symbol}"
     # Cache check
@@ -12,9 +13,16 @@ async def run(symbol: str) -> dict:
 
     # Fetch ESG breakdown
     scores = await fetch_esg_breakdown(symbol)
-    value = scores.get('environmental')
+    value = scores.get("environmental")
     if value is None:
-        result = {"symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None, "details": {}, "agent_name": agent_name}
+        result = {
+            "symbol": symbol,
+            "verdict": "NO_DATA",
+            "confidence": 0.0,
+            "value": None,
+            "details": {},
+            "agent_name": agent_name,
+        }
     else:
         # Normalize 0–100 to 0–1
         score = max(0.0, min(1.0, value / 100.0))
@@ -34,7 +42,7 @@ async def run(symbol: str) -> dict:
             "value": value,
             "details": {"subscore": value},
             "score": score,
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
 
     # Cache & track

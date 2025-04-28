@@ -1,12 +1,15 @@
 from backend.utils.data_provider import fetch_esg_data
-from backend.agents.decorators import standard_agent_execution # Import decorator
-from backend.config.settings import get_settings # Added import
+from backend.agents.decorators import standard_agent_execution  # Import decorator
+from backend.config.settings import get_settings  # Added import
 
-agent_name = "esg_score_agent" # Define agent name
-AGENT_CATEGORY = "esg" # Define category for the decorator
+agent_name = "esg_score_agent"  # Define agent name
+AGENT_CATEGORY = "esg"  # Define category for the decorator
 
-@standard_agent_execution(agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=86400) # Apply decorator
-async def run(symbol: str, agent_outputs: dict = None) -> dict: # Define run function
+
+@standard_agent_execution(
+    agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=86400
+)  # Apply decorator
+async def run(symbol: str, agent_outputs: dict = None) -> dict:  # Define run function
     # Boilerplate (cache check, try/except, cache set, tracker, error handling) is handled by decorator
 
     # Fetch settings
@@ -24,8 +27,8 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict: # Define run fun
             "confidence": 0.0,
             "value": None,
             "details": {"reason": "No ESG data available"},
-            "error": None, # Explicitly None for NO_DATA
-            "agent_name": agent_name # Decorator might overwrite this
+            "error": None,  # Explicitly None for NO_DATA
+            "agent_name": agent_name,  # Decorator might overwrite this
         }
 
     # Calculate ESG score (Core Logic)
@@ -38,9 +41,9 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict: # Define run fun
     esg_score = (environmental + social + governance) / 3
 
     # Determine verdict based on score (using settings)
-    if esg_score > esg_settings.THRESHOLD_STRONG_ESG: # Use setting
+    if esg_score > esg_settings.THRESHOLD_STRONG_ESG:  # Use setting
         verdict = "STRONG_ESG"
-    elif esg_score > esg_settings.THRESHOLD_MODERATE_ESG: # Use setting
+    elif esg_score > esg_settings.THRESHOLD_MODERATE_ESG:  # Use setting
         verdict = "MODERATE_ESG"
     else:
         verdict = "WEAK_ESG"
@@ -49,17 +52,19 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict: # Define run fun
     result = {
         "symbol": symbol,
         "verdict": verdict,
-        "confidence": round(esg_score, 2), # Use score as confidence, or derive differently
+        "confidence": round(
+            esg_score, 2
+        ),  # Use score as confidence, or derive differently
         "value": round(esg_score, 2),
         "details": {
             "environmental_score": environmental,
             "social_score": social,
             "governance_score": governance,
             "composite_esg_score": round(esg_score, 2),
-            "threshold_strong": esg_settings.THRESHOLD_STRONG_ESG, # Added threshold
-            "threshold_moderate": esg_settings.THRESHOLD_MODERATE_ESG, # Added threshold
+            "threshold_strong": esg_settings.THRESHOLD_STRONG_ESG,  # Added threshold
+            "threshold_moderate": esg_settings.THRESHOLD_MODERATE_ESG,  # Added threshold
         },
-        "error": None, # Explicitly None for success
-        "agent_name": agent_name # Decorator might overwrite this
+        "error": None,  # Explicitly None for success
+        "agent_name": agent_name,  # Decorator might overwrite this
     }
     return result

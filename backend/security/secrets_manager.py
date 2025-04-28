@@ -7,11 +7,13 @@ from azure.identity import DefaultAzureCredential, ManagedIdentityCredential
 from backend.config.settings import get_settings
 from loguru import logger
 
+
 class SecretsManager:
     """
     Manages secrets across different environments using environment variables,
     Azure Key Vault, or other secret stores based on the environment.
     """
+
     def __init__(self):
         self.settings = get_settings()
         self._key_vault_client = None
@@ -30,12 +32,11 @@ class SecretsManager:
                 if not vault_url:
                     logger.warning("AZURE_KEY_VAULT_URL not set in production")
                     return None
-                    
+
                 credential = self._get_azure_credential()
                 if credential:
                     self._key_vault_client = SecretClient(
-                        vault_url=vault_url,
-                        credential=credential
+                        vault_url=vault_url, credential=credential
                     )
             except Exception as e:
                 logger.error(f"Failed to initialize Key Vault client: {e}")
@@ -62,10 +63,10 @@ class SecretsManager:
         """
         Get a secret from the appropriate store based on environment.
         Uses caching to prevent repeated calls to the secret store.
-        
+
         Args:
             secret_name: Name of the secret to retrieve
-            
+
         Returns:
             The secret value or None if not found
         """
@@ -77,17 +78,17 @@ class SecretsManager:
                     return secret.value
                 except Exception as e:
                     logger.warning(f"Failed to get secret from Key Vault: {e}")
-            
+
         # Development/Testing or Key Vault fallback: Use environment variables
         return os.getenv(secret_name)
 
     def get_connection_string(self, service_name: str) -> Optional[str]:
         """
         Get a connection string for a service, handling different formats and sources.
-        
+
         Args:
             service_name: Name of the service (e.g., 'DATABASE', 'REDIS')
-            
+
         Returns:
             Connection string or None if not found
         """
@@ -95,7 +96,7 @@ class SecretsManager:
         conn_str = self.get_secret(f"{service_name}_CONNECTION_STRING")
         if conn_str:
             return conn_str
-            
+
         # Try to build from components for database
         if service_name == "DATABASE":
             try:
@@ -104,9 +105,9 @@ class SecretsManager:
                     "port": self.get_secret("DATABASE_PORT"),
                     "name": self.get_secret("DATABASE_NAME"),
                     "user": self.get_secret("DATABASE_USER"),
-                    "password": self.get_secret("DATABASE_PASSWORD")
+                    "password": self.get_secret("DATABASE_PASSWORD"),
                 }
-                
+
                 if all(components.values()):
                     return (
                         f"postgresql+asyncpg://{components['user']}:{components['password']}"
@@ -114,15 +115,17 @@ class SecretsManager:
                     )
             except Exception as e:
                 logger.error(f"Failed to build connection string: {e}")
-                
+
         return None
 
     def clear_cache(self):
         """Clear the secret cache"""
         self.get_secret.cache_clear()
 
+
 # Global instance
 _secrets_manager = None
+
 
 def get_secrets_manager():
     """Get or create the global SecretsManager instance"""

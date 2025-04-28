@@ -4,11 +4,13 @@ import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential
 from circuitbreaker import circuit
 
+
 class AIProvider(ABC):
     @abstractmethod
     async def call(self, prompt: str, **kwargs) -> dict:
         """Send prompt to the model and return the response."""
         pass
+
 
 class OpenAIProvider(AIProvider):
     def __init__(self, api_key: str, model: str = "gpt-4"):
@@ -21,9 +23,12 @@ class OpenAIProvider(AIProvider):
         headers = {"Authorization": f"Bearer {self.api_key}"}
         json_data = {"model": self.model, "prompt": prompt, **kwargs}
         async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post("https://api.openai.com/v1/completions", json=json_data, headers=headers)
+            resp = await client.post(
+                "https://api.openai.com/v1/completions", json=json_data, headers=headers
+            )
             resp.raise_for_status()
             return resp.json()
+
 
 class GeminiProvider(AIProvider):
     def __init__(self, api_key: str, model: str = "gemini-pro"):
@@ -35,10 +40,14 @@ class GeminiProvider(AIProvider):
     async def call(self, prompt: str, **kwargs) -> dict:
         headers = {"Authorization": f"Bearer {self.api_key}"}
         async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(f"https://api.gemini.example/v1/{self.model}/completions",
-                                      json={"prompt": prompt, **kwargs}, headers=headers)
+            resp = await client.post(
+                f"https://api.gemini.example/v1/{self.model}/completions",
+                json={"prompt": prompt, **kwargs},
+                headers=headers,
+            )
             resp.raise_for_status()
             return resp.json()
+
 
 # Additional providers can be added similarly
 PROVIDERS = {

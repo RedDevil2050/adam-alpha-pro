@@ -7,6 +7,7 @@ tracker = ProgressTracker(filepath="backend/utils/progress.json")
 # Initialize VADER analyzer
 analyzer = SentimentIntensityAnalyzer()
 
+
 def normalize_compound(compound: float) -> float:
     """
     Normalize VADER compound score (-1 to 1) to (0 to 1).

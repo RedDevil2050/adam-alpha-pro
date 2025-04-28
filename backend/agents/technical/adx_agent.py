@@ -5,6 +5,7 @@ from backend.agents.technical.utils import tracker
 
 agent_name = "adx_agent"
 
+
 async def run(symbol: str) -> dict:
     cache_key = f"{agent_name}:{symbol}"
     # 1) Cache check
@@ -21,7 +22,7 @@ async def run(symbol: str) -> dict:
             "confidence": 0.0,
             "value": None,
             "details": {},
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
     else:
         high = df["high"]
@@ -30,11 +31,9 @@ async def run(symbol: str) -> dict:
         prev_close = close.shift(1)
 
         # 3) True Range and ATR
-        tr = pd.concat([
-            high - low,
-            (high - prev_close).abs(),
-            (low - prev_close).abs()
-        ], axis=1).max(axis=1)
+        tr = pd.concat(
+            [high - low, (high - prev_close).abs(), (low - prev_close).abs()], axis=1
+        ).max(axis=1)
         atr = tr.rolling(window=14, min_periods=14).mean()
 
         # 4) Directional Movements
@@ -70,7 +69,7 @@ async def run(symbol: str) -> dict:
             "value": adx,
             "details": {"adx": adx},
             "score": score,
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
 
     # 8) Cache result for 1 hour

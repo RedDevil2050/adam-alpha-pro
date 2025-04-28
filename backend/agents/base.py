@@ -6,23 +6,20 @@ from backend.utils.cache_utils import redis_client
 from backend.config.settings import settings
 from backend.agents.categories import CategoryType, CategoryManager
 
+
 class AgentBase(ABC):
     def __init__(self):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.cache = redis_client
         self.ttl = settings.agent_cache_ttl
         self.context = {}
-        self.metrics = {
-            'calls': 0,
-            'errors': 0,
-            'avg_latency': 0
-        }
+        self.metrics = {"calls": 0, "errors": 0, "avg_latency": 0}
 
     async def execute(self, symbol: str, agent_outputs: Dict = {}) -> Dict[str, Any]:
         """Template method for agent execution with metrics"""
         start_time = datetime.now()
-        self.metrics['calls'] += 1
-        
+        self.metrics["calls"] += 1
+
         try:
             cache_key = f"{self.__class__.__name__}:{symbol}"
             cached = await self.cache.get(cache_key)
@@ -31,11 +28,11 @@ class AgentBase(ABC):
 
             result = await self._execute(symbol, agent_outputs)
             await self.cache.set(cache_key, result, ex=self.ttl)
-            
+
             return result
 
         except Exception as e:
-            self.metrics['errors'] += 1
+            self.metrics["errors"] += 1
             self.logger.error(f"Agent execution failed: {e}")
             return self._error_response(symbol, str(e))
         finally:
@@ -55,13 +52,13 @@ class AgentBase(ABC):
             "value": None,
             "details": {},
             "error": error,
-            "agent_name": self.__class__.__name__
+            "agent_name": self.__class__.__name__,
         }
 
     def _update_latency(self, new_latency: float):
-        old_avg = self.metrics['avg_latency']
-        calls = self.metrics['calls']
-        self.metrics['avg_latency'] = (old_avg * (calls-1) + new_latency) / calls
+        old_avg = self.metrics["avg_latency"]
+        calls = self.metrics["calls"]
+        self.metrics["avg_latency"] = (old_avg * (calls - 1) + new_latency) / calls
 
     def get_dependencies(self) -> List[str]:
         """Return list of dependent agent names"""
@@ -81,13 +78,14 @@ class AgentBase(ABC):
 
     def validate_result(self, result: Dict) -> bool:
         """Validate agent output"""
-        required = ['symbol', 'verdict', 'confidence', 'value']
+        required = ["symbol", "verdict", "confidence", "value"]
         return all(k in result for k in required)
 
     async def get_market_context(self, symbol: str) -> Dict[str, Any]:
         """Get current market context"""
         try:
             from backend.market.context import MarketContext
+
             ctx = await MarketContext.get_instance()
             return await ctx.get_state(symbol)
         except Exception as e:
@@ -96,23 +94,18 @@ class AgentBase(ABC):
 
     def adjust_for_market_regime(self, score: float, regime: str) -> float:
         """Adjust score based on market regime"""
-        regime_multipliers = {
-            'BULL': 1.2,
-            'BEAR': 0.8,
-            'NEUTRAL': 1.0,
-            'VOLATILE': 0.7
-        }
+        regime_multipliers = {"BULL": 1.2, "BEAR": 0.8, "NEUTRAL": 1.0, "VOLATILE": 0.7}
         return score * regime_multipliers.get(regime, 1.0)
 
     async def get_execution_context(self, symbol: str) -> Dict[str, Any]:
         """Get execution context with market state"""
         market_state = await self.get_market_context(symbol)
         return {
-            'timestamp': datetime.now().isoformat(),
-            'market_regime': market_state.get('regime', 'UNKNOWN'),
-            'volatility': market_state.get('volatility', 0.0),
-            'agent_name': self.__class__.__name__,
-            'dependencies_met': self._check_dependencies()
+            "timestamp": datetime.now().isoformat(),
+            "market_regime": market_state.get("regime", "UNKNOWN"),
+            "volatility": market_state.get("volatility", 0.0),
+            "agent_name": self.__class__.__name__,
+            "dependencies_met": self._check_dependencies(),
         }
 
     def _check_dependencies(self) -> bool:
@@ -122,13 +115,13 @@ class AgentBase(ABC):
 
     def _verify_dependency(self, dep_name: str) -> bool:
         """Verify single dependency"""
-        return dep_name in self.context.get('dependencies', {})
-        
+        return dep_name in self.context.get("dependencies", {})
+
     @property
     def category(self) -> CategoryType:
         """Return agent category"""
         raise NotImplementedError
-        
+
     def get_category_weight(self) -> float:
         """Get weight based on category"""
         return CategoryManager.get_category_weight(self.category)
@@ -146,19 +139,19 @@ class AgentBase(ABC):
         """Validate agent output based on category"""
         if not self.validate_result(result):
             return False
-            
+
         category_meta = CategoryManager.CATEGORY_METADATA.get(self.category)
         if not category_meta:
             return False
-            
+
         # Check category-specific thresholds
-        if category_meta.required and result['confidence'] < 0.5:
+        if category_meta.required and result["confidence"] < 0.5:
             return False
-            
+
         # Validate dependencies
         if not await self.validate_category_requirements(context):
             return False
-            
+
         return True
 
     def get_agent_priority(self) -> int:
@@ -171,6 +164,6 @@ class AgentBase(ABC):
             CategoryType.SENTIMENT: 5,
             CategoryType.EVENT: 6,
             CategoryType.ESG: 7,
-            CategoryType.INTELLIGENCE: 8
+            CategoryType.INTELLIGENCE: 8,
         }
         return priorities.get(self.category, 10)

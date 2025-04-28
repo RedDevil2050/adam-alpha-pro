@@ -1,13 +1,16 @@
 import pandas as pd
 import numpy as np
 from backend.utils.data_provider import fetch_price_series
-from backend.config.settings import get_settings # Use get_settings()
-from backend.agents.decorators import standard_agent_execution # Import decorator
+from backend.config.settings import get_settings  # Use get_settings()
+from backend.agents.decorators import standard_agent_execution  # Import decorator
 
 agent_name = "beta_agent"
-AGENT_CATEGORY = "risk" # Define category for the decorator
+AGENT_CATEGORY = "risk"  # Define category for the decorator
 
-@standard_agent_execution(agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600)
+
+@standard_agent_execution(
+    agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600
+)
 async def run(symbol: str) -> dict:
     """
     Calculates various risk metrics for a given stock symbol relative to a market index.
@@ -63,8 +66,8 @@ async def run(symbol: str) -> dict:
     """
     # Boilerplate (cache check, try/except, cache set, tracker, error handling) is handled by decorator
 
-    settings = get_settings() # Get settings instance
-    beta_settings = settings.agent_settings.beta # Access beta-specific settings
+    settings = get_settings()  # Get settings instance
+    beta_settings = settings.agent_settings.beta  # Access beta-specific settings
 
     # Fetch price series for symbol and market index (Core Logic)
     symbol_prices = await fetch_price_series(symbol)
@@ -73,20 +76,29 @@ async def run(symbol: str) -> dict:
     market_prices = await fetch_price_series(market_symbol)
 
     # Validate data length (Core Logic)
-    if not symbol_prices or not market_prices or len(symbol_prices) < 2 or len(market_prices) < 2:
+    if (
+        not symbol_prices
+        or not market_prices
+        or len(symbol_prices) < 2
+        or len(market_prices) < 2
+    ):
         # Return NO_DATA format (decorator won't cache this)
         return {
             "symbol": symbol,
             "verdict": "NO_DATA",
             "confidence": 0.0,
             "value": None,
-            "details": {"reason": f"Insufficient price data for {symbol} or market index {market_symbol}"},
-            "agent_name": agent_name # Decorator might overwrite this, but good practice
+            "details": {
+                "reason": f"Insufficient price data for {symbol} or market index {market_symbol}"
+            },
+            "agent_name": agent_name,  # Decorator might overwrite this, but good practice
         }
 
     # Calculate returns (Core Logic)
     # Ensure consistent indexing if lengths differ slightly (e.g., align dates)
-    sym_series = pd.Series(symbol_prices) # Assuming prices are just values; if dicts/tuples with dates, adjust
+    sym_series = pd.Series(
+        symbol_prices
+    )  # Assuming prices are just values; if dicts/tuples with dates, adjust
     mkt_series = pd.Series(market_prices)
     # A more robust approach would align based on dates if available
     sym_ret = sym_series.pct_change().dropna()
@@ -95,51 +107,73 @@ async def run(symbol: str) -> dict:
     # Align returns if necessary (simple intersection for now)
     common_index = sym_ret.index.intersection(mkt_ret.index)
     if len(common_index) < 2:
-         return {
-            "symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None,
-            "details": {"reason": f"Insufficient overlapping data points between {symbol} and {market_symbol}"},
-            "agent_name": agent_name
+        return {
+            "symbol": symbol,
+            "verdict": "NO_DATA",
+            "confidence": 0.0,
+            "value": None,
+            "details": {
+                "reason": f"Insufficient overlapping data points between {symbol} and {market_symbol}"
+            },
+            "agent_name": agent_name,
         }
     sym_ret = sym_ret.loc[common_index]
     mkt_ret = mkt_ret.loc[common_index]
-
 
     # Beta calculation (Core Logic)
     # Check for zero variance in market returns
     mkt_var = mkt_ret.var()
     if mkt_var == 0:
-        beta = np.nan # Or handle as appropriate (e.g., 1.0 or specific verdict)
+        beta = np.nan  # Or handle as appropriate (e.g., 1.0 or specific verdict)
     else:
         beta = float(sym_ret.cov(mkt_ret) / mkt_var)
 
     # Value at Risk (VaR) calculation (Core Logic)
-    confidence_level = beta_settings.VAR_CONFIDENCE_LEVEL # Use setting
-    var = float(np.percentile(sym_ret, (1 - confidence_level) * 100)) if not sym_ret.empty else np.nan
+    confidence_level = beta_settings.VAR_CONFIDENCE_LEVEL  # Use setting
+    var = (
+        float(np.percentile(sym_ret, (1 - confidence_level) * 100))
+        if not sym_ret.empty
+        else np.nan
+    )
 
     # Sharpe Ratio (Core Logic)
-    risk_free = settings.data_provider.RISK_FREE_RATE # Use setting
-    annualization_factor = beta_settings.SHARPE_ANNUALIZATION_FACTOR # Use setting
-    excess_ret = sym_ret - risk_free / annualization_factor  # Daily adjustment using setting
+    risk_free = settings.data_provider.RISK_FREE_RATE  # Use setting
+    annualization_factor = beta_settings.SHARPE_ANNUALIZATION_FACTOR  # Use setting
+    excess_ret = (
+        sym_ret - risk_free / annualization_factor
+    )  # Daily adjustment using setting
     std_dev_excess = excess_ret.std()
     if std_dev_excess == 0 or excess_ret.empty:
-        sharpe = 0.0 # Or handle as appropriate
+        sharpe = 0.0  # Or handle as appropriate
     else:
         # Use annualization factor setting
-        sharpe = float(np.sqrt(annualization_factor) * excess_ret.mean() / std_dev_excess)
+        sharpe = float(
+            np.sqrt(annualization_factor) * excess_ret.mean() / std_dev_excess
+        )
 
     # Correlation analysis (Core Logic)
-    correlation = float(sym_ret.corr(mkt_ret)) if not sym_ret.empty and not mkt_ret.empty else np.nan
+    correlation = (
+        float(sym_ret.corr(mkt_ret))
+        if not sym_ret.empty and not mkt_ret.empty
+        else np.nan
+    )
 
     # Risk scoring based on multiple metrics (Core Logic)
     # Handle potential NaN values from calculations
     beta_score = max(0, 1 - abs(beta - 1)) if not np.isnan(beta) else 0
-    var_score = max(0, 1 + var/0.05) if not np.isnan(var) else 0 # Normalize VaR (0.05 could also be a setting)
-    sharpe_score = min(1, max(0, sharpe/3)) if not np.isnan(sharpe) else 0 # Normalization (3 could also be a setting)
+    var_score = (
+        max(0, 1 + var / 0.05) if not np.isnan(var) else 0
+    )  # Normalize VaR (0.05 could also be a setting)
+    sharpe_score = (
+        min(1, max(0, sharpe / 3)) if not np.isnan(sharpe) else 0
+    )  # Normalization (3 could also be a setting)
 
     # Use weights from settings
-    composite_score = (beta_score * beta_settings.COMPOSITE_WEIGHT_BETA +
-                       var_score * beta_settings.COMPOSITE_WEIGHT_VAR +
-                       sharpe_score * beta_settings.COMPOSITE_WEIGHT_SHARPE)
+    composite_score = (
+        beta_score * beta_settings.COMPOSITE_WEIGHT_BETA
+        + var_score * beta_settings.COMPOSITE_WEIGHT_VAR
+        + sharpe_score * beta_settings.COMPOSITE_WEIGHT_SHARPE
+    )
 
     # Use thresholds from settings
     # Corrected if/elif/else block
@@ -157,36 +191,44 @@ async def run(symbol: str) -> dict:
     result = {
         "symbol": symbol,
         "verdict": verdict,
-        "confidence": round(composite_score * 100, 2), # Use composite score for confidence
-        "value": round(beta, 4) if not np.isnan(beta) else None, # Beta as primary value
+        "confidence": round(
+            composite_score * 100, 2
+        ),  # Use composite score for confidence
+        "value": (
+            round(beta, 4) if not np.isnan(beta) else None
+        ),  # Beta as primary value
         "details": {
             "beta": round(beta, 4) if not np.isnan(beta) else None,
-            var_key: round(var * 100, 2) if not np.isnan(var) else None, # Use dynamic key
+            var_key: (
+                round(var * 100, 2) if not np.isnan(var) else None
+            ),  # Use dynamic key
             "sharpe_ratio": round(sharpe, 2) if not np.isnan(sharpe) else None,
-            "market_correlation": round(correlation, 2) if not np.isnan(correlation) else None,
+            "market_correlation": (
+                round(correlation, 2) if not np.isnan(correlation) else None
+            ),
             "market_index_used": market_symbol,
             "risk_scores": {
                 "beta_component": round(beta_score, 2),
                 "var_component": round(var_score, 2),
-                "sharpe_component": round(sharpe_score, 2)
+                "sharpe_component": round(sharpe_score, 2),
             },
-            "config_used": { # Add config details for traceability
-                 "var_confidence_level": confidence_level,
-                 "sharpe_annualization_factor": annualization_factor,
-                 "risk_free_rate": risk_free,
-                 "weights": {
-                     "beta": beta_settings.COMPOSITE_WEIGHT_BETA,
-                     "var": beta_settings.COMPOSITE_WEIGHT_VAR,
-                     "sharpe": beta_settings.COMPOSITE_WEIGHT_SHARPE
-                 },
-                 "thresholds": {
-                     "low_risk": beta_settings.VERDICT_THRESHOLD_LOW_RISK,
-                     "moderate_risk": beta_settings.VERDICT_THRESHOLD_MODERATE_RISK
-                 }
-            }
+            "config_used": {  # Add config details for traceability
+                "var_confidence_level": confidence_level,
+                "sharpe_annualization_factor": annualization_factor,
+                "risk_free_rate": risk_free,
+                "weights": {
+                    "beta": beta_settings.COMPOSITE_WEIGHT_BETA,
+                    "var": beta_settings.COMPOSITE_WEIGHT_VAR,
+                    "sharpe": beta_settings.COMPOSITE_WEIGHT_SHARPE,
+                },
+                "thresholds": {
+                    "low_risk": beta_settings.VERDICT_THRESHOLD_LOW_RISK,
+                    "moderate_risk": beta_settings.VERDICT_THRESHOLD_MODERATE_RISK,
+                },
+            },
         },
-        "score": round(composite_score, 4), # Keep composite score if needed elsewhere
-        "agent_name": agent_name # Decorator might overwrite this
+        "score": round(composite_score, 4),  # Keep composite score if needed elsewhere
+        "agent_name": agent_name,  # Decorator might overwrite this
     }
 
     # Decorator handles caching and tracker update

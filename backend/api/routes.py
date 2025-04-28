@@ -12,6 +12,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.get("/api/market-state")
 async def get_market_state():
     try:
@@ -22,6 +23,7 @@ async def get_market_state():
         return {"status": "success", "data": market_state}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/api/optimize-portfolio")
 async def optimize_portfolio(symbols: List[str]):

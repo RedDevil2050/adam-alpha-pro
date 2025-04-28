@@ -1,4 +1,3 @@
-
 from backend.utils.progress_tracker import ProgressTracker
 
 # Shared tracker

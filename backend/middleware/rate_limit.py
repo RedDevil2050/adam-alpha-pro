@@ -4,8 +4,14 @@ from ..config.settings import get_settings
 
 settings = get_settings()
 
+
 class RateLimiter:
-    def __init__(self, redis_url: str = settings.redis.REDIS_URL, limit: int = 100, window: int = 60):
+    def __init__(
+        self,
+        redis_url: str = settings.redis.REDIS_URL,
+        limit: int = 100,
+        window: int = 60,
+    ):
         self.redis = Redis.from_url(redis_url)
         self.limit = limit
         self.window = window
@@ -17,6 +23,5 @@ class RateLimiter:
             await self.redis.expire(redis_key, self.window)
         if count > self.limit:
             raise HTTPException(
-                status_code=429,
-                detail="Rate limit exceeded. Try again later."
+                status_code=429, detail="Rate limit exceeded. Try again later."
             )

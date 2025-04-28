@@ -6,6 +6,7 @@ from backend.config.settings import settings
 
 agent_name = "stochastic_agent"
 
+
 async def run(symbol: str) -> dict:
     cache_key = f"{agent_name}:{symbol}"
     # Cache check
@@ -16,7 +17,14 @@ async def run(symbol: str) -> dict:
     # Fetch OHLCV series with fallback
     df = await fetch_ohlcv_series(symbol, source_preference=["api", "scrape"])
     if df is None or df.empty:
-        result = {"symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None, "details": {}, "agent_name": agent_name}
+        result = {
+            "symbol": symbol,
+            "verdict": "NO_DATA",
+            "confidence": 0.0,
+            "value": None,
+            "details": {},
+            "agent_name": agent_name,
+        }
     else:
         low_min = df["low"].rolling(settings.STOCHASTIC_K_WINDOW).min()
         high_max = df["high"].rolling(settings.STOCHASTIC_K_WINDOW).max()
@@ -36,7 +44,9 @@ async def run(symbol: str) -> dict:
             verdict = "HOLD"
             # linear score: buffer between oversold/overbought
             range_span = settings.STOCHASTIC_OVERBOUGHT - settings.STOCHASTIC_OVERSOLD
-            score = max(0.0, min(1.0, (settings.STOCHASTIC_OVERBOUGHT - latest_k) / range_span))
+            score = max(
+                0.0, min(1.0, (settings.STOCHASTIC_OVERBOUGHT - latest_k) / range_span)
+            )
 
         confidence = round(score, 4)
         result = {
@@ -46,7 +56,7 @@ async def run(symbol: str) -> dict:
             "value": latest_k,
             "details": {"k": latest_k, "d": latest_d},
             "score": score,
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
 
     # Cache and track

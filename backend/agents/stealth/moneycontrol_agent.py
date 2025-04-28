@@ -6,6 +6,7 @@ from loguru import logger
 
 agent_name = "moneycontrol_agent"
 
+
 class MoneyControlAgent(StealthAgentBase):
     def __init__(self):
         super().__init__()
@@ -23,11 +24,10 @@ class MoneyControlAgent(StealthAgentBase):
             anomalies = self._detect_anomalies(data)
             volume_profile = self._analyze_volume_profile(data)
             sentiment_impact = self._analyze_sentiment_impact(data)
-            
+
             # Composite scoring with ML
             score = self._calculate_ml_enhanced_score(
-                data, multi_tf_analysis, anomalies, 
-                volume_profile, sentiment_impact
+                data, multi_tf_analysis, anomalies, volume_profile, sentiment_impact
             )
 
             verdict = self._get_ml_verdict(score, anomalies)
@@ -45,10 +45,10 @@ class MoneyControlAgent(StealthAgentBase):
                     "anomalies_detected": anomalies,
                     "volume_profile": volume_profile,
                     "timeframe_analysis": multi_tf_analysis,
-                    "source": "moneycontrol"
+                    "source": "moneycontrol",
                 },
                 "error": None,
-                "agent_name": agent_name
+                "agent_name": agent_name,
             }
         except Exception as e:
             logger.error(f"MoneyControl advanced analysis error: {e}")
@@ -62,7 +62,7 @@ class MoneyControlAgent(StealthAgentBase):
                 analyses[f"{tf}min"] = {
                     "trend": self._calculate_trend_strength(prices),
                     "momentum": self._calculate_momentum(prices),
-                    "volatility": self._calculate_volatility(prices)
+                    "volatility": self._calculate_volatility(prices),
                 }
             except Exception as e:
                 logger.error(f"Timeframe analysis error: {e}")
@@ -75,7 +75,7 @@ class MoneyControlAgent(StealthAgentBase):
             return {
                 "score": float(np.mean(anomaly_scores)),
                 "detected": bool(np.any(anomaly_scores == -1)),
-                "locations": np.where(anomaly_scores == -1)[0].tolist()
+                "locations": np.where(anomaly_scores == -1)[0].tolist(),
             }
         except Exception as e:
             logger.error(f"Anomaly detection error: {e}")
@@ -87,21 +87,23 @@ class MoneyControlAgent(StealthAgentBase):
             prices = data.get("price_data", [])
             if not volumes or not prices:
                 return {}
-                
+
             # Calculate VWAP and volume zones
             vwap = np.average(prices, weights=volumes)
             volume_zones = self._calculate_volume_zones(prices, volumes)
-            
+
             return {
                 "vwap": vwap,
                 "zones": volume_zones,
-                "distribution": self._analyze_volume_distribution(volumes)
+                "distribution": self._analyze_volume_distribution(volumes),
             }
         except Exception as e:
             logger.error(f"Volume profile analysis error: {e}")
             return {}
 
-    def _calculate_ml_enhanced_score(self, data, multi_tf_analysis, anomalies, volume_profile, sentiment_impact):
+    def _calculate_ml_enhanced_score(
+        self, data, multi_tf_analysis, anomalies, volume_profile, sentiment_impact
+    ):
         # Implement a method to calculate score based on ML model or advanced logic
         # This is a placeholder for the actual implementation
         return 0.5
@@ -118,25 +120,25 @@ class MoneyControlAgent(StealthAgentBase):
 
     async def _fetch_stealth_data(self, symbol: str) -> dict:
         url = f"https://www.moneycontrol.com/india/stockpricequote/{symbol}"
-        headers = {'User-Agent': 'Mozilla/5.0'}
+        headers = {"User-Agent": "Mozilla/5.0"}
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.get(url, headers=headers)
-            soup = BeautifulSoup(response.text, 'html.parser')
-            
+            soup = BeautifulSoup(response.text, "html.parser")
+
             return {
                 "ratings": self._extract_ratings(soup),
                 "technicals": self._extract_technicals(soup),
-                "sentiment": self._extract_sentiment(soup)
+                "sentiment": self._extract_sentiment(soup),
             }
 
     def _extract_ratings(self, soup) -> dict:
         ratings = {}
         try:
-            rating_div = soup.select_one('.ratings-block')
+            rating_div = soup.select_one(".ratings-block")
             if rating_div:
-                for item in rating_div.select('.rating-item'):
-                    name = item.select_one('.name').text.strip()
-                    rating = item.select_one('.rating').text.strip()
+                for item in rating_div.select(".rating-item"):
+                    name = item.select_one(".name").text.strip()
+                    rating = item.select_one(".rating").text.strip()
                     ratings[name] = rating
         except:
             pass
@@ -145,11 +147,11 @@ class MoneyControlAgent(StealthAgentBase):
     def _extract_technicals(self, soup) -> dict:
         technicals = {}
         try:
-            tech_div = soup.select_one('.technical-block')
+            tech_div = soup.select_one(".technical-block")
             if tech_div:
-                for indicator in tech_div.select('.indicator'):
-                    name = indicator.select_one('.name').text.strip()
-                    value = indicator.select_one('.value').text.strip()
+                for indicator in tech_div.select(".indicator"):
+                    name = indicator.select_one(".name").text.strip()
+                    value = indicator.select_one(".value").text.strip()
                     technicals[name] = value
         except:
             pass
@@ -157,7 +159,7 @@ class MoneyControlAgent(StealthAgentBase):
 
     def _extract_sentiment(self, soup) -> str:
         try:
-            sentiment_div = soup.select_one('.sentiment-indicator')
+            sentiment_div = soup.select_one(".sentiment-indicator")
             if sentiment_div:
                 return sentiment_div.text.strip().lower()
         except:
@@ -191,6 +193,7 @@ class MoneyControlAgent(StealthAgentBase):
     def _extract_ml_features(self, data: dict) -> np.array:
         # Placeholder for extracting features for ML
         return np.array([])
+
 
 async def run(symbol: str, agent_outputs: dict = {}) -> dict:
     agent = MoneyControlAgent()

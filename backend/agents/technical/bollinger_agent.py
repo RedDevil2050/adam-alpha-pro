@@ -5,6 +5,7 @@ from backend.agents.technical.utils import tracker
 
 agent_name = "bollinger_agent"
 
+
 async def run(symbol: str, window: int = 20, num_std: float = 2.0) -> dict:
     cache_key = f"{agent_name}:{symbol}:{window}:{num_std}"
     # 1) Cache check
@@ -21,7 +22,7 @@ async def run(symbol: str, window: int = 20, num_std: float = 2.0) -> dict:
             "confidence": 0.0,
             "value": None,
             "details": {},
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
     else:
         close = df["close"]
@@ -57,10 +58,10 @@ async def run(symbol: str, window: int = 20, num_std: float = 2.0) -> dict:
                 "upper_band": round(upper_band, 4),
                 "lower_band": round(lower_band, 4),
                 "moving_average": round(last_ma, 4),
-                "std_dev": round(last_std, 4)
+                "std_dev": round(last_std, 4),
             },
             "score": score,
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
 
     # 5) Cache result for 1 hour

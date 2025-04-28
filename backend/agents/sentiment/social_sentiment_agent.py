@@ -5,6 +5,7 @@ from backend.agents.sentiment.utils import analyzer, normalize_compound, tracker
 
 agent_name = "social_sentiment_agent"
 
+
 async def run(symbol: str) -> dict:
     cache_key = f"{agent_name}:{symbol}"
     # Cache check
@@ -27,12 +28,21 @@ async def run(symbol: str) -> dict:
             if text:
                 tweets.append(text)
     if not tweets:
-        result = {"symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None, "details": {}, "agent_name": agent_name}
+        result = {
+            "symbol": symbol,
+            "verdict": "NO_DATA",
+            "confidence": 0.0,
+            "value": None,
+            "details": {},
+            "agent_name": agent_name,
+        }
     else:
         comp_scores = [analyzer.polarity_scores(t)["compound"] for t in tweets]
         avg_comp = sum(comp_scores) / len(comp_scores)
         score = normalize_compound(avg_comp)
-        verdict = "POSITIVE" if score >= 0.6 else ("NEGATIVE" if score <= 0.4 else "NEUTRAL")
+        verdict = (
+            "POSITIVE" if score >= 0.6 else ("NEGATIVE" if score <= 0.4 else "NEUTRAL")
+        )
         result = {
             "symbol": symbol,
             "verdict": verdict,
@@ -40,7 +50,7 @@ async def run(symbol: str) -> dict:
             "value": round(avg_comp, 4),
             "details": {"tweets_count": len(tweets)},
             "score": score,
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
 
     # Cache and update progress

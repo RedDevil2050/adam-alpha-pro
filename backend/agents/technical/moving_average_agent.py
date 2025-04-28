@@ -5,6 +5,7 @@ from backend.agents.technical.utils import tracker
 
 agent_name = "moving_average_agent"
 
+
 async def run(symbol: str, window: int = 20) -> dict:
     cache_key = f"{agent_name}:{symbol}:{window}"
     # 1) Cache check
@@ -21,7 +22,7 @@ async def run(symbol: str, window: int = 20) -> dict:
             "confidence": 0.0,
             "value": None,
             "details": {},
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
     else:
         close = df["close"]
@@ -50,10 +51,10 @@ async def run(symbol: str, window: int = 20) -> dict:
             "details": {
                 "ma_last": round(ma_last, 4),
                 "ma_prev": round(ma_prev, 4),
-                "slope_pct": round(slope_pct, 4)
+                "slope_pct": round(slope_pct, 4),
             },
             "score": score,
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
 
     # 3) Cache result for 1 hour

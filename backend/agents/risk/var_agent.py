@@ -1,20 +1,25 @@
 from backend.utils.data_provider import fetch_price_series
 import numpy as np
 from loguru import logger
-from backend.agents.decorators import standard_agent_execution # Import decorator
+from backend.agents.decorators import standard_agent_execution  # Import decorator
 
 agent_name = "var_agent"
-AGENT_CATEGORY = "risk" # Define category for the decorator
+AGENT_CATEGORY = "risk"  # Define category for the decorator
+
 
 # Apply the decorator to the standalone run function
-@standard_agent_execution(agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600)
-async def run(symbol: str, agent_outputs: dict = None) -> dict: # Added agent_outputs default
+@standard_agent_execution(
+    agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600
+)
+async def run(
+    symbol: str, agent_outputs: dict = None
+) -> dict:  # Added agent_outputs default
     # Boilerplate (cache check, try/except, cache set, tracker, error handling) is handled by decorator
     # Core logic moved from the previous _execute method
 
     prices = await fetch_price_series(symbol)
     # Use a reasonable lookback period, e.g., 252 trading days (1 year)
-    min_days = 60 # Keep minimum requirement
+    min_days = 60  # Keep minimum requirement
     if not prices or len(prices) < min_days:
         # Return NO_DATA format
         return {
@@ -22,17 +27,22 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict: # Added agent_ou
             "verdict": "NO_DATA",
             "confidence": 0.0,
             "value": None,
-            "details": {"reason": f"Insufficient price history for VaR calculation (need {min_days}, got {len(prices) if prices else 0})"},
-            "agent_name": agent_name
+            "details": {
+                "reason": f"Insufficient price history for VaR calculation (need {min_days}, got {len(prices) if prices else 0})"
+            },
+            "agent_name": agent_name,
         }
 
     # Calculate log returns
     returns = np.diff(np.log(prices))
     if len(returns) == 0:
-         return {
-            "symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None,
+        return {
+            "symbol": symbol,
+            "verdict": "NO_DATA",
+            "confidence": 0.0,
+            "value": None,
             "details": {"reason": "Could not calculate returns from price data"},
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
 
     # Calculate Value at Risk (VaR)
@@ -53,15 +63,15 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict: # Added agent_ou
     # This mapping is subjective and needs tuning.
     # Let's use a simple linear mapping for demonstration:
     # Map VaR range [-0.05, 0] to confidence [0.1, 0.9]
-    confidence = 0.9 + (daily_var_95 / 0.05) * 0.8 # Clamp between 0.1 and 0.9
+    confidence = 0.9 + (daily_var_95 / 0.05) * 0.8  # Clamp between 0.1 and 0.9
     confidence = min(0.9, max(0.1, confidence))
 
     # Verdict based on daily VaR 95%
-    if daily_var_95 > -0.01: # Less than 1% potential daily loss
+    if daily_var_95 > -0.01:  # Less than 1% potential daily loss
         verdict = "LOW_VAR"
-    elif daily_var_95 > -0.03: # Between 1% and 3% potential daily loss
+    elif daily_var_95 > -0.03:  # Between 1% and 3% potential daily loss
         verdict = "MODERATE_VAR"
-    else: # More than 3% potential daily loss
+    else:  # More than 3% potential daily loss
         verdict = "HIGH_VAR"
 
     # Create success result dictionary
@@ -69,17 +79,20 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict: # Added agent_ou
         "symbol": symbol,
         "verdict": verdict,
         "confidence": round(confidence, 4),
-        "value": round(-daily_var_95 * 100, 2), # Report positive percentage loss for 95% VaR
+        "value": round(
+            -daily_var_95 * 100, 2
+        ),  # Report positive percentage loss for 95% VaR
         "details": {
             "daily_var_95_percent": round(-daily_var_95 * 100, 2),
             "daily_var_99_percent": round(-var_99 * 100, 2),
-            "calculation_period_days": len(prices)
+            "calculation_period_days": len(prices),
         },
-        "agent_name": agent_name
+        "agent_name": agent_name,
     }
 
     # Decorator handles caching and tracker update
     return result
+
 
 # The VaRAgent class and RiskAgentBase dependency might be removable
 # if this standalone run function is sufficient and RiskAgentBase

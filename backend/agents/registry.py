@@ -2,9 +2,12 @@ from typing import Type, Dict, List
 from backend.agents.categories import CategoryType, CategoryManager
 from backend.agents.base import AgentBase
 
+
 class AgentRegistry:
-    _agents: Dict[CategoryType, Dict[str, Type[AgentBase]]] = {cat: {} for cat in CategoryType}
-    
+    _agents: Dict[CategoryType, Dict[str, Type[AgentBase]]] = {
+        cat: {} for cat in CategoryType
+    }
+
     @classmethod
     def register(cls, category: CategoryType, name: str, agent_class: Type[AgentBase]):
         if category not in cls._agents:

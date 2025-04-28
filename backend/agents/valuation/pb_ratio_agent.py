@@ -1,15 +1,22 @@
 import asyncio
 import pandas as pd
 import numpy as np
-from backend.utils.data_provider import fetch_price_point, fetch_latest_bvps, fetch_historical_price_series # Updated imports
+from backend.utils.data_provider import (
+    fetch_price_point,
+    fetch_latest_bvps,
+    fetch_historical_price_series,
+)  # Updated imports
 from loguru import logger
 from backend.agents.decorators import standard_agent_execution
 from backend.config.settings import get_settings
 
 agent_name = "pb_ratio_agent"
-AGENT_CATEGORY = "valuation" # Define category for the decorator
+AGENT_CATEGORY = "valuation"  # Define category for the decorator
 
-@standard_agent_execution(agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600)
+
+@standard_agent_execution(
+    agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600
+)
 async def run(symbol: str, agent_outputs: dict = None) -> dict:
     """
     Calculates the Price-to-Book (P/B) ratio for a given stock symbol and assesses its valuation
@@ -71,14 +78,21 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     try:
         price_task = fetch_price_point(symbol)
         bvps_task = fetch_latest_bvps(symbol)
-        hist_price_task = fetch_historical_price_series(symbol, years=pb_settings.HISTORICAL_YEARS)
-        price_data, current_bvps, historical_prices = await asyncio.gather(price_task, bvps_task, hist_price_task)
+        hist_price_task = fetch_historical_price_series(
+            symbol, years=pb_settings.HISTORICAL_YEARS
+        )
+        price_data, current_bvps, historical_prices = await asyncio.gather(
+            price_task, bvps_task, hist_price_task
+        )
     except Exception as fetch_err:
         logger.error(f"[{agent_name}] Error fetching data for {symbol}: {fetch_err}")
         return {
-            "symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None,
+            "symbol": symbol,
+            "verdict": "NO_DATA",
+            "confidence": 0.0,
+            "value": None,
             "details": {"reason": f"Failed to fetch required data: {fetch_err}"},
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
 
     current_price = price_data.get("latestPrice") if price_data else None
@@ -86,21 +100,33 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     # Validate fetched data
     if current_price is None or current_price <= 0:
         return {
-            "symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None,
+            "symbol": symbol,
+            "verdict": "NO_DATA",
+            "confidence": 0.0,
+            "value": None,
             "details": {"reason": f"Missing or invalid current price: {current_price}"},
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
     if current_bvps is None:
         return {
-            "symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None,
+            "symbol": symbol,
+            "verdict": "NO_DATA",
+            "confidence": 0.0,
+            "value": None,
             "details": {"reason": "Missing Book Value Per Share (BVPS) data"},
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
     if current_bvps <= 0:
         return {
-            "symbol": symbol, "verdict": "NEGATIVE_OR_ZERO_BV", "confidence": 0.7, "value": None,
-            "details": {"current_bvps": current_bvps, "reason": "Book Value Per Share is zero or negative"},
-            "agent_name": agent_name
+            "symbol": symbol,
+            "verdict": "NEGATIVE_OR_ZERO_BV",
+            "confidence": 0.7,
+            "value": None,
+            "details": {
+                "current_bvps": current_bvps,
+                "reason": "Book Value Per Share is zero or negative",
+            },
+            "agent_name": agent_name,
         }
 
     # Calculate Current P/B Ratio
@@ -117,12 +143,14 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     if historical_prices is not None and not historical_prices.empty:
         # Ensure historical_prices is a pandas Series
         if not isinstance(historical_prices, pd.Series):
-             try:
-                 historical_prices = pd.Series(historical_prices)
-                 historical_prices.index = pd.to_datetime(historical_prices.index)
-             except Exception as conversion_err:
-                 logger.warning(f"[{agent_name}] Could not convert historical_prices to Series for {symbol}: {conversion_err}")
-                 historical_prices = None
+            try:
+                historical_prices = pd.Series(historical_prices)
+                historical_prices.index = pd.to_datetime(historical_prices.index)
+            except Exception as conversion_err:
+                logger.warning(
+                    f"[{agent_name}] Could not convert historical_prices to Series for {symbol}: {conversion_err}"
+                )
+                historical_prices = None
 
         if historical_prices is not None and not historical_prices.empty:
             # Calculate historical P/B using historical prices and CURRENT BVPS (simplification!)
@@ -137,19 +165,26 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
                 # Calculate percentile rank of current P/B relative to history
                 try:
                     from scipy import stats
-                    percentile_rank = stats.percentileofscore(historical_pb_series, current_pb, kind='rank')
+
+                    percentile_rank = stats.percentileofscore(
+                        historical_pb_series, current_pb, kind="rank"
+                    )
                 except ImportError:
                     percentile_rank = (historical_pb_series < current_pb).mean() * 100
 
                 # Calculate Z-score
                 if std_hist_pb and std_hist_pb > 1e-9:
-                     z_score = (current_pb - mean_hist_pb) / std_hist_pb
+                    z_score = (current_pb - mean_hist_pb) / std_hist_pb
             else:
-                 logger.warning(f"[{agent_name}] Historical P/B series empty after calculation for {symbol}")
-                 data_source = "calculated_fundamental (historical calc failed)"
+                logger.warning(
+                    f"[{agent_name}] Historical P/B series empty after calculation for {symbol}"
+                )
+                data_source = "calculated_fundamental (historical calc failed)"
         else:
-             logger.warning(f"[{agent_name}] Invalid historical price series format for {symbol}")
-             data_source = "calculated_fundamental (invalid historical data)"
+            logger.warning(
+                f"[{agent_name}] Invalid historical price series format for {symbol}"
+            )
+            data_source = "calculated_fundamental (invalid historical data)"
 
     # Determine Verdict based on Percentile Rank
     if percentile_rank is None:
@@ -157,10 +192,15 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         confidence = 0.3
     elif percentile_rank <= pb_settings.PERCENTILE_UNDERVALUED:
         verdict = "UNDERVALUED_REL_HIST"
-        confidence = 0.6 + 0.3 * (1 - (percentile_rank / pb_settings.PERCENTILE_UNDERVALUED))
+        confidence = 0.6 + 0.3 * (
+            1 - (percentile_rank / pb_settings.PERCENTILE_UNDERVALUED)
+        )
     elif percentile_rank >= pb_settings.PERCENTILE_OVERVALUED:
         verdict = "OVERVALUED_REL_HIST"
-        confidence = 0.6 + 0.3 * ((percentile_rank - pb_settings.PERCENTILE_OVERVALUED) / (100 - pb_settings.PERCENTILE_OVERVALUED))
+        confidence = 0.6 + 0.3 * (
+            (percentile_rank - pb_settings.PERCENTILE_OVERVALUED)
+            / (100 - pb_settings.PERCENTILE_OVERVALUED)
+        )
     else:
         verdict = "FAIRLY_VALUED_REL_HIST"
         confidence = 0.5
@@ -173,16 +213,22 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         "current_pb_ratio": round(current_pb, 2),
         "current_bvps": round(current_bvps, 2),
         "current_price": round(current_price, 2),
-        "historical_mean_pb": round(mean_hist_pb, 2) if mean_hist_pb is not None else None,
-        "historical_std_dev_pb": round(std_hist_pb, 2) if std_hist_pb is not None else None,
-        "percentile_rank": round(percentile_rank, 1) if percentile_rank is not None else None,
+        "historical_mean_pb": (
+            round(mean_hist_pb, 2) if mean_hist_pb is not None else None
+        ),
+        "historical_std_dev_pb": (
+            round(std_hist_pb, 2) if std_hist_pb is not None else None
+        ),
+        "percentile_rank": (
+            round(percentile_rank, 1) if percentile_rank is not None else None
+        ),
         "z_score": round(z_score, 2) if z_score is not None else None,
         "data_source": data_source,
         "config_used": {
             "historical_years": pb_settings.HISTORICAL_YEARS,
             "percentile_undervalued": pb_settings.PERCENTILE_UNDERVALUED,
-            "percentile_overvalued": pb_settings.PERCENTILE_OVERVALUED
-        }
+            "percentile_overvalued": pb_settings.PERCENTILE_OVERVALUED,
+        },
     }
 
     # Create success result dictionary
@@ -192,6 +238,6 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         "confidence": round(confidence, 4),
         "value": round(current_pb, 2),
         "details": details,
-        "agent_name": agent_name
+        "agent_name": agent_name,
     }
     return result

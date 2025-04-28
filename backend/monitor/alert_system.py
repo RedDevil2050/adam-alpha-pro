@@ -5,13 +5,10 @@ from datetime import datetime
 import asyncio
 from loguru import logger
 
+
 class AlertSystem:
     def __init__(self):
-        self.alert_levels = {
-            "critical": 1,
-            "warning": 2,
-            "info": 3
-        }
+        self.alert_levels = {"critical": 1, "warning": 2, "info": 3}
         self.alert_queue = asyncio.Queue()
         self.subscribers = self._load_subscribers()
 
@@ -25,7 +22,7 @@ class AlertSystem:
             "level": level,
             "message": message,
             "details": details,
-            "timestamp": datetime.now()
+            "timestamp": datetime.now(),
         }
         await self.alert_queue.put(alert)
         logger.warning(f"Alert queued: {message}")
@@ -37,7 +34,7 @@ class AlertSystem:
                 await self._send_slack_alert(alert)
             elif alert["level"] == "warning":
                 await self._send_slack_alert(alert)
-            
+
             logger.info(f"Alert processed: {alert['message']}")
         except Exception as e:
             logger.error(f"Alert processing failed: {e}")

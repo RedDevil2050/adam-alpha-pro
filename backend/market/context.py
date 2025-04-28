@@ -3,9 +3,10 @@ from typing import Dict, Any
 import pandas as pd
 from backend.utils.cache_utils import redis_client
 
+
 class MarketContext:
     _instance = None
-    
+
     def __init__(self):
         self.cache = redis_client
         self.state = {}

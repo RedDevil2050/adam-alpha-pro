@@ -4,12 +4,18 @@ import shutil
 from datetime import datetime
 from threading import Lock
 
+
 class ProgressTracker:
     """
     Tracks progress of agent implementations and pipeline execution.
     Saves to a JSON file and maintains timestamped backups.
     """
-    def __init__(self, filepath="backend/utils/progress.json", backup_dir="backend/utils/progress_backups"):
+
+    def __init__(
+        self,
+        filepath="backend/utils/progress.json",
+        backup_dir="backend/utils/progress_backups",
+    ):
         self.filepath = filepath
         self.backup_dir = backup_dir
         self._lock = Lock()

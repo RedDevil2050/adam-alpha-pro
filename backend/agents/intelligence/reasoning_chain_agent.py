@@ -4,6 +4,7 @@ from backend.config.settings import settings
 
 agent_name = "reasoning_chain_agent"
 
+
 async def run(symbol: str, agent_outputs: dict) -> dict:
     cache_key = f"{agent_name}:{symbol}"
     cached = await redis_client.get(cache_key)
@@ -11,7 +12,10 @@ async def run(symbol: str, agent_outputs: dict) -> dict:
         return cached
 
     # Build chain-of-thought
-    entries = [f"{k}:{v.get('verdict')}({v.get('confidence')})" for k,v in agent_outputs.items()]
+    entries = [
+        f"{k}:{v.get('verdict')}({v.get('confidence')})"
+        for k, v in agent_outputs.items()
+    ]
     reasoning = " -> ".join(entries)
 
     result = {
@@ -21,7 +25,7 @@ async def run(symbol: str, agent_outputs: dict) -> dict:
         "value": reasoning,
         "details": {"chain": entries},
         "score": 1.0,
-        "agent_name": agent_name
+        "agent_name": agent_name,
     }
 
     await redis_client.set(cache_key, result, ex=None)

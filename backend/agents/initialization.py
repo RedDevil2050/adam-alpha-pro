@@ -7,9 +7,10 @@ from backend.agents.categories import CategoryType, CategoryManager
 from backend.utils.metrics_collector import MetricsCollector
 from backend.config.settings import get_settings
 
+
 class AgentInitializer:
     """Handles agent initialization, validation, and dependency management"""
-    
+
     def __init__(self):
         self.metrics = MetricsCollector()
         self.settings = get_settings()
@@ -34,7 +35,7 @@ class AgentInitializer:
                 logger.error(f"Failed to initialize category {category}: {e}")
                 if self._is_critical_category(category):
                     success = False
-        
+
         self._log_initialization_status()
         return success
 
@@ -47,20 +48,28 @@ class AgentInitializer:
                 module = importlib.import_module(module_path)
             except ImportError as e:
                 logger.error(f"Failed to import {module_path}: {e}")
-                self._initialization_errors.append(f"Import error for {agent_name}: {e}")
+                self._initialization_errors.append(
+                    f"Import error for {agent_name}: {e}"
+                )
                 return False
 
             # Validate module structure
             if not hasattr(module, "run"):
                 logger.error(f"Agent {agent_name} missing run function")
-                self._initialization_errors.append(f"Missing run function in {agent_name}")
+                self._initialization_errors.append(
+                    f"Missing run function in {agent_name}"
+                )
                 return False
 
             # Get agent class if exists
             agent_class = None
             for attr in dir(module):
                 obj = getattr(module, attr)
-                if isinstance(obj, type) and issubclass(obj, AgentBase) and obj != AgentBase:
+                if (
+                    isinstance(obj, type)
+                    and issubclass(obj, AgentBase)
+                    and obj != AgentBase
+                ):
                     agent_class = obj
                     break
 
@@ -75,7 +84,9 @@ class AgentInitializer:
                     return True
                 except Exception as e:
                     logger.error(f"Failed to instantiate {agent_name}: {e}")
-                    self._initialization_errors.append(f"Instantiation error for {agent_name}: {e}")
+                    self._initialization_errors.append(
+                        f"Instantiation error for {agent_name}: {e}"
+                    )
                     return False
             else:
                 # Function-based agent
@@ -105,14 +116,14 @@ class AgentInitializer:
             CategoryType.VALUATION,
             CategoryType.TECHNICAL,
             CategoryType.MARKET,
-            CategoryType.RISK
+            CategoryType.RISK,
         }
 
     def _log_initialization_status(self):
         """Log initialization status and metrics"""
         total_agents = len(self._initialized_agents)
         total_errors = len(self._initialization_errors)
-        
+
         logger.info(f"Agent initialization complete: {total_agents} agents initialized")
         if total_errors > 0:
             logger.warning(f"{total_errors} initialization errors occurred")
@@ -133,17 +144,24 @@ class AgentInitializer:
 
     def validate_agent_implementation(self, agent_class: Type[AgentBase]) -> bool:
         """Validate agent class implementation"""
-        required_methods = ["execute", "_execute" if hasattr(agent_class, "_execute") else "run"]
-        
+        required_methods = [
+            "execute",
+            "_execute" if hasattr(agent_class, "_execute") else "run",
+        ]
+
         for method in required_methods:
             if not hasattr(agent_class, method):
-                logger.error(f"Agent {agent_class.__name__} missing required method: {method}")
+                logger.error(
+                    f"Agent {agent_class.__name__} missing required method: {method}"
+                )
                 return False
 
         return True
 
+
 # Global instance
 _agent_initializer = None
+
 
 def get_agent_initializer() -> AgentInitializer:
     """Get or create the global AgentInitializer instance"""

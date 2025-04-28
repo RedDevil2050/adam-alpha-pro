@@ -7,6 +7,7 @@ router = APIRouter()
 orchestrator = SystemOrchestrator()
 system_monitor = SystemMonitor()
 
+
 @router.get("/analyze/{symbol}")
 async def analyze_stock(symbol: str, categories: Optional[List[str]] = None):
     try:
@@ -14,13 +15,15 @@ async def analyze_stock(symbol: str, categories: Optional[List[str]] = None):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.get("/health")
 async def health_check():
     metrics = system_monitor.get_health_metrics()
     return {
         "status": "healthy" if metrics["system"]["cpu_usage"] < 80 else "degraded",
-        "metrics": metrics
+        "metrics": metrics,
     }
+
 
 @router.post("/batch-analyze")
 async def batch_analyze(symbols: List[str], background_tasks: BackgroundTasks):

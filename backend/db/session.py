@@ -9,10 +9,9 @@ async_engine = create_async_engine(settings.DATABASE_URL, echo=False)
 
 # Create an async session factory
 AsyncSessionLocal = sessionmaker(
-    bind=async_engine,
-    class_=AsyncSession,
-    expire_on_commit=False
+    bind=async_engine, class_=AsyncSession, expire_on_commit=False
 )
+
 
 # Dependency to get the database session
 async def get_db():

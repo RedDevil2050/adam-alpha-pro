@@ -13,6 +13,7 @@ from scipy.stats import norm, pearsonr
 from sklearn.preprocessing import StandardScaler
 from arch import arch_model
 
+
 class DataService:
     def __init__(self):
         self.primary_source = "yahoo"
@@ -23,7 +24,7 @@ class DataService:
                 host=settings.REDIS_HOST,
                 port=settings.REDIS_PORT,
                 db=0,
-                decode_responses=True
+                decode_responses=True,
             )
         except Exception as e:
             logger.error(f"Redis connection failed: {e}")
@@ -32,14 +33,16 @@ class DataService:
         self.logger = self._setup_logger()
         self.rate_limiter = asyncio.Semaphore(5)
 
-    async def get_market_data(self, symbols: List[str], lookback_period: int = 252) -> pd.DataFrame:
+    async def get_market_data(
+        self, symbols: List[str], lookback_period: int = 252
+    ) -> pd.DataFrame:
         """Enhanced dual-channel data acquisition with caching"""
         cache_key = f"market_data_{'-'.join(symbols)}_{lookback_period}"
         cached_data = self._get_from_cache(cache_key)
-        
+
         if cached_data is not None:
             return cached_data
-            
+
         async with self.rate_limiter:
             try:
                 data = await self._fetch_primary_data(symbols, lookback_period)
@@ -51,10 +54,12 @@ class DataService:
 
     async def stream_real_time_data(self, symbols: List[str]):
         """Real-time market data streaming"""
-        async with websockets.connect(f"{self.websocket_url}?token={self.api_keys['finnhub']}") as websocket:
+        async with websockets.connect(
+            f"{self.websocket_url}?token={self.api_keys['finnhub']}"
+        ) as websocket:
             for symbol in symbols:
                 await websocket.send(f'{{"type":"subscribe","symbol":"{symbol}"}}')
-            
+
             while True:
                 try:
                     data = await websocket.recv()
@@ -71,10 +76,10 @@ class DataService:
                 ticker = yf.Ticker(symbol)
                 info = ticker.info
                 return {
-                    'market_cap': info.get('marketCap'),
-                    'pe_ratio': info.get('trailingPE'),
-                    'dividend_yield': info.get('dividendYield'),
-                    'beta': info.get('beta')
+                    "market_cap": info.get("marketCap"),
+                    "pe_ratio": info.get("trailingPE"),
+                    "dividend_yield": info.get("dividendYield"),
+                    "beta": info.get("beta"),
                 }
             except Exception as e:
                 self.logger.error(f"Failed to fetch fundamental data: {e}")
@@ -91,9 +96,9 @@ class DataService:
             try:
                 data = await self._fetch_primary_data([symbol], 100)
                 indicators = {
-                    'rsi': self._calculate_rsi(data[symbol]),
-                    'macd': self._calculate_macd(data[symbol]),
-                    'bollinger': self._calculate_bollinger_bands(data[symbol])
+                    "rsi": self._calculate_rsi(data[symbol]),
+                    "macd": self._calculate_macd(data[symbol]),
+                    "bollinger": self._calculate_bollinger_bands(data[symbol]),
                 }
                 self._cache_data(cache_key, indicators, expiry=1800)
                 return indicators
@@ -112,10 +117,10 @@ class DataService:
             try:
                 data = await self._fetch_primary_data([symbol], 252)
                 analytics = {
-                    'technical': await self._get_technical_indicators(data[symbol]),
-                    'statistical': self._get_statistical_metrics(data[symbol]),
-                    'volatility': self._get_volatility_metrics(data[symbol]),
-                    'momentum': self._get_momentum_indicators(data[symbol])
+                    "technical": await self._get_technical_indicators(data[symbol]),
+                    "statistical": self._get_statistical_metrics(data[symbol]),
+                    "volatility": self._get_volatility_metrics(data[symbol]),
+                    "momentum": self._get_momentum_indicators(data[symbol]),
                 }
                 self._cache_data(cache_key, analytics, expiry=1800)
                 return analytics
@@ -128,10 +133,10 @@ class DataService:
         try:
             data = await self._fetch_primary_data([symbol], 252)
             return {
-                'liquidity': self._analyze_liquidity(data[symbol]),
-                'market_impact': self._estimate_market_impact(data[symbol]),
-                'microstructure': await self._analyze_microstructure(symbol),
-                'regime': self._detect_market_regime(data[symbol])
+                "liquidity": self._analyze_liquidity(data[symbol]),
+                "market_impact": self._estimate_market_impact(data[symbol]),
+                "microstructure": await self._analyze_microstructure(symbol),
+                "regime": self._detect_market_regime(data[symbol]),
             }
         except Exception as e:
             self.logger.error(f"Market health analysis failed: {e}")
@@ -139,9 +144,9 @@ class DataService:
 
     def _analyze_microstructure(self, symbol: str) -> Dict[str, float]:
         return {
-            'spread': self._calculate_spread(symbol),
-            'depth': self._calculate_market_depth(symbol),
-            'resilience': self._calculate_market_resilience(symbol)
+            "spread": self._calculate_spread(symbol),
+            "depth": self._calculate_market_depth(symbol),
+            "resilience": self._calculate_market_resilience(symbol),
         }
 
     def _detect_market_regime(self, prices: pd.Series) -> str:
@@ -153,27 +158,29 @@ class DataService:
         """Calculate advanced statistical metrics"""
         returns = prices.pct_change().dropna()
         return {
-            'skewness': returns.skew(),
-            'kurtosis': returns.kurtosis(),
-            'var_95': norm.ppf(0.05, returns.mean(), returns.std()),
-            'cvar_95': returns[returns <= norm.ppf(0.05, returns.mean(), returns.std())].mean()
+            "skewness": returns.skew(),
+            "kurtosis": returns.kurtosis(),
+            "var_95": norm.ppf(0.05, returns.mean(), returns.std()),
+            "cvar_95": returns[
+                returns <= norm.ppf(0.05, returns.mean(), returns.std())
+            ].mean(),
         }
 
     def _get_volatility_metrics(self, prices: pd.Series) -> Dict[str, float]:
         """Calculate volatility metrics"""
         returns = prices.pct_change().dropna()
         return {
-            'historical_vol': returns.std() * np.sqrt(252),
-            'parkinson_vol': self._parkinson_volatility(prices),
-            'garch_vol': self._garch_volatility(returns)
+            "historical_vol": returns.std() * np.sqrt(252),
+            "parkinson_vol": self._parkinson_volatility(prices),
+            "garch_vol": self._garch_volatility(returns),
         }
 
     def _get_momentum_indicators(self, prices: pd.Series) -> Dict[str, float]:
         """Calculate momentum indicators"""
         return {
-            'roc': self._rate_of_change(prices),
-            'cci': self._commodity_channel_index(prices),
-            'ultimate_osc': self._ultimate_oscillator(prices)
+            "roc": self._rate_of_change(prices),
+            "cci": self._commodity_channel_index(prices),
+            "ultimate_osc": self._ultimate_oscillator(prices),
         }
 
     def _calculate_rsi(self, prices: pd.Series, period: int = 14) -> float:
@@ -188,23 +195,27 @@ class DataService:
         exp2 = prices.ewm(span=26, adjust=False).mean()
         macd = exp1 - exp2
         signal = macd.ewm(span=9, adjust=False).mean()
-        return {'macd': macd.iloc[-1], 'signal': signal.iloc[-1]}
+        return {"macd": macd.iloc[-1], "signal": signal.iloc[-1]}
 
-    def _calculate_bollinger_bands(self, prices: pd.Series, period: int = 20) -> Dict[str, float]:
+    def _calculate_bollinger_bands(
+        self, prices: pd.Series, period: int = 20
+    ) -> Dict[str, float]:
         sma = prices.rolling(window=period).mean()
         std = prices.rolling(window=period).std()
         return {
-            'upper': (sma + (std * 2)).iloc[-1],
-            'lower': (sma - (std * 2)).iloc[-1],
-            'middle': sma.iloc[-1]
+            "upper": (sma + (std * 2)).iloc[-1],
+            "lower": (sma - (std * 2)).iloc[-1],
+            "middle": sma.iloc[-1],
         }
 
     def _setup_logger(self) -> logging.Logger:
         """Configure logging"""
-        logger = logging.getLogger('DataService')
+        logger = logging.getLogger("DataService")
         logger.setLevel(logging.INFO)
-        handler = logging.FileHandler('data_service.log')
-        handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+        handler = logging.FileHandler("data_service.log")
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+        )
         logger.addHandler(handler)
         return logger
 
@@ -230,38 +241,37 @@ class DataService:
         try:
             parsed = json.loads(data)
             return {
-                'symbol': parsed['data'][0]['s'],
-                'price': parsed['data'][0]['p'],
-                'timestamp': parsed['data'][0]['t'],
-                'volume': parsed['data'][0]['v']
+                "symbol": parsed["data"][0]["s"],
+                "price": parsed["data"][0]["p"],
+                "timestamp": parsed["data"][0]["t"],
+                "volume": parsed["data"][0]["v"],
             }
         except Exception as e:
             self.logger.error(f"Websocket data processing error: {e}")
             return {}
 
-    async def _fetch_primary_data(self, symbols: List[str], lookback_period: int) -> pd.DataFrame:
+    async def _fetch_primary_data(
+        self, symbols: List[str], lookback_period: int
+    ) -> pd.DataFrame:
         data = {}
         for symbol in symbols:
             ticker = yf.Ticker(symbol)
             hist = ticker.history(period=f"{lookback_period}d")
-            data[symbol] = hist['Close']
+            data[symbol] = hist["Close"]
         return pd.DataFrame(data)
 
-    async def _fetch_backup_data(self, symbols: List[str], lookback_period: int) -> pd.DataFrame:
+    async def _fetch_backup_data(
+        self, symbols: List[str], lookback_period: int
+    ) -> pd.DataFrame:
         start = datetime.now() - timedelta(days=lookback_period)
         data = {}
         for symbol in symbols:
             df = pdr.get_data_alpha_vantage(
-                symbol,
-                start=start,
-                api_key=self.api_keys['alpha_vantage']
+                symbol, start=start, api_key=self.api_keys["alpha_vantage"]
             )
-            data[symbol] = df['close']
+            data[symbol] = df["close"]
         return pd.DataFrame(data)
 
     def _load_api_keys(self) -> Dict[str, str]:
         # Implement secure API key loading
-        return {
-            "alpha_vantage": "YOUR_API_KEY",
-            "finnhub": "YOUR_API_KEY"
-        }
+        return {"alpha_vantage": "YOUR_API_KEY", "finnhub": "YOUR_API_KEY"}

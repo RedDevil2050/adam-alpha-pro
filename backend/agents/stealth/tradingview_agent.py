@@ -6,6 +6,7 @@ from loguru import logger
 
 agent_name = "tradingview_agent"
 
+
 class TradingViewAgent(StealthAgentBase):
     async def _execute(self, symbol: str, agent_outputs: dict) -> dict:
         try:
@@ -18,14 +19,16 @@ class TradingViewAgent(StealthAgentBase):
             fibonacci_levels = self._calculate_fibonacci_levels(data)
             pivot_points = self._calculate_pivot_points(data)
             elliott_waves = self._detect_elliott_waves(data)
-            
+
             # Enhanced signal processing
             signals = self._process_advanced_signals(
-                data, candlestick_patterns, 
-                fibonacci_levels, pivot_points,
-                elliott_waves
+                data,
+                candlestick_patterns,
+                fibonacci_levels,
+                pivot_points,
+                elliott_waves,
             )
-            
+
             confidence = self._calculate_weighted_confidence(signals)
             verdict = self._get_advanced_verdict(signals)
 
@@ -40,10 +43,10 @@ class TradingViewAgent(StealthAgentBase):
                     "fibonacci_levels": fibonacci_levels,
                     "elliott_wave_position": elliott_waves,
                     "pivot_points": pivot_points,
-                    "source": "tradingview"
+                    "source": "tradingview",
                 },
                 "error": None,
-                "agent_name": agent_name
+                "agent_name": agent_name,
             }
 
         except Exception as e:
@@ -56,15 +59,15 @@ class TradingViewAgent(StealthAgentBase):
             lows = np.array(data.get("lows", []))
             opens = np.array(data.get("opens", []))
             closes = np.array(data.get("closes", []))
-            
+
             patterns = {
                 "doji": ta.cdl_doji(opens, highs, lows, closes),
                 "engulfing": ta.cdl_engulfing(opens, highs, lows, closes),
                 "morning_star": ta.cdl_morningstar(opens, highs, lows, closes),
                 "evening_star": ta.cdl_eveningstar(opens, highs, lows, closes),
-                "hammer": ta.cdl_hammer(opens, highs, lows, closes)
+                "hammer": ta.cdl_hammer(opens, highs, lows, closes),
             }
-            
+
             return {k: bool(v[-1]) for k, v in patterns.items()}
         except Exception as e:
             logger.error(f"Pattern analysis error: {e}")
@@ -87,11 +90,11 @@ class TradingViewAgent(StealthAgentBase):
     def _extract_technicals(self, soup) -> dict:
         technicals = {}
         try:
-            tech_div = soup.select_one('.technicals-content')
+            tech_div = soup.select_one(".technicals-content")
             if tech_div:
-                for row in tech_div.select('.indicator-row'):
-                    name = row.select_one('.name').text.strip()
-                    value = row.select_one('.value').text.strip()
+                for row in tech_div.select(".indicator-row"):
+                    name = row.select_one(".name").text.strip()
+                    value = row.select_one(".value").text.strip()
                     technicals[name] = value
         except Exception:
             pass
@@ -100,11 +103,11 @@ class TradingViewAgent(StealthAgentBase):
     def _extract_oscillators(self, soup) -> dict:
         oscillators = {}
         try:
-            osc_div = soup.select_one('.oscillators-content')
+            osc_div = soup.select_one(".oscillators-content")
             if osc_div:
-                for row in osc_div.select('.oscillator-row'):
-                    name = row.select_one('.name').text.strip()
-                    value = row.select_one('.value').text.strip()
+                for row in osc_div.select(".oscillator-row"):
+                    name = row.select_one(".name").text.strip()
+                    value = row.select_one(".value").text.strip()
                     oscillators[name] = value
         except Exception:
             pass
@@ -113,15 +116,16 @@ class TradingViewAgent(StealthAgentBase):
     def _extract_moving_averages(self, soup) -> dict:
         mas = {}
         try:
-            ma_div = soup.select_one('.moving-averages-content')
+            ma_div = soup.select_one(".moving-averages-content")
             if ma_div:
-                for row in ma_div.select('.ma-row'):
-                    period = row.select_one('.period').text.strip()
-                    value = row.select_one('.value').text.strip()
+                for row in ma_div.select(".ma-row"):
+                    period = row.select_one(".period").text.strip()
+                    value = row.select_one(".value").text.strip()
                     mas[period] = value
         except Exception:
             pass
         return mas
+
 
 async def run(symbol: str, agent_outputs: dict = {}) -> dict:
     agent = TradingViewAgent()

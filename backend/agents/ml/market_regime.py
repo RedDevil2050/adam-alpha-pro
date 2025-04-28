@@ -6,6 +6,7 @@ from backend.agents.ml.utils import tracker
 
 agent_name = "market_regime_agent"
 
+
 class MarketRegimeDetector:
     def __init__(self, n_regimes: int = 3):
         self.n_regimes = n_regimes
@@ -21,10 +22,11 @@ class MarketRegimeDetector:
         regime_probs = self.gmm.predict_proba(features)[-1]
 
         return {
-            'current_regime': int(current_regime),
-            'regime_probability': float(regime_probs[current_regime]),
-            'regime_volatility': float(self.gmm.covariances_[current_regime][1,1])
+            "current_regime": int(current_regime),
+            "regime_probability": float(regime_probs[current_regime]),
+            "regime_volatility": float(self.gmm.covariances_[current_regime][1, 1]),
         }
+
 
 async def run(symbol: str) -> dict:
     cache_key = f"{agent_name}:{symbol}"
@@ -42,7 +44,7 @@ async def run(symbol: str) -> dict:
                 "confidence": 0.0,
                 "value": None,
                 "details": {},
-                "agent_name": agent_name
+                "agent_name": agent_name,
             }
 
         # Calculate returns and volatility
@@ -56,10 +58,10 @@ async def run(symbol: str) -> dict:
         result = {
             "symbol": symbol,
             "verdict": f"REGIME_{regime_data['current_regime']}",
-            "confidence": round(regime_data['regime_probability'], 4),
-            "value": regime_data['current_regime'],
+            "confidence": round(regime_data["regime_probability"], 4),
+            "value": regime_data["current_regime"],
             "details": regime_data,
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
 
         await redis_client.set(cache_key, result, ex=3600)
@@ -74,5 +76,5 @@ async def run(symbol: str) -> dict:
             "value": None,
             "details": {},
             "error": str(e),
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }

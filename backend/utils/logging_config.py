@@ -2,6 +2,7 @@ import sys
 from loguru import logger
 import json
 
+
 def setup_logging():
     config = {
         "handlers": [
@@ -9,17 +10,17 @@ def setup_logging():
                 "sink": sys.stdout,
                 "format": "{time} | {level} | {message}",
                 "serialize": True,
-                "level": "INFO"
+                "level": "INFO",
             },
             {
                 "sink": "logs/error.log",
                 "format": "{time} | {level} | {message}",
                 "serialize": True,
                 "level": "ERROR",
-                "rotation": "100 MB"
-            }
+                "rotation": "100 MB",
+            },
         ]
     }
-    
+
     logger.configure(**config)
     return logger

@@ -2,6 +2,7 @@ from typing import Dict, List, Optional
 import asyncio
 from datetime import datetime
 
+
 class ExecutionEngine:
     def __init__(self, data_service):
         self.data_service = data_service
@@ -20,8 +21,10 @@ class ExecutionEngine:
 
     async def _execute_with_smart_routing(self, plan: Dict) -> Dict[str, any]:
         results = {}
-        for order in plan['orders']:
+        for order in plan["orders"]:
             market_impact = await self._estimate_market_impact(order)
             execution_algo = self._select_execution_algo(order, market_impact)
-            results[order['id']] = await self._execute_single_order(order, execution_algo)
+            results[order["id"]] = await self._execute_single_order(
+                order, execution_algo
+            )
         return results

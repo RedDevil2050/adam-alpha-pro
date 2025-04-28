@@ -1,5 +1,8 @@
 import sys, os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
+
+sys.path.insert(
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+)
 
 import pandas as pd
 import numpy as np
@@ -7,12 +10,15 @@ from backend.utils.data_provider import fetch_historical_price_series
 from backend.agents.decorators import standard_agent_execution
 from backend.config.settings import get_settings
 from loguru import logger
-import asyncio # Import asyncio
+import asyncio  # Import asyncio
 
 agent_name = "momentum_agent"
 AGENT_CATEGORY = "technical"
 
-@standard_agent_execution(agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600)
+
+@standard_agent_execution(
+    agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600
+)
 async def run(symbol: str, agent_outputs: dict = None) -> dict:
     """
     Calculates price momentum over various lookback periods for a given stock symbol.
@@ -55,10 +61,16 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     mom_settings = settings.agent_settings.momentum
 
     if not mom_settings.LOOKBACK_PERIODS:
-        logger.warning(f"[{agent_name}] No lookback periods defined in settings for {symbol}.")
+        logger.warning(
+            f"[{agent_name}] No lookback periods defined in settings for {symbol}."
+        )
         return {
-            "symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None,
-            "details": {"reason": "Lookback periods not configured"}, "agent_name": agent_name
+            "symbol": symbol,
+            "verdict": "NO_DATA",
+            "confidence": 0.0,
+            "value": None,
+            "details": {"reason": "Lookback periods not configured"},
+            "agent_name": agent_name,
         }
 
     max_lookback = max(mom_settings.LOOKBACK_PERIODS)
@@ -66,27 +78,47 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     required_years = int(max_lookback / 252) + 1
 
     try:
-        historical_prices = await fetch_historical_price_series(symbol, years=required_years)
+        historical_prices = await fetch_historical_price_series(
+            symbol, years=required_years
+        )
     except Exception as fetch_err:
-        logger.error(f"[{agent_name}] Error fetching historical prices for {symbol}: {fetch_err}")
+        logger.error(
+            f"[{agent_name}] Error fetching historical prices for {symbol}: {fetch_err}"
+        )
         return {
-            "symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None,
+            "symbol": symbol,
+            "verdict": "NO_DATA",
+            "confidence": 0.0,
+            "value": None,
             "details": {"reason": f"Failed to fetch historical prices: {fetch_err}"},
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
 
     # Validate data
-    if historical_prices is None or not isinstance(historical_prices, pd.Series) or historical_prices.empty:
-         return {
-            "symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None,
-            "details": {"reason": "Historical price data is missing or invalid"}, "agent_name": agent_name
+    if (
+        historical_prices is None
+        or not isinstance(historical_prices, pd.Series)
+        or historical_prices.empty
+    ):
+        return {
+            "symbol": symbol,
+            "verdict": "NO_DATA",
+            "confidence": 0.0,
+            "value": None,
+            "details": {"reason": "Historical price data is missing or invalid"},
+            "agent_name": agent_name,
         }
 
     if len(historical_prices) <= max_lookback:
         return {
-            "symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None,
-            "details": {"reason": f"Insufficient historical data points ({len(historical_prices)}) for longest lookback ({max_lookback})"},
-            "agent_name": agent_name
+            "symbol": symbol,
+            "verdict": "NO_DATA",
+            "confidence": 0.0,
+            "value": None,
+            "details": {
+                "reason": f"Insufficient historical data points ({len(historical_prices)}) for longest lookback ({max_lookback})"
+            },
+            "agent_name": agent_name,
         }
 
     # Calculate Returns
@@ -101,23 +133,29 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
                 past_price = historical_prices.iloc[-1 - period]
                 if pd.notna(past_price) and past_price > 0:
                     period_return = (latest_price / past_price) - 1
-                    returns[f'{period}d'] = period_return
-                    details[f'return_{period}d_pct'] = round(period_return * 100, 2)
+                    returns[f"{period}d"] = period_return
+                    details[f"return_{period}d_pct"] = round(period_return * 100, 2)
                 else:
-                    details[f'return_{period}d_pct'] = None # Invalid past price
+                    details[f"return_{period}d_pct"] = None  # Invalid past price
             else:
-                 details[f'return_{period}d_pct'] = None # Not enough data points historically
+                details[f"return_{period}d_pct"] = (
+                    None  # Not enough data points historically
+                )
         except IndexError:
-             details[f'return_{period}d_pct'] = None # Should not happen with length check, but safety
+            details[f"return_{period}d_pct"] = (
+                None  # Should not happen with length check, but safety
+            )
 
     # Calculate Average Momentum
     valid_returns = [r for r in returns.values() if r is not None and pd.notna(r)]
     average_momentum = np.mean(valid_returns) if valid_returns else None
-    details['average_momentum_pct'] = round(average_momentum * 100, 2) if average_momentum is not None else None
+    details["average_momentum_pct"] = (
+        round(average_momentum * 100, 2) if average_momentum is not None else None
+    )
 
     # Determine Verdict
     if average_momentum is None:
-        verdict = "NO_DATA" # Could not calculate any valid returns
+        verdict = "NO_DATA"  # Could not calculate any valid returns
         confidence = 0.0
         details["reason"] = "Could not calculate momentum for any lookback period."
     elif average_momentum > mom_settings.THRESHOLD_STRONG_POSITIVE:
@@ -126,10 +164,10 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     elif average_momentum < mom_settings.THRESHOLD_STRONG_NEGATIVE:
         verdict = "STRONG_NEGATIVE_MOMENTUM"
         confidence = 0.7
-    elif average_momentum > 0: # Positive but not strong
+    elif average_momentum > 0:  # Positive but not strong
         verdict = "POSITIVE_MOMENTUM"
         confidence = 0.5
-    else: # Negative but not strong
+    else:  # Negative but not strong
         verdict = "NEGATIVE_MOMENTUM"
         confidence = 0.5
 
@@ -137,7 +175,7 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     details["config_used"] = {
         "lookback_periods": mom_settings.LOOKBACK_PERIODS,
         "threshold_strong_positive": mom_settings.THRESHOLD_STRONG_POSITIVE,
-        "threshold_strong_negative": mom_settings.THRESHOLD_STRONG_NEGATIVE
+        "threshold_strong_negative": mom_settings.THRESHOLD_STRONG_NEGATIVE,
     }
     details["data_source"] = "historical_prices"
 
@@ -146,8 +184,10 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         "symbol": symbol,
         "verdict": verdict,
         "confidence": round(confidence, 4),
-        "value": round(average_momentum * 100, 2) if average_momentum is not None else None, # Return avg momentum %
+        "value": (
+            round(average_momentum * 100, 2) if average_momentum is not None else None
+        ),  # Return avg momentum %
         "details": details,
-        "agent_name": agent_name
+        "agent_name": agent_name,
     }
     return result

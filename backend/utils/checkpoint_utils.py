@@ -1,7 +1,8 @@
 import json
 import os
 
-CHECKPOINT_FILE = os.getenv('CHECKPOINT_FILE', 'checkpoint.json')
+CHECKPOINT_FILE = os.getenv("CHECKPOINT_FILE", "checkpoint.json")
+
 
 def load_checkpoint() -> dict:
     """
@@ -12,9 +13,10 @@ def load_checkpoint() -> dict:
             return json.load(f)
     return {}
 
+
 def save_checkpoint(data: dict):
     """
     Save the current checkpoint to disk.
     """
-    with open(CHECKPOINT_FILE, 'w') as f:
+    with open(CHECKPOINT_FILE, "w") as f:
         json.dump(data, f)

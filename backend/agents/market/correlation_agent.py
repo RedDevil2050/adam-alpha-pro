@@ -8,7 +8,10 @@ from backend.agents.decorators import standard_agent_execution
 agent_name = "correlation_agent"
 AGENT_CATEGORY = "market"
 
-@standard_agent_execution(agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600)
+
+@standard_agent_execution(
+    agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600
+)
 async def run(symbol: str, agent_outputs: dict = None) -> dict:
     """
     Calculates the correlation between a stock symbol and the market index over different time periods.
@@ -67,15 +70,22 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
 
     # Use settings for minimum days required
     min_days = corr_settings.MIN_REQUIRED_DAYS
-    if not symbol_prices or not market_prices or len(symbol_prices) < min_days or len(market_prices) < min_days:
+    if (
+        not symbol_prices
+        or not market_prices
+        or len(symbol_prices) < min_days
+        or len(market_prices) < min_days
+    ):
         # Return NO_DATA format
         return {
             "symbol": symbol,
             "verdict": "NO_DATA",
             "confidence": 0.0,
             "value": None,
-            "details": {"reason": f"Insufficient price history for {symbol} or market index {market_symbol} (need {min_days} days)"},
-            "agent_name": agent_name
+            "details": {
+                "reason": f"Insufficient price history for {symbol} or market index {market_symbol} (need {min_days} days)"
+            },
+            "agent_name": agent_name,
         }
 
     # Calculate returns
@@ -88,9 +98,14 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     common_index = sym_ret.index.intersection(mkt_ret.index)
     if len(common_index) < min_days:
         return {
-            "symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None,
-            "details": {"reason": f"Insufficient overlapping data points ({len(common_index)} < {min_days}) between {symbol} and {market_symbol}"},
-            "agent_name": agent_name
+            "symbol": symbol,
+            "verdict": "NO_DATA",
+            "confidence": 0.0,
+            "value": None,
+            "details": {
+                "reason": f"Insufficient overlapping data points ({len(common_index)} < {min_days}) between {symbol} and {market_symbol}"
+            },
+            "agent_name": agent_name,
         }
     sym_ret = sym_ret.loc[common_index]
     mkt_ret = mkt_ret.loc[common_index]
@@ -99,22 +114,35 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     min_days_30d = corr_settings.MIN_DAYS_FOR_30D_CORR
     if len(sym_ret) < min_days_30d or len(mkt_ret) < min_days_30d:
         return {
-            "symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None,
-            "details": {"reason": f"Insufficient aligned data points for 30d correlation ({len(sym_ret)} points)"},
-            "agent_name": agent_name
+            "symbol": symbol,
+            "verdict": "NO_DATA",
+            "confidence": 0.0,
+            "value": None,
+            "details": {
+                "reason": f"Insufficient aligned data points for 30d correlation ({len(sym_ret)} points)"
+            },
+            "agent_name": agent_name,
         }
 
     # Calculate rolling correlations
     # Use tail for recent data
     correlation_30d = sym_ret.tail(30).corr(mkt_ret.tail(30))
-    correlation_60d = sym_ret.tail(60).corr(mkt_ret.tail(60)) if len(sym_ret) >= 60 else np.nan
+    correlation_60d = (
+        sym_ret.tail(60).corr(mkt_ret.tail(60)) if len(sym_ret) >= 60 else np.nan
+    )
 
     # Handle potential NaN correlations
     if np.isnan(correlation_30d):
         return {
-            "symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None,
-            "details": {"reason": "Could not calculate 30d correlation (NaN result)", "market_index": market_symbol},
-            "agent_name": agent_name
+            "symbol": symbol,
+            "verdict": "NO_DATA",
+            "confidence": 0.0,
+            "value": None,
+            "details": {
+                "reason": "Could not calculate 30d correlation (NaN result)",
+                "market_index": market_symbol,
+            },
+            "agent_name": agent_name,
         }
 
     # Use settings for correlation thresholds
@@ -124,10 +152,10 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     # Simplified Verdict Logic based on 30d correlation and settings thresholds
     if correlation_30d > high_corr_threshold:
         verdict = "HIGH_CORRELATION"
-        confidence = 0.8 # Adjusted confidence
+        confidence = 0.8  # Adjusted confidence
     elif correlation_30d < low_corr_threshold:
         verdict = "LOW_CORRELATION"
-        confidence = 0.7 # Adjusted confidence
+        confidence = 0.7  # Adjusted confidence
     else:
         verdict = "NORMAL_CORRELATION"
         confidence = 0.6
@@ -137,18 +165,20 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         "symbol": symbol,
         "verdict": verdict,
         "confidence": round(confidence, 4),
-        "value": round(correlation_30d, 4), # 30d correlation as primary value
+        "value": round(correlation_30d, 4),  # 30d correlation as primary value
         "details": {
             "correlation_30d": round(correlation_30d, 4),
-            "correlation_60d": round(correlation_60d, 4) if not np.isnan(correlation_60d) else None,
+            "correlation_60d": (
+                round(correlation_60d, 4) if not np.isnan(correlation_60d) else None
+            ),
             "market_index_used": market_symbol,
             "config_used": {
                 "high_correlation_threshold": high_corr_threshold,
                 "low_correlation_threshold": low_corr_threshold,
-                "min_required_days": min_days
-            }
+                "min_required_days": min_days,
+            },
         },
-        "agent_name": agent_name
+        "agent_name": agent_name,
     }
 
     return result

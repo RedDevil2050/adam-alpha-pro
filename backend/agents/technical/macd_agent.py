@@ -6,6 +6,7 @@ from loguru import logger
 
 agent_name = "macd_agent"
 
+
 class MACDAgent(TechnicalAgent):
     async def _execute(self, symbol: str, agent_outputs: dict) -> dict:
         try:
@@ -14,8 +15,8 @@ class MACDAgent(TechnicalAgent):
                 return self._error_response(symbol, "No data available")
 
             # Calculate MACD
-            exp1 = df['close'].ewm(span=12, adjust=False).mean()
-            exp2 = df['close'].ewm(span=26, adjust=False).mean()
+            exp1 = df["close"].ewm(span=12, adjust=False).mean()
+            exp2 = df["close"].ewm(span=26, adjust=False).mean()
             macd = exp1 - exp2
             signal = macd.ewm(span=9, adjust=False).mean()
             histogram = macd - signal
@@ -27,7 +28,7 @@ class MACDAgent(TechnicalAgent):
 
             # Market regime adjustment
             market_context = await self.get_market_context(symbol)
-            regime = market_context.get('regime', 'NEUTRAL')
+            regime = market_context.get("regime", "NEUTRAL")
 
             # Generate signals
             if current_macd > current_signal and current_hist > 0:
@@ -49,15 +50,16 @@ class MACDAgent(TechnicalAgent):
                     "macd": round(current_macd, 4),
                     "signal": round(current_signal, 4),
                     "histogram": round(current_hist, 4),
-                    "market_regime": regime
+                    "market_regime": regime,
                 },
                 "error": None,
-                "agent_name": agent_name
+                "agent_name": agent_name,
             }
 
         except Exception as e:
             logger.error(f"MACD calculation error: {e}")
             return self._error_response(symbol, str(e))
+
 
 async def run(symbol: str, agent_outputs: dict = {}) -> dict:
     agent = MACDAgent()

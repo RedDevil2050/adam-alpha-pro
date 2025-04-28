@@ -6,16 +6,18 @@ from ...db import crud
 from ...security.utils import verify_password, create_access_token
 from pydantic import BaseModel
 
+
 class Token(BaseModel):
     access_token: str
     token_type: str
 
+
 router = APIRouter()
+
 
 @router.post("/token", response_model=Token)
 async def login(
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    db: AsyncSession = Depends(get_db)
+    form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)
 ):
     user = await crud.get_user_by_username(db, username=form_data.username)
     if not user or not verify_password(form_data.password, user.hashed_password):

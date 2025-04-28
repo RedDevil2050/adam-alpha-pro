@@ -5,6 +5,7 @@ from backend.agents.technical.utils import tracker
 
 agent_name = "ma_crossover_agent"
 
+
 async def run(symbol: str, short_window: int = 50, long_window: int = 200) -> dict:
     cache_key = f"{agent_name}:{symbol}:{short_window}:{long_window}"
     # 1) Cache check
@@ -21,7 +22,7 @@ async def run(symbol: str, short_window: int = 50, long_window: int = 200) -> di
             "confidence": 0.0,
             "value": None,
             "details": {},
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
     else:
         close = df["close"]
@@ -52,10 +53,10 @@ async def run(symbol: str, short_window: int = 50, long_window: int = 200) -> di
             "value": round(last_short - last_long, 4),
             "details": {
                 "short_ma": round(last_short, 4),
-                "long_ma": round(last_long, 4)
+                "long_ma": round(last_long, 4),
             },
             "score": score,
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
 
     # 5) Cache result for 1 hour

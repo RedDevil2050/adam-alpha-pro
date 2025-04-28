@@ -6,16 +6,18 @@ from datetime import datetime
 
 Base = declarative_base()
 
+
 class MarketData(Base):
-    __tablename__ = 'market_data'
+    __tablename__ = "market_data"
     id = Column(Integer, primary_key=True)
     symbol = Column(String)
     timestamp = Column(DateTime)
     price = Column(Float)
     volume = Column(Float)
 
+
 class DatabaseService:
-    def __init__(self, connection_string: str = 'sqlite:///market_data.db'):
+    def __init__(self, connection_string: str = "sqlite:///market_data.db"):
         self.engine = create_engine(connection_string)
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
@@ -24,10 +26,10 @@ class DatabaseService:
         session = self.Session()
         try:
             market_data = MarketData(
-                symbol=data['symbol'],
-                timestamp=datetime.fromtimestamp(data['timestamp']),
-                price=data['price'],
-                volume=data['volume']
+                symbol=data["symbol"],
+                timestamp=datetime.fromtimestamp(data["timestamp"]),
+                price=data["price"],
+                volume=data["volume"],
             )
             session.add(market_data)
             session.commit()

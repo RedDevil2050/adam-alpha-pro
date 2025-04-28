@@ -4,6 +4,7 @@ from backend.agents.sentiment.utils import tracker
 
 agent_name = "overall_sentiment_agent"
 
+
 async def run(symbol: str) -> dict:
     cache_key = f"{agent_name}:{symbol}"
     cached = await redis_client.get(cache_key)
@@ -15,15 +16,22 @@ async def run(symbol: str) -> dict:
     final = (news_sent + social_sent) / 2
 
     if final > 0.1:
-        verdict="POSITIVE"
+        verdict = "POSITIVE"
     elif final < -0.1:
-        verdict="NEGATIVE"
+        verdict = "NEGATIVE"
     else:
-        verdict="NEUTRAL"
+        verdict = "NEUTRAL"
 
-    score = round((final + 1)/2,4)
-    result = {"symbol": symbol, "verdict": verdict, "confidence":score,
-              "value":final, "details":{}, "score":score, "agent_name":agent_name}
+    score = round((final + 1) / 2, 4)
+    result = {
+        "symbol": symbol,
+        "verdict": verdict,
+        "confidence": score,
+        "value": final,
+        "details": {},
+        "score": score,
+        "agent_name": agent_name,
+    }
 
     await redis_client.set(cache_key, result, ex=None)
     tracker.update("sentiment", agent_name, "implemented")

@@ -8,7 +8,7 @@ numpy>=1.25.2
 backoff>=2.2.1
 beautifulsoup4>=4.12.2
 pydantic>=2.3.0
-pydantic-settings>=2.0.3
+pydantic-settings>=2.0.3  # Required for BaseSettings in Pydantic v2
 python-dotenv>=1.0.0
 redis>=5.0.0
 sqlalchemy>=2.0.20
@@ -26,4 +26,32 @@ python-multipart>=0.0.6
 aiocache>=0.12.1
 aiofiles>=23.1.0
 tenacity>=8.2.3
-scipy>=1.10.0 # Added for statistical calculations
+scipy>=1.10.0  # For statistical calculations
+
+# Data science and ML dependencies
+scikit-learn>=1.3.0  # For sklearn imports
+transformers>=4.30.0  # For NLP transformers models
+gensim>=4.3.1  # For topic modeling
+nltk>=3.8.1  # For NLP processing
+textblob>=0.17.1  # For sentiment analysis
+vaderSentiment>=3.3.2  # For sentiment analysis
+
+# Additional data handling
+pandas-ta>=0.3.14b  # Technical analysis extensions for pandas
+lxml>=4.9.3  # XML/HTML processing
+pandas-datareader>=0.10.0  # Data reader for various sources
+arch>=6.1.0  # For ARCH models in time series
+
+# Cloud and infrastructure
+azure-keyvault>=4.2.0  # For Azure integration
+pyjwt>=2.8.0  # For JWT handling
+aioredis>=2.0.1  # Async Redis client
+circuitbreaker>=1.4.0  # Circuit breaker pattern
+
+# Utilities
+tqdm>=4.66.1  # Progress bars
+psutil>=5.9.5  # System monitoring
+
+# For data visualization (optional but useful)
+matplotlib>=3.7.2
+seaborn>=0.12.2

@@ -4,6 +4,7 @@ from loguru import logger
 
 agent_name = "reverse_dcf_agent"
 
+
 class ReverseDCFAgent(ValuationAgentBase):
     async def _execute(self, symbol: str, agent_outputs: dict) -> dict:
         try:
@@ -23,8 +24,10 @@ class ReverseDCFAgent(ValuationAgentBase):
             low, high = -0.2, 0.5  # -20% to +50% growth
             while high - low > 0.001:
                 mid = (low + high) / 2
-                dcf_value = self._calculate_dcf(fcf, mid, discount_rate, years, terminal_multiple)
-                
+                dcf_value = self._calculate_dcf(
+                    fcf, mid, discount_rate, years, terminal_multiple
+                )
+
                 if abs(dcf_value - current_price) < 0.01:
                     implied_growth = mid
                     break
@@ -43,7 +46,7 @@ class ReverseDCFAgent(ValuationAgentBase):
                 verdict = "MODERATE"
                 confidence = 0.6
             elif implied_growth > 0:
-                verdict = "REASONABLE" 
+                verdict = "REASONABLE"
                 confidence = 0.9
             else:
                 verdict = "DECLINE"
@@ -57,26 +60,34 @@ class ReverseDCFAgent(ValuationAgentBase):
                 "details": {
                     "implied_growth_rate": round(implied_growth * 100, 2),
                     "current_price": current_price,
-                    "fcf_per_share": fcf
+                    "fcf_per_share": fcf,
                 },
                 "error": None,
-                "agent_name": agent_name
+                "agent_name": agent_name,
             }
 
         except Exception as e:
             logger.error(f"Reverse DCF error: {e}")
             return self._error_response(symbol, str(e))
 
-    def _calculate_dcf(self, fcf: float, growth: float, discount: float, years: int, terminal_mult: float) -> float:
+    def _calculate_dcf(
+        self,
+        fcf: float,
+        growth: float,
+        discount: float,
+        years: int,
+        terminal_mult: float,
+    ) -> float:
         value = 0
         current_fcf = fcf
-        
+
         for _ in range(years):
-            current_fcf *= (1 + growth)
+            current_fcf *= 1 + growth
             value += current_fcf / ((1 + discount) ** (_ + 1))
-            
+
         terminal_value = current_fcf * terminal_mult / ((1 + discount) ** years)
         return value + terminal_value
+
 
 # For backwards compatibility
 async def run(symbol: str, agent_outputs: dict = {}) -> dict:

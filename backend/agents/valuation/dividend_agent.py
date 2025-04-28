@@ -1,5 +1,8 @@
 import sys, os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
+
+sys.path.insert(
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+)
 
 import asyncio
 from backend.utils.data_provider import fetch_alpha_vantage
@@ -14,7 +17,10 @@ AGENT_CATEGORY = "valuation"
 # class DividendAgentSettings(BaseSettings):
 #     SOME_THRESHOLD: float = 0.0 # Example if needed
 
-@standard_agent_execution(agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=86400) # Longer TTL for less frequent data
+
+@standard_agent_execution(
+    agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=86400
+)  # Longer TTL for less frequent data
 async def run(symbol: str, agent_outputs: dict = None) -> dict:
     """
     Fetches and reports key dividend information for a stock symbol.
@@ -55,13 +61,18 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     # div_settings = settings.agent_settings.dividend # Example
 
     # Fetch overview data
-    overview_data = await fetch_alpha_vantage("query", {"function": "OVERVIEW", "symbol": symbol})
+    overview_data = await fetch_alpha_vantage(
+        "query", {"function": "OVERVIEW", "symbol": symbol}
+    )
 
     if not overview_data:
         return {
-            "symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None,
+            "symbol": symbol,
+            "verdict": "NO_DATA",
+            "confidence": 0.0,
+            "value": None,
             "details": {"reason": "Could not fetch overview data from Alpha Vantage"},
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
 
     dps_str = overview_data.get("DividendPerShare")
@@ -78,7 +89,9 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         try:
             dps = float(dps_str)
         except (ValueError, TypeError):
-            logger.warning(f"[{agent_name}] Could not parse DividendPerShare for {symbol}: {dps_str}")
+            logger.warning(
+                f"[{agent_name}] Could not parse DividendPerShare for {symbol}: {dps_str}"
+            )
 
     # Parse Yield
     if yield_str and yield_str.lower() not in ["none", "-", ""]:
@@ -86,7 +99,9 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
             # Yield is usually given as decimal, convert to percent for details consistency
             yield_pct = float(yield_str) * 100
         except (ValueError, TypeError):
-            logger.warning(f"[{agent_name}] Could not parse DividendYield for {symbol}: {yield_str}")
+            logger.warning(
+                f"[{agent_name}] Could not parse DividendYield for {symbol}: {yield_str}"
+            )
 
     # Parse Ex-Date (keep as string for now)
     if ex_date_str and ex_date_str.lower() not in ["none", "-", ""]:
@@ -96,14 +111,14 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     if dps is not None and dps > 0:
         verdict = "PAYS_DIVIDEND"
         confidence = 0.8
-    elif dps is not None and dps == 0: # Explicitly zero
+    elif dps is not None and dps == 0:  # Explicitly zero
         verdict = "NO_DIVIDEND"
         confidence = 0.9
-    elif dps_str and dps_str.lower() in ["0", "none"]: # String indicates zero/none
-         verdict = "NO_DIVIDEND"
-         confidence = 0.9
-         dps = 0.0 # Set value to 0.0 for clarity
-    else: # Cannot determine
+    elif dps_str and dps_str.lower() in ["0", "none"]:  # String indicates zero/none
+        verdict = "NO_DIVIDEND"
+        confidence = 0.9
+        dps = 0.0  # Set value to 0.0 for clarity
+    else:  # Cannot determine
         verdict = "NO_DATA"
         confidence = 0.1
 
@@ -112,13 +127,15 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         "symbol": symbol,
         "verdict": verdict,
         "confidence": round(confidence, 4),
-        "value": round(dps, 4) if dps is not None else None, # DPS as primary value
+        "value": round(dps, 4) if dps is not None else None,  # DPS as primary value
         "details": {
             "dividend_per_share": round(dps, 4) if dps is not None else None,
             "ex_dividend_date": ex_date,
-            "dividend_yield_percent": round(yield_pct, 2) if yield_pct is not None else None,
+            "dividend_yield_percent": (
+                round(yield_pct, 2) if yield_pct is not None else None
+            ),
             "data_source": data_source,
         },
-        "agent_name": agent_name
+        "agent_name": agent_name,
     }
     return result

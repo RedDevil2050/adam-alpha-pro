@@ -3,6 +3,7 @@ from backend.agents.intelligence.utils import tracker
 
 agent_name = "verdict_orchestrator_agent"
 
+
 async def run(symbol: str, agent_outputs: dict = {}) -> dict:
     cache_key = f"{agent_name}:{symbol}"
     cached = await redis_client.get(cache_key)
@@ -30,7 +31,7 @@ async def run(symbol: str, agent_outputs: dict = {}) -> dict:
             "confidence": round(avg_score, 4),
             "value": avg_score,
             "details": {"agent_scores": agent_outputs},
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
 
         await redis_client.set(cache_key, result, ex=3600)
@@ -45,5 +46,5 @@ async def run(symbol: str, agent_outputs: dict = {}) -> dict:
             "value": None,
             "details": {},
             "error": str(e),
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }

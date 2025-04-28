@@ -1,12 +1,15 @@
 import numpy as np
 from backend.utils.data_provider import fetch_price_series
-from backend.agents.decorators import standard_agent_execution # Import decorator
+from backend.agents.decorators import standard_agent_execution  # Import decorator
 
 agent_name = "sharpe_agent"
-AGENT_CATEGORY = "risk" # Define category for the decorator
+AGENT_CATEGORY = "risk"  # Define category for the decorator
+
 
 # Apply the decorator
-@standard_agent_execution(agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600)
+@standard_agent_execution(
+    agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600
+)
 async def run(symbol: str) -> dict:
     # Boilerplate (cache check, try/except, cache set, tracker, error handling) is handled by decorator
 
@@ -35,10 +38,9 @@ async def run(symbol: str) -> dict:
     # Handle potential division by zero if std dev is zero
     std_dev = np.std(excess_returns)
     if std_dev == 0:
-        sharpe_ratio = 0.0 # Or handle as appropriate (e.g., return specific verdict)
+        sharpe_ratio = 0.0  # Or handle as appropriate (e.g., return specific verdict)
     else:
         sharpe_ratio = np.sqrt(252) * np.mean(excess_returns) / std_dev
-
 
     # Verdict based on Sharpe ratio (Core Logic)
     if sharpe_ratio > 2:

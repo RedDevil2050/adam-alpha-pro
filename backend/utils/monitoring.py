@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Dict, Optional
 
+
 class SystemMonitor:
     def __init__(self):
         self.components = {}
@@ -13,18 +14,22 @@ class SystemMonitor:
             "cpu_samples": [],
             "memory_samples": [],
             "error_counts": {},
-            "component_status": {}
+            "component_status": {},
         }
 
     def register_component(self, component_name: str):
         self.components[component_name] = {
             "status": "healthy",
             "last_error": None,
-            "error_count": 0
+            "error_count": 0,
         }
 
     def is_ready(self) -> Dict:
         return {
-            "ready": all(comp["status"] == "healthy" for comp in self.components.values()),
-            "components": {name: comp["status"] for name, comp in self.components.items()}
+            "ready": all(
+                comp["status"] == "healthy" for comp in self.components.values()
+            ),
+            "components": {
+                name: comp["status"] for name, comp in self.components.items()
+            },
         }

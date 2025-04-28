@@ -5,25 +5,26 @@ from loguru import logger
 
 agent_name = "tickertape_agent"
 
+
 class TickertapeAgent(StealthAgentBase):
     async def _execute(self, symbol: str, agent_outputs: dict) -> dict:
         try:
             data = await self._fetch_stealth_data(symbol)
             if not data:
                 return self._error_response(symbol, "No data available")
-            
+
             score = self._calculate_score(data)
             verdict = self._get_verdict(score)
             confidence = score * 0.85  # Conservative confidence due to data source
 
             return {
                 "symbol": symbol,
-                "verdict": verdict, 
+                "verdict": verdict,
                 "confidence": confidence,
                 "value": round(score, 2),
                 "details": data,
                 "error": None,
-                "agent_name": agent_name
+                "agent_name": agent_name,
             }
 
         except Exception as e:
@@ -34,17 +35,17 @@ class TickertapeAgent(StealthAgentBase):
         url = f"https://www.tickertape.in/stocks/{symbol}"
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(url)
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        
+        soup = BeautifulSoup(resp.text, "html.parser")
+
         return {
             "ratios": self._extract_ratios(soup),
             "recommendations": self._extract_recommendations(soup),
-            "source": "tickertape"
+            "source": "tickertape",
         }
 
     def _calculate_score(self, data: dict) -> float:
-        recs = data.get('recommendations', [])
-        buy_count = len([r for r in recs if 'buy' in r.lower()])
+        recs = data.get("recommendations", [])
+        buy_count = len([r for r in recs if "buy" in r.lower()])
         if not recs:
             return 0.5
         return buy_count / len(recs)
@@ -59,11 +60,11 @@ class TickertapeAgent(StealthAgentBase):
     def _extract_ratios(self, soup) -> dict:
         ratios = {}
         try:
-            ratio_div = soup.select_one('.key-ratios')
+            ratio_div = soup.select_one(".key-ratios")
             if ratio_div:
-                for item in ratio_div.select('.ratio-item'):
-                    label = item.select_one('.label').text.strip()
-                    value = item.select_one('.value').text.strip()
+                for item in ratio_div.select(".ratio-item"):
+                    label = item.select_one(".label").text.strip()
+                    value = item.select_one(".value").text.strip()
                     ratios[label] = value
         except:
             pass
@@ -72,12 +73,13 @@ class TickertapeAgent(StealthAgentBase):
     def _extract_recommendations(self, soup) -> list:
         recs = []
         try:
-            rec_div = soup.select_one('.analyst-recommendations')
+            rec_div = soup.select_one(".analyst-recommendations")
             if rec_div:
-                recs = [r.text.strip() for r in rec_div.select('.recommendation')]
+                recs = [r.text.strip() for r in rec_div.select(".recommendation")]
         except:
             pass
         return recs
+
 
 async def run(symbol: str, agent_outputs: dict = {}) -> dict:
     agent = TickertapeAgent()

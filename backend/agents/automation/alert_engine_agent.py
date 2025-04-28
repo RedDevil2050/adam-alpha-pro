@@ -8,6 +8,7 @@ from backend.agents.automation.utils import tracker
 
 agent_name = "alert_engine_agent"
 
+
 async def run(symbol: str, agent_outputs: dict = {}) -> dict:
     cache_key = f"{agent_name}:{symbol}"
     cached = await redis_client.get(cache_key)
@@ -15,15 +16,21 @@ async def run(symbol: str, agent_outputs: dict = {}) -> dict:
         return cached
 
     # 1) Fetch price series (60d) and compute 50-day MA
-    prices = await fetch_price_series(symbol, source_preference=["api","scrape"])
+    prices = await fetch_price_series(symbol, source_preference=["api", "scrape"])
     series = pd.Series(prices)
-    ma50 = series.rolling(window=50).mean().iloc[-1] if len(series)>=50 else series.mean()
+    ma50 = (
+        series.rolling(window=50).mean().iloc[-1]
+        if len(series) >= 50
+        else series.mean()
+    )
 
     # 2) Fetch EPS time series, compute QoQ growth
     eps_ts = await fetch_eps_data(symbol)
     eps_growth = None
-    if eps_ts and len(eps_ts)>=2:
-        eps_growth = (eps_ts[-1] - eps_ts[-2]) / abs(eps_ts[-2]) if eps_ts[-2]!=0 else None
+    if eps_ts and len(eps_ts) >= 2:
+        eps_growth = (
+            (eps_ts[-1] - eps_ts[-2]) / abs(eps_ts[-2]) if eps_ts[-2] != 0 else None
+        )
 
     # 3) Upcoming earnings days to event
     earn_out = await earnings_run(symbol)
@@ -53,9 +60,14 @@ async def run(symbol: str, agent_outputs: dict = {}) -> dict:
         "verdict": verdict,
         "confidence": round(confidence, 4),
         "value": len(alerts),
-        "details": {"alerts": alerts, "ma50": round(ma50,2), "eps_growth": eps_growth, "earnings_in": days_to_earn},
+        "details": {
+            "alerts": alerts,
+            "ma50": round(ma50, 2),
+            "eps_growth": eps_growth,
+            "earnings_in": days_to_earn,
+        },
         "score": confidence,
-        "agent_name": agent_name
+        "agent_name": agent_name,
     }
 
     await redis_client.set(cache_key, result, ex=settings.agent_cache_ttl)

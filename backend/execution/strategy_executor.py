@@ -2,11 +2,12 @@ import asyncio
 from typing import Dict, List
 import logging
 
+
 class StrategyExecutor:
     def __init__(self, data_service, db_service):
         self.data_service = data_service
         self.db_service = db_service
-        self.logger = logging.getLogger('StrategyExecutor')
+        self.logger = logging.getLogger("StrategyExecutor")
         self.active_strategies = {}
 
     async def execute_strategy(self, strategy_name: str, params: Dict):

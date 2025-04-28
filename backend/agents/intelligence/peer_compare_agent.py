@@ -6,6 +6,7 @@ import importlib
 
 agent_name = "peer_compare_agent"
 
+
 async def run(symbol: str) -> dict:
     cache_key = f"{agent_name}:{symbol}"
     cached = await redis_client.get(cache_key)
@@ -19,13 +20,27 @@ async def run(symbol: str) -> dict:
     # Compare to sector average in settings
     sector_avg = settings.sector_pe_averages.get(symbol, None)
     if pe is None or sector_avg is None:
-        result = {"symbol": symbol, "verdict":"NO_DATA","confidence":0.0,"value":None,"details":{},"agent_name":agent_name}
+        result = {
+            "symbol": symbol,
+            "verdict": "NO_DATA",
+            "confidence": 0.0,
+            "value": None,
+            "details": {},
+            "agent_name": agent_name,
+        }
     else:
         diff = pe - sector_avg
-        score = max(0.0, min(1.0, (sector_avg - diff)/sector_avg))
-        verdict = "UNDERVALUED" if diff<0 else "OVERVALUED"
-        result = {"symbol": symbol,"verdict":verdict,"confidence":round(score,4),"value":round(diff,4),
-                  "details":{"pe":pe,"sector_avg":sector_avg},"score":score,"agent_name":agent_name}
+        score = max(0.0, min(1.0, (sector_avg - diff) / sector_avg))
+        verdict = "UNDERVALUED" if diff < 0 else "OVERVALUED"
+        result = {
+            "symbol": symbol,
+            "verdict": verdict,
+            "confidence": round(score, 4),
+            "value": round(diff, 4),
+            "details": {"pe": pe, "sector_avg": sector_avg},
+            "score": score,
+            "agent_name": agent_name,
+        }
 
     await redis_client.set(cache_key, result, ex=3600)
     tracker.update("intelligence", agent_name, "implemented")

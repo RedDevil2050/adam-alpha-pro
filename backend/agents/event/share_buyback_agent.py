@@ -4,6 +4,7 @@ from backend.agents.event.utils import fetch_alpha_events, tracker
 
 agent_name = "share_buyback_agent"
 
+
 async def run(symbol: str) -> dict:
     cache_key = f"{agent_name}:{symbol}"
     cached = await redis_client.get(cache_key)
@@ -11,8 +12,8 @@ async def run(symbol: str) -> dict:
         return cached
 
     # 1) API fetch hypothetical BUYBACK data
-    data = await fetch_alpha_events(symbol, 'BUYBACK')
-    date_str = data.get('buybackDate') or data.get('BuybackDate')
+    data = await fetch_alpha_events(symbol, "BUYBACK")
+    date_str = data.get("buybackDate") or data.get("BuybackDate")
     buyback_date = None
     if date_str:
         try:
@@ -25,18 +26,28 @@ async def run(symbol: str) -> dict:
         try:
             import httpx
             from bs4 import BeautifulSoup
+
             url = f"https://www.trendlyne.com/stock/{symbol}/corporate-announcements/"
             async with httpx.AsyncClient(timeout=10) as client:
                 resp = await client.get(url)
-            soup = BeautifulSoup(resp.text, 'html.parser')
-            elem = soup.find('th', string='Buyback Date')
+            soup = BeautifulSoup(resp.text, "html.parser")
+            elem = soup.find("th", string="Buyback Date")
             if elem:
-                buyback_date = datetime.datetime.strptime(elem.find_next_sibling('td').text.strip(), '%d %b %Y').date()
+                buyback_date = datetime.datetime.strptime(
+                    elem.find_next_sibling("td").text.strip(), "%d %b %Y"
+                ).date()
         except Exception:
             pass
 
     if not buyback_date:
-        result = {"symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None, "details": {}, "agent_name": agent_name}
+        result = {
+            "symbol": symbol,
+            "verdict": "NO_DATA",
+            "confidence": 0.0,
+            "value": None,
+            "details": {},
+            "agent_name": agent_name,
+        }
     else:
         today = datetime.date.today()
         days = (buyback_date - today).days
@@ -49,7 +60,7 @@ async def run(symbol: str) -> dict:
             "value": str(buyback_date),
             "details": {"days_to_event": days},
             "score": score,
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
 
     await redis_client.set(cache_key, result, ex=86400)

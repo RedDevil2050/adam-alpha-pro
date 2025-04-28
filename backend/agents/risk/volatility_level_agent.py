@@ -6,7 +6,10 @@ from backend.agents.decorators import standard_agent_execution
 agent_name = "volatility_level_agent"
 AGENT_CATEGORY = "risk"
 
-@standard_agent_execution(agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600)
+
+@standard_agent_execution(
+    agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600
+)
 async def run(symbol: str) -> dict:
     """
     Calculates the annualized volatility level for a given stock symbol.
@@ -52,7 +55,7 @@ async def run(symbol: str) -> dict:
             "confidence": 0.0,
             "value": None,
             "details": {"reason": f"Insufficient price data for {symbol}"},
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
 
     # Compute daily returns and volatility
@@ -60,9 +63,12 @@ async def run(symbol: str) -> dict:
     returns = np.diff(prices_array) / prices_array[:-1]
     if len(returns) == 0:
         return {
-            "symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None,
+            "symbol": symbol,
+            "verdict": "NO_DATA",
+            "confidence": 0.0,
+            "value": None,
             "details": {"reason": "Could not calculate returns from price data"},
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
 
     daily_volatility = np.std(returns)
@@ -88,9 +94,9 @@ async def run(symbol: str) -> dict:
         "value": round(annualized_volatility * 100, 2),
         "details": {
             "annualized_volatility_percent": round(annualized_volatility * 100, 2),
-            "daily_volatility": round(daily_volatility, 6)
-            },
-        "agent_name": agent_name
+            "daily_volatility": round(daily_volatility, 6),
+        },
+        "agent_name": agent_name,
     }
 
     return result

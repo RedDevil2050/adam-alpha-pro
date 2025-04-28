@@ -5,6 +5,7 @@ from backend.agents.technical.utils import tracker
 
 agent_name = "stochastic_oscillator_agent"
 
+
 async def run(symbol: str) -> dict:
     cache_key = f"{agent_name}:{symbol}"
     # Cache check
@@ -15,7 +16,14 @@ async def run(symbol: str) -> dict:
     # Fetch data
     df = await fetch_ohlcv_series(symbol, source_preference=["api", "scrape"])
     if df is None or df.empty:
-        result = {"symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None, "details": {}, "agent_name": agent_name}
+        result = {
+            "symbol": symbol,
+            "verdict": "NO_DATA",
+            "confidence": 0.0,
+            "value": None,
+            "details": {},
+            "agent_name": agent_name,
+        }
     else:
         # Compute fast %K and %D
         low_min = df["low"].rolling(14).min()
@@ -43,7 +51,7 @@ async def run(symbol: str) -> dict:
             "value": round(latest_k - latest_d, 4),
             "details": {"k": latest_k, "d": latest_d},
             "score": score,
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
 
     # Cache and track

@@ -13,20 +13,19 @@ from backend.config.settings import get_settings
 AGENT_EXECUTION_TIME = Histogram(
     "agent_execution_seconds",
     "Time spent executing each agent",
-    ["agent_name", "category"]
+    ["agent_name", "category"],
 )
 
 AGENT_ERRORS = Counter(
     "agent_errors_total",
     "Number of agent execution errors",
-    ["agent_name", "error_type"]
+    ["agent_name", "error_type"],
 )
 
 AGENT_SUCCESS_RATE = Gauge(
-    "agent_success_rate",
-    "Success rate of agent executions",
-    ["agent_name"]
+    "agent_success_rate", "Success rate of agent executions", ["agent_name"]
 )
+
 
 class Orchestrator:
     def __init__(self):
@@ -53,7 +52,10 @@ class Orchestrator:
 
     def _register_initialized_agents(self):
         """Register successfully initialized agents"""
-        for agent_name, agent_class in self.agent_initializer._initialized_agents.items():
+        for (
+            agent_name,
+            agent_class,
+        ) in self.agent_initializer._initialized_agents.items():
             try:
                 self.register(agent_name, agent_class)
             except Exception as e:
@@ -76,13 +78,17 @@ class Orchestrator:
         """Execute single agent with timing and monitoring"""
         start_time = time.time()
         agent_instance = self.agent_initializer.get_agent_instance(name)
-        
+
         try:
             # Check dependencies
             deps = self._dependencies.get(name, [])
             if not all(dep in self.context for dep in deps):
-                logger.warning(f"Missing dependencies for {name}: {[d for d in deps if d not in self.context]}")
-                AGENT_ERRORS.labels(agent_name=name, error_type="missing_dependencies").inc()
+                logger.warning(
+                    f"Missing dependencies for {name}: {[d for d in deps if d not in self.context]}"
+                )
+                AGENT_ERRORS.labels(
+                    agent_name=name, error_type="missing_dependencies"
+                ).inc()
                 return None
 
             # Execute agent
@@ -97,7 +103,7 @@ class Orchestrator:
             self._execution_times[name] = execution_time
             AGENT_EXECUTION_TIME.labels(
                 agent_name=name,
-                category=agent_instance.category.value if agent_instance else "unknown"
+                category=agent_instance.category.value if agent_instance else "unknown",
             ).observe(execution_time)
 
             if result and "error" not in result:
@@ -105,7 +111,9 @@ class Orchestrator:
             else:
                 AGENT_SUCCESS_RATE.labels(agent_name=name).set(0)
                 if result and "error" in result:
-                    AGENT_ERRORS.labels(agent_name=name, error_type="execution_error").inc()
+                    AGENT_ERRORS.labels(
+                        agent_name=name, error_type="execution_error"
+                    ).inc()
 
             return result
 
@@ -158,10 +166,10 @@ class Orchestrator:
             # Verify API endpoints
             # Check data provider access
             healthy = True
-            
+
             # Update system monitor
             self.system_monitor.update_health("orchestrator", healthy)
-            
+
             return healthy
         except Exception as e:
             logger.error(f"Health check failed: {e}")
@@ -181,15 +189,19 @@ class Orchestrator:
             "execution_times": self._execution_times.copy(),
             "total_agents": len(self._agents),
             "initialized_agents": len(self.agent_initializer._initialized_agents),
-            "initialization_errors": len(self.agent_initializer.get_initialization_errors()),
+            "initialization_errors": len(
+                self.agent_initializer.get_initialization_errors()
+            ),
             "agent_success_rates": {
                 name: float(AGENT_SUCCESS_RATE.labels(agent_name=name)._value.get())
                 for name in self._agents
-            }
+            },
         }
+
 
 # Global instance
 _orchestrator = None
+
 
 def get_orchestrator() -> Orchestrator:
     """Get or create the global Orchestrator instance"""

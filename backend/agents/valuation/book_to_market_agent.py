@@ -1,10 +1,17 @@
 import sys, os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
+
+sys.path.insert(
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+)
 
 import asyncio
 import pandas as pd
 import numpy as np
-from backend.utils.data_provider import fetch_price_point, fetch_book_value, fetch_historical_price_series
+from backend.utils.data_provider import (
+    fetch_price_point,
+    fetch_book_value,
+    fetch_historical_price_series,
+)
 from loguru import logger
 from backend.agents.decorators import standard_agent_execution
 from backend.config.settings import get_settings
@@ -12,7 +19,10 @@ from backend.config.settings import get_settings
 agent_name = "book_to_market_agent"
 AGENT_CATEGORY = "valuation"
 
-@standard_agent_execution(agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600)
+
+@standard_agent_execution(
+    agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600
+)
 async def run(symbol: str, agent_outputs: dict = None) -> dict:
     """
     Calculates the Book-to-Market (B/M) ratio for a given stock symbol and assesses its valuation
@@ -55,7 +65,7 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     Return Structure:
         A dictionary containing:
         - symbol (str): The stock symbol.
-        - verdict (str): 'UNDERVALUED_REL_HIST', 'FAIRLY_VALUED_REL_HIST', 'OVERVALUED_REL_HIST', 
+        - verdict (str): 'UNDERVALUED_REL_HIST', 'FAIRLY_VALUED_REL_HIST', 'OVERVALUED_REL_HIST',
                          'NEGATIVE_OR_ZERO_BV', 'NO_HISTORICAL_CONTEXT', or 'NO_DATA'.
         - confidence (float): A dynamic score based on the percentile rank (0.0 to 1.0).
         - value (float | None): The calculated B/M ratio, or None if not available/applicable.
@@ -70,7 +80,7 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     # Fetch data concurrently
     price_task = fetch_price_point(symbol)
     book_value_task = fetch_book_value(symbol)
-    
+
     price, book_value = await asyncio.gather(price_task, book_value_task)
 
     # Validate data
@@ -79,7 +89,7 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         details = {
             "book_value_per_share": book_value,
             "latest_price": price,
-            "reason": f"Missing or invalid data (Price: {price}, Book Value: {book_value})"
+            "reason": f"Missing or invalid data (Price: {price}, Book Value: {book_value})",
         }
         return {
             "symbol": symbol,
@@ -87,7 +97,7 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
             "confidence": 0.0,
             "value": None,
             "details": details,
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
 
     # Calculate Current B/M Ratio
@@ -103,20 +113,26 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
 
     # Fetch historical prices
     try:
-        historical_prices = await fetch_historical_price_series(symbol, years=btm_settings.HISTORICAL_YEARS)
+        historical_prices = await fetch_historical_price_series(
+            symbol, years=btm_settings.HISTORICAL_YEARS
+        )
     except Exception as fetch_err:
-        logger.warning(f"[{agent_name}] Failed to fetch historical prices for {symbol}: {fetch_err}. Proceeding without historical context.")
+        logger.warning(
+            f"[{agent_name}] Failed to fetch historical prices for {symbol}: {fetch_err}. Proceeding without historical context."
+        )
         historical_prices = None
 
     if historical_prices is not None and not historical_prices.empty:
         # Ensure historical_prices is a pandas Series
         if not isinstance(historical_prices, pd.Series):
-             try:
-                 historical_prices = pd.Series(historical_prices)
-                 historical_prices.index = pd.to_datetime(historical_prices.index)
-             except Exception as conversion_err:
-                 logger.warning(f"[{agent_name}] Could not convert historical_prices to Series for {symbol}: {conversion_err}")
-                 historical_prices = None
+            try:
+                historical_prices = pd.Series(historical_prices)
+                historical_prices.index = pd.to_datetime(historical_prices.index)
+            except Exception as conversion_err:
+                logger.warning(
+                    f"[{agent_name}] Could not convert historical_prices to Series for {symbol}: {conversion_err}"
+                )
+                historical_prices = None
 
         if historical_prices is not None and not historical_prices.empty:
             # Calculate historical B/M using CURRENT book_value and historical prices (simplification!)
@@ -134,36 +150,56 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
                     # Calculate percentile rank of current B/M relative to history
                     try:
                         from scipy import stats
-                        percentile_rank = stats.percentileofscore(historical_btm_series, btm_ratio, kind='rank')
+
+                        percentile_rank = stats.percentileofscore(
+                            historical_btm_series, btm_ratio, kind="rank"
+                        )
                     except ImportError:
-                        percentile_rank = (historical_btm_series < btm_ratio).mean() * 100
+                        percentile_rank = (
+                            historical_btm_series < btm_ratio
+                        ).mean() * 100
 
                     # Calculate Z-score
                     if std_hist_btm and std_hist_btm > 1e-9:
-                         z_score = (btm_ratio - mean_hist_btm) / std_hist_btm
+                        z_score = (btm_ratio - mean_hist_btm) / std_hist_btm
                 else:
-                    logger.warning(f"[{agent_name}] Historical B/M series empty after calculation for {symbol}")
+                    logger.warning(
+                        f"[{agent_name}] Historical B/M series empty after calculation for {symbol}"
+                    )
                     data_source = "calculated_fundamental (historical calc failed)"
             else:
-                logger.warning(f"[{agent_name}] No positive historical prices found for B/M calculation for {symbol}")
+                logger.warning(
+                    f"[{agent_name}] No positive historical prices found for B/M calculation for {symbol}"
+                )
                 data_source = "calculated_fundamental (no positive historical prices)"
         else:
-             logger.warning(f"[{agent_name}] Invalid historical price series format for {symbol}")
-             data_source = "calculated_fundamental (invalid historical data)"
+            logger.warning(
+                f"[{agent_name}] Invalid historical price series format for {symbol}"
+            )
+            data_source = "calculated_fundamental (invalid historical data)"
 
     # Determine Verdict based on Percentile Rank (Note: High B/M is Undervalued)
-    if book_value <= 0: # Check book value itself first
+    if book_value <= 0:  # Check book value itself first
         verdict = "NEGATIVE_OR_ZERO_BV"
         confidence = 0.7
     elif percentile_rank is None:
         verdict = "NO_HISTORICAL_CONTEXT"
         confidence = 0.3
-    elif percentile_rank >= btm_settings.PERCENTILE_UNDERVALUED: # High percentile means high B/M -> Undervalued
+    elif (
+        percentile_rank >= btm_settings.PERCENTILE_UNDERVALUED
+    ):  # High percentile means high B/M -> Undervalued
         verdict = "UNDERVALUED_REL_HIST"
-        confidence = 0.6 + 0.3 * ((percentile_rank - btm_settings.PERCENTILE_UNDERVALUED) / (100 - btm_settings.PERCENTILE_UNDERVALUED))
-    elif percentile_rank <= btm_settings.PERCENTILE_OVERVALUED: # Low percentile means low B/M -> Overvalued
+        confidence = 0.6 + 0.3 * (
+            (percentile_rank - btm_settings.PERCENTILE_UNDERVALUED)
+            / (100 - btm_settings.PERCENTILE_UNDERVALUED)
+        )
+    elif (
+        percentile_rank <= btm_settings.PERCENTILE_OVERVALUED
+    ):  # Low percentile means low B/M -> Overvalued
         verdict = "OVERVALUED_REL_HIST"
-        confidence = 0.6 + 0.3 * (1 - (percentile_rank / btm_settings.PERCENTILE_OVERVALUED))
+        confidence = 0.6 + 0.3 * (
+            1 - (percentile_rank / btm_settings.PERCENTILE_OVERVALUED)
+        )
     else:
         verdict = "FAIRLY_VALUED_REL_HIST"
         confidence = 0.5
@@ -176,16 +212,22 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         "btm_ratio": round(btm_ratio, 4),
         "book_value_per_share": round(book_value, 4),
         "latest_price": round(price, 4),
-        "historical_mean_btm": round(mean_hist_btm, 4) if mean_hist_btm is not None else None,
-        "historical_std_dev_btm": round(std_hist_btm, 4) if std_hist_btm is not None else None,
-        "percentile_rank": round(percentile_rank, 1) if percentile_rank is not None else None,
+        "historical_mean_btm": (
+            round(mean_hist_btm, 4) if mean_hist_btm is not None else None
+        ),
+        "historical_std_dev_btm": (
+            round(std_hist_btm, 4) if std_hist_btm is not None else None
+        ),
+        "percentile_rank": (
+            round(percentile_rank, 1) if percentile_rank is not None else None
+        ),
         "z_score": round(z_score, 2) if z_score is not None else None,
         "data_source": data_source,
         "config_used": {
             "historical_years": btm_settings.HISTORICAL_YEARS,
             "percentile_undervalued": btm_settings.PERCENTILE_UNDERVALUED,
-            "percentile_overvalued": btm_settings.PERCENTILE_OVERVALUED
-        }
+            "percentile_overvalued": btm_settings.PERCENTILE_OVERVALUED,
+        },
     }
 
     # Create success result dictionary
@@ -195,6 +237,6 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         "confidence": round(confidence, 4),
         "value": round(btm_ratio, 4),
         "details": details,
-        "agent_name": agent_name
+        "agent_name": agent_name,
     }
     return result

@@ -4,12 +4,14 @@ import pandas as pd
 from dataclasses import dataclass
 from datetime import datetime
 
+
 @dataclass
 class StrategyConfig:
     name: str
     universe: List[str]
     parameters: Dict[str, any]
     risk_limits: Dict[str, float]
+
 
 class StrategyManager:
     def __init__(self, data_service, risk_manager):

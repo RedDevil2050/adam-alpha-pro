@@ -5,6 +5,7 @@ from backend.agents.sentiment.utils import analyzer, normalize_compound, tracker
 
 agent_name = "news_sentiment_agent"
 
+
 async def run(symbol: str) -> dict:
     cache_key = f"{agent_name}:{symbol}"
     # 1) Cache check
@@ -26,7 +27,14 @@ async def run(symbol: str) -> dict:
             if title:
                 headlines.append(title)
     if not headlines:
-        result = {"symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None, "details": {}, "agent_name": agent_name}
+        result = {
+            "symbol": symbol,
+            "verdict": "NO_DATA",
+            "confidence": 0.0,
+            "value": None,
+            "details": {},
+            "agent_name": agent_name,
+        }
     else:
         # 3) Compute sentiment scores
         comp_scores = [analyzer.polarity_scores(h)["compound"] for h in headlines]
@@ -46,7 +54,7 @@ async def run(symbol: str) -> dict:
             "value": round(avg_comp, 4),
             "details": {"headlines_count": len(headlines)},
             "score": score,
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
 
     # 5) Cache result for 1 hour and track progress

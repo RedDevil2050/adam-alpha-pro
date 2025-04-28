@@ -5,6 +5,7 @@ from loguru import logger
 
 agent_name = "trend_strength_agent"
 
+
 class TrendStrengthAgent(TechnicalAgent):
     async def _execute(self, symbol: str, agent_outputs: dict) -> dict:
         try:
@@ -13,7 +14,7 @@ class TrendStrengthAgent(TechnicalAgent):
                 return self._error_response(symbol, "No data available")
 
             # Calculate trend metrics
-            close = df['close']
+            close = df["close"]
             sma20 = close.rolling(window=20).mean()
             sma50 = close.rolling(window=50).mean()
 
@@ -23,7 +24,7 @@ class TrendStrengthAgent(TechnicalAgent):
             slope50 = (sma50.iloc[-1] - sma50.iloc[-20]) / sma50.iloc[-20]
 
             # Volume trend confirmation
-            volume = df['volume']
+            volume = df["volume"]
             vol_sma = volume.rolling(window=20).mean()
             vol_trend = volume.iloc[-1] > vol_sma.iloc[-1]
 
@@ -34,7 +35,7 @@ class TrendStrengthAgent(TechnicalAgent):
 
             # Market regime adjustment
             market_context = await self.get_market_context(symbol)
-            regime = market_context.get('regime', 'NEUTRAL')
+            regime = market_context.get("regime", "NEUTRAL")
 
             # Determine verdict based on strength and direction
             if strength_score > 0.02:
@@ -58,15 +59,16 @@ class TrendStrengthAgent(TechnicalAgent):
                     "slope20": round(slope20, 4),
                     "slope50": round(slope50, 4),
                     "volume_confirms": vol_trend,
-                    "market_regime": regime
+                    "market_regime": regime,
                 },
                 "error": None,
-                "agent_name": agent_name
+                "agent_name": agent_name,
             }
 
         except Exception as e:
             logger.error(f"Trend strength calculation error: {e}")
             return self._error_response(symbol, str(e))
+
 
 async def run(symbol: str, agent_outputs: dict = {}) -> dict:
     agent = TrendStrengthAgent()

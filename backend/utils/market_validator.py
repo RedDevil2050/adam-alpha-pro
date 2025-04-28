@@ -4,12 +4,10 @@ from datetime import datetime, time
 import pandas as pd
 from loguru import logger
 
+
 class MarketDataValidator:
     def __init__(self):
-        self.market_hours = {
-            "open": time(9, 15),
-            "close": time(15, 30)
-        }
+        self.market_hours = {"open": time(9, 15), "close": time(15, 30)}
         self.price_limits = {"max_change": 0.20}  # 20% max price change
 
     def validate_price_data(self, data: Dict) -> Tuple[bool, Optional[str]]:
@@ -20,7 +18,9 @@ class MarketDataValidator:
                 return False, "Stale data detected"
 
             # Check for price anomalies
-            if self._detect_price_anomaly(data.get("price"), data.get("previous_close")):
+            if self._detect_price_anomaly(
+                data.get("price"), data.get("previous_close")
+            ):
                 return False, "Price anomaly detected"
 
             # Check market hours

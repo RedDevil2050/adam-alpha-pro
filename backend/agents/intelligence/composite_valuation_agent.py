@@ -6,6 +6,7 @@ from backend.agents.intelligence.utils import tracker
 
 agent_name = "composite_valuation_agent"
 
+
 async def run(symbol: str) -> dict:
     cache_key = f"{agent_name}:{symbol}"
     cached = await redis_client.get(cache_key)
@@ -13,11 +14,13 @@ async def run(symbol: str) -> dict:
         return cached
 
     # Dummy fetch to ensure data load
-    _ = await fetch_price_series(symbol, source_preference=["api","scrape"])
+    _ = await fetch_price_series(symbol, source_preference=["api", "scrape"])
 
     scores = []
     pkg = importlib.import_module("backend.agents.valuation")
-    for _, fullname, _ in pkgutil.walk_packages(path=pkg.__path__, prefix="backend.agents.valuation."):
+    for _, fullname, _ in pkgutil.walk_packages(
+        path=pkg.__path__, prefix="backend.agents.valuation."
+    ):
         if fullname.endswith(("utils", "__init__")):
             continue
         mod = importlib.import_module(fullname)
@@ -25,7 +28,11 @@ async def run(symbol: str) -> dict:
         scores.append(res.get("score", 0.0))
 
     avg = sum(scores) / len(scores) if scores else 0.0
-    verdict = "STRONG_BUY" if avg >= 0.7 else "BUY" if avg >= 0.5 else "HOLD" if avg >= 0.3 else "AVOID"
+    verdict = (
+        "STRONG_BUY"
+        if avg >= 0.7
+        else "BUY" if avg >= 0.5 else "HOLD" if avg >= 0.3 else "AVOID"
+    )
 
     result = {
         "symbol": symbol,
@@ -34,7 +41,7 @@ async def run(symbol: str) -> dict:
         "value": avg,
         "details": {"scores": scores},
         "score": avg,
-        "agent_name": agent_name
+        "agent_name": agent_name,
     }
 
     await redis_client.set(cache_key, result, ex=None)

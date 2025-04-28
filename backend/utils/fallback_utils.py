@@ -1,4 +1,3 @@
-
 def fallback_pipeline(data):
     try:
         # Main execution

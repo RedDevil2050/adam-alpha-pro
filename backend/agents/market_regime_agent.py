@@ -6,7 +6,9 @@ agent_name = "MarketRegimeAgent"
 AGENT_CATEGORY = "market"
 
 
-@standard_agent_execution(agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600)
+@standard_agent_execution(
+    agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600
+)
 async def run(symbol: str, agent_outputs: dict = None) -> dict:
     # Fetch historical price series
     # Using a fixed date range here - consider making this dynamic or configurable if needed
@@ -54,7 +56,9 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     return {
         "symbol": symbol,
         "verdict": regime,
-        "confidence": round(min(volatility * 50, 1.0), 4),  # Adjusted confidence calculation example
+        "confidence": round(
+            min(volatility * 50, 1.0), 4
+        ),  # Adjusted confidence calculation example
         "value": round(trend, 6),
         "details": {"volatility": round(volatility, 6), "trend": round(trend, 6)},
     }

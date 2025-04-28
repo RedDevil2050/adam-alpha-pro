@@ -6,6 +6,7 @@ from backend.agents.forecast.utils import tracker
 
 agent_name = "price_forecast_agent"
 
+
 async def run(symbol: str) -> dict:
     cache_key = f"{agent_name}:{symbol}"
     cached = await redis_client.get(cache_key)
@@ -13,10 +14,17 @@ async def run(symbol: str) -> dict:
         return cached
 
     # Fetch price series (60 days)
-    prices = await fetch_price_series(symbol, source_preference=["api","scrape"])
+    prices = await fetch_price_series(symbol, source_preference=["api", "scrape"])
     if not prices or len(prices) < 2:
-        result = {"symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None,
-                  "details": {}, "score": 0.0, "agent_name": agent_name}
+        result = {
+            "symbol": symbol,
+            "verdict": "NO_DATA",
+            "confidence": 0.0,
+            "value": None,
+            "details": {},
+            "score": 0.0,
+            "agent_name": agent_name,
+        }
     else:
         series = pd.Series(prices)
         # Fit linear trend
@@ -37,7 +45,7 @@ async def run(symbol: str) -> dict:
             "value": slope,
             "details": {"slope": slope},
             "score": score,
-            "agent_name": agent_name
+            "agent_name": agent_name,
         }
 
     await redis_client.set(cache_key, result, ex=None)

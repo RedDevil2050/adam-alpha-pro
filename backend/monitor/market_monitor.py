@@ -5,12 +5,14 @@ import asyncio
 import logging
 from dataclasses import dataclass
 
+
 @dataclass
 class MarketAlert:
     level: str
     message: str
     timestamp: datetime
     action_required: bool
+
 
 class MarketMonitor:
     def __init__(self, data_service, market_analyzer):
@@ -32,5 +34,7 @@ class MarketMonitor:
 
     async def _check_market_conditions(self, symbols: List[str]):
         state = await self.market_analyzer.analyze_market_state(symbols)
-        if state.regime in ['stress', 'crisis']:
-            self._generate_alert('high', f'Market regime changed to {state.regime}', True)
+        if state.regime in ["stress", "crisis"]:
+            self._generate_alert(
+                "high", f"Market regime changed to {state.regime}", True
+            )
