@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from loguru import logger
 import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential
 from circuitbreaker import circuit
