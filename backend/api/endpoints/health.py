@@ -1,12 +1,16 @@
 import time
 from typing import Dict, Any
 import psutil
+import logging  # Import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...db.session import get_db
 from ...config.settings import get_settings
+
+# Get logger instance
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -28,38 +32,57 @@ async def health_check(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
     }
     
     # Check database connection
+    db_start_time = time.time()
     try:
+        logger.info("Health check: Attempting database connection check...")
         # Simple database query to verify connection
         result = await db.execute("SELECT 1")
         await result.fetchone()
+        db_latency = time.time() - db_start_time
         health_data["services"]["database"] = {
             "status": "up",
-            "latency_ms": round((time.time() - start_time) * 1000, 2)
+            "latency_ms": round(db_latency * 1000, 2)
         }
+        logger.info(f"Health check: Database connection successful (Latency: {db_latency*1000:.2f}ms)")
     except Exception as e:
+        db_latency = time.time() - db_start_time
+        logger.error(f"Health check: Database connection failed after {db_latency*1000:.2f}ms: {e}", exc_info=True) # Log exception info
         health_data["status"] = "degraded"
         health_data["services"]["database"] = {
             "status": "down",
-            "error": str(e)
+            "error": str(e),
+            "latency_ms": round(db_latency * 1000, 2) # Add latency even on failure
         }
     
     # Check Redis connection if used
+    redis_start_time = time.time()
     try:
         from ...utils.cache_utils import redis_client
-        redis_start_time = time.time()
+        logger.info("Health check: Attempting Redis connection check...")
         if await redis_client.ping():
             redis_latency = time.time() - redis_start_time
             health_data["services"]["redis"] = {
                 "status": "up",
                 "latency_ms": round(redis_latency * 1000, 2)
             }
+            logger.info(f"Health check: Redis connection successful (Latency: {redis_latency*1000:.2f}ms)")
         else:
+            # This case might not be hit if ping() raises an exception on failure, but included for completeness
+            redis_latency = time.time() - redis_start_time
+            logger.error(f"Health check: Redis ping failed after {redis_latency*1000:.2f}ms (returned False)")
             raise Exception("Redis ping failed")
+    except ImportError:
+        logger.warning("Health check: Redis client not found (cache_utils import failed). Skipping Redis check.")
+        # Optionally mark redis as 'not_configured' or similar if needed
+        pass # If redis is optional, don't mark status as degraded
     except Exception as e:
+        redis_latency = time.time() - redis_start_time
+        logger.error(f"Health check: Redis connection failed after {redis_latency*1000:.2f}ms: {e}", exc_info=True) # Log exception info
         health_data["status"] = "degraded"
         health_data["services"]["redis"] = {
             "status": "down",
-            "error": str(e)
+            "error": str(e),
+            "latency_ms": round(redis_latency * 1000, 2) # Add latency even on failure
         }
     
     # Add system resource metrics
@@ -71,9 +94,13 @@ async def health_check(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
     
     # Return 503 Service Unavailable if critical services are down
     if health_data["status"] != "healthy":
-        # Raise 503 if either DB or Redis is down
-        if (health_data["services"].get("database", {}).get("status") == "down" or
-            health_data["services"].get("redis", {}).get("status") == "down"):
+        # Raise 503 if either DB or Redis is down (and Redis is configured/expected)
+        db_down = health_data["services"].get("database", {}).get("status") == "down"
+        # Check if redis service exists in health_data before checking its status
+        redis_down = health_data["services"].get("redis", {}).get("status") == "down"
+
+        if db_down or redis_down:
+            logger.warning(f"Health check reporting unhealthy: DB Down={db_down}, Redis Down={redis_down}. Raising 503.")
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=health_data
