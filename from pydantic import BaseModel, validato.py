@@ -1,4 +1,4 @@
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, field_validator
 from typing import List
 
 class DeploymentValidation(BaseModel):
@@ -24,7 +24,7 @@ class DeploymentReadiness(BaseModel):
     test_status: TestValidation
     recommendations: List[str] = []
 
-    @validator('ready')
+    @field_validator('ready')
     def validate_complete_readiness(cls, v, values):
         if not v:
             return v

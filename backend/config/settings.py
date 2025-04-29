@@ -1,7 +1,7 @@
 import os
 from typing import Dict, Any, Optional, List, Callable, Tuple
 from pydantic_settings import BaseSettings, SettingsConfigDict  # Updated import for Pydantic v2
-from pydantic import Field, validator  # Keep these imports from pydantic
+from pydantic import Field, validator, field_validator  # Keep these imports from pydantic
 import logging
 from pathlib import Path
 import json
@@ -64,16 +64,26 @@ class APIKeys(BaseSettings):
     IEX_CLOUD_API_KEY: Optional[str] = Field(None, env="IEX_CLOUD_API_KEY")
     MARKETSTACK_API_KEY: Optional[str] = Field(None, env="MARKETSTACK_API_KEY")
     REACT_APP_BACKEND_URL: Optional[str] = Field(None, env="REACT_APP_BACKEND_URL")
-
-    # Additional fields to resolve validation errors
-    JWT_SECRET_KEY: Optional[str] = Field(None, env="JWT_SECRET_KEY")
-    JWT_ALGORITHM: Optional[str] = Field(None, env="JWT_ALGORITHM")
-    ACCESS_TOKEN_EXPIRE_MINUTES: Optional[int] = Field(None, env="ACCESS_TOKEN_EXPIRE_MINUTES")
-    REDIS_URL: Optional[str] = Field('redis://localhost:6379/0', env="REDIS_URL")
-    SLACK_WEBHOOK_URL: Optional[str] = Field(None, env="SLACK_WEBHOOK_URL")
-    EMAIL_NOTIFICATIONS: Optional[str] = Field(None, env="EMAIL_NOTIFICATIONS")
+    REDIS_URL: Optional[str] = Field(None, env="REDIS_URL")
     METRICS_PORT: Optional[int] = Field(None, env="METRICS_PORT")
     LOG_LEVEL: Optional[str] = Field(None, env="LOG_LEVEL")
+
+    # Additional fields to resolve validation errors
+    ENV: Optional[str] = Field(None, env="ENV")
+    PRIMARY_PROVIDER: Optional[str] = Field(None, env="PRIMARY_PROVIDER")
+    FALLBACK_PROVIDERS: Optional[str] = Field(None, env="FALLBACK_PROVIDERS")
+    MARKET_INDEX_SYMBOL: Optional[str] = Field(None, env="MARKET_INDEX_SYMBOL")
+    CACHE_TTL: Optional[int] = Field(None, env="CACHE_TTL")
+    REQUEST_TIMEOUT: Optional[int] = Field(None, env="REQUEST_TIMEOUT")
+    MAX_RETRIES: Optional[int] = Field(None, env="MAX_RETRIES")
+    RETRY_BACKOFF: Optional[float] = Field(None, env="RETRY_BACKOFF")
+    MARKET_HOURS_START: Optional[str] = Field(None, env="MARKET_HOURS_START")
+    MARKET_HOURS_END: Optional[str] = Field(None, env="MARKET_HOURS_END")
+    DB_HOST: Optional[str] = Field(None, env="DB_HOST")
+    DB_PORT: Optional[int] = Field(None, env="DB_PORT")
+    DB_NAME: Optional[str] = Field(None, env="DB_NAME")
+    DB_USER: Optional[str] = Field(None, env="DB_USER")
+    DB_PASSWORD: Optional[str] = Field(None, env="DB_PASSWORD")
 
     model_config = BaseSecretHandlingConfig.get_config_dict()
 
@@ -130,7 +140,7 @@ class DatabaseSettings(BaseSettings):
     POOL_SIZE: int = Field(5, env="DATABASE_POOL_SIZE")
     MAX_OVERFLOW: int = Field(10, env="DATABASE_MAX_OVERFLOW")
 
-    @validator("URL")
+    @field_validator("URL")
     def validate_database_url(cls, v):
         if not v or "your-database-url" in v:
             raise ValueError("DATABASE_URL must be set to a valid connection string")
@@ -332,7 +342,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env", 
         case_sensitive=True,
-        extra="ignore"  # Allow extra fields without validation errors
+        extra="allow"  # Allow extra fields without validation errors
     )
 
 

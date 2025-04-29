@@ -57,3 +57,6 @@ def cache_decorator(ttl: int = 3600):
                 return await func(*args, **kwargs)
         return wrapper
     return decorator
+
+# Export redis_client as an alias for get_redis_client
+redis_client = get_redis_client()
