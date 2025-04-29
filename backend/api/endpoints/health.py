@@ -50,10 +50,16 @@ async def health_check(
     status_code = 200 if db_ok and redis_ok else 503 # Service Unavailable
 
     response = {
-        "status": "ok" if db_ok and redis_ok else "error",
-        "details": {
-            "database": {"status": "ok" if db_ok else "error", "latency_ms": f"{db_latency:.2f}"},
-            "cache": {"status": "ok" if redis_ok else "error", "latency_ms": f"{redis_latency:.2f}"}
+        "status": "healthy" if db_ok and redis_ok else "unhealthy",
+        "services": {
+            "database": {
+                "status": "healthy" if db_ok else "unhealthy",
+                "latency_ms": f"{db_latency:.2f}"
+            },
+            "redis": {
+                "status": "healthy" if redis_ok else "unhealthy",
+                "latency_ms": f"{redis_latency:.2f}"
+            }
         },
         "total_latency_ms": f"{total_latency:.2f}"
     }
