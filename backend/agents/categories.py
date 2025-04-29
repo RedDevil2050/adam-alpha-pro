@@ -234,8 +234,13 @@ class CategoryManager:
         return [cat for cat in CategoryType if cls.CATEGORY_METADATA[cat].required]
 
     @classmethod
-    def get_dependencies(cls, category: CategoryType) -> List[CategoryType]:
-        return cls.CATEGORY_METADATA[category].dependencies
+    def get_dependencies(cls, category: CategoryType) -> List[str]: # Return uppercase names
+        """Get the list of dependency category names (uppercase strings)."""
+        metadata = cls.CATEGORY_METADATA.get(category)
+        if metadata and metadata.dependencies:
+            # Directly return the names stored in metadata
+            return metadata.dependencies
+        return []
 
     @classmethod
     def get_registered_agents(cls, category: CategoryType) -> List[str]:

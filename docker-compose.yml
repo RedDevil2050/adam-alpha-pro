@@ -1,3 +1,5 @@
+version: '3.8'  # Specify the version of docker-compose
+
 services:
   backend:
     container_name: zion-backend
@@ -10,6 +12,12 @@ services:
       - .:/app
     environment:
       - ENV=development
+    depends_on:
+      - redis
+      - db       # Also good to wait for the DB
+    networks:
+      - app-network
+    command: ["python", "run.py"]
 
   frontend:
     container_name: zion-frontend
@@ -17,7 +25,9 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "3000:80"  # Changed from 3000:3000 to map host 3000 to container 80 (Nginx)
+      - "3000:80"
+    networks:
+      - app-network
 
   db:
     container_name: zion-db
@@ -30,6 +40,8 @@ services:
       - "5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
+    networks:
+      - app-network
 
   redis:
     container_name: zion-redis
@@ -37,6 +49,15 @@ services:
     ports:
       - "6379:6379"
     command: ["redis-server", "--appendonly", "yes"]
+    networks:
+      - app-network
+    volumes:
+      - redis_data:/data
 
 volumes:
   db_data:
+  redis_data: {} # Define the redis volume
+
+networks:
+  app-network:
+    driver: bridge

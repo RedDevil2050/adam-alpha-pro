@@ -127,10 +127,26 @@ class SystemOrchestrator:
     def _build_dependency_graph(self) -> Dict[str, List[str]]:
         """Build category dependency graph"""
         dependencies = {}
-        for category in CategoryType:
-            deps = self.category_manager.get_dependencies(category)
-            # Convert dependency strings to CategoryType values
-            dependencies[category.value] = [CategoryType[d].value for d in deps]
+        for category_enum_member in CategoryType: # Iterate through Enum members
+            # Get dependency names (e.g., ["MARKET", "TECHNICAL"])
+            dep_names = self.category_manager.get_dependencies(category_enum_member)
+            dep_values = []
+            for name in dep_names:
+                try:
+                    # Look up Enum member by name (e.g., CategoryType["MARKET"])
+                    dependency_enum_member = CategoryType[name]
+                    # Get the value of the Enum member (e.g., "market")
+                    dep_values.append(dependency_enum_member.value)
+                except KeyError:
+                    # Log error if a dependency name doesn't match an Enum member
+                    logger.error(
+                        f"Invalid category dependency name '{name}' found for {category_enum_member.name}"
+                    )
+                    # Decide how to handle: skip, raise, etc. Skipping for now.
+                    continue
+            # Map the *value* of the current category (e.g., "valuation")
+            # to the list of dependency *values* (e.g., ["market", "technical"])
+            dependencies[category_enum_member.value] = dep_values
         return dependencies
 
     async def _get_cached_analysis(self, symbol: str) -> Optional[Dict]:

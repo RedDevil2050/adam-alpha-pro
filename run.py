@@ -259,28 +259,32 @@ except ImportError as e:
 
 async def main():
     try:
+        # Initialize system first
         orchestrator, monitor = await initialize_system()
         
-        # Add system components to app state
-        if hasattr(app, 'state'):
-            app.state.orchestrator = orchestrator
-            app.state.monitor = monitor
-        else:
-            logger.warning("app.state is not available. Cannot assign orchestrator and monitor.")
-        
+        # The FastAPI app object is imported, but Uvicorn needs the string path
+        app_module_path = "backend.api.main:app" 
+
         # Start uvicorn server
         config = uvicorn.Config(
-            app=app,
+            app=app_module_path, # Use the string path for Uvicorn
             host="0.0.0.0",
             port=8000,
-            reload=True,
+            reload=False, # Set reload to False for Docker stability
             log_level="info"
         )
         server = uvicorn.Server(config)
+
+        # Accessing app.state before server starts is unreliable.
+        # If you need to pass orchestrator/monitor, consider dependency injection
+        # or accessing state within request handlers after the app starts.
+        # logger.info("Orchestrator and monitor initialized, starting server...")
+
         await server.serve()
         
     except Exception as e:
         logger.error(f"System launch failed: {e}")
+        # Optionally: Add more specific error handling or cleanup
         raise
 
 if __name__ == "__main__":
