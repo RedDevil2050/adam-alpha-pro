@@ -1,5 +1,5 @@
 # Use Alpine-based Python image for a smaller attack surface
-FROM python:3.12-alpine
+FROM python:3.13-alpine
 
 # Set the working directory in the container
 WORKDIR /app
@@ -8,7 +8,7 @@ WORKDIR /app
 COPY requirements.txt ./
 
 # Install the dependencies
-RUN pip install --upgrade setuptools pkg_resources
+RUN pip install --upgrade setuptools
 
 # Copy the rest of the application code into the container
 COPY . .

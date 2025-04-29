@@ -1,12 +1,13 @@
 import sys
 import subprocess
-import pkg_resources
 import time
 import os
 import tempfile
 import ssl
 import shutil
 import socket
+import pkg_resources
+from importlib.metadata import version, PackageNotFoundError
 
 def check_network():
     dns_servers = [
@@ -24,8 +25,8 @@ def check_network():
 
 def verify_installation(package_name):
     try:
-        return pkg_resources.get_distribution(package_name)
-    except pkg_resources.DistributionNotFound:
+        return version(package_name)
+    except PackageNotFoundError:
         return None
 
 def check_dependencies():
