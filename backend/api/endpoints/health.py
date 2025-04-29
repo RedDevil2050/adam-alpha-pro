@@ -8,13 +8,11 @@ import time
 import logging
 
 logger = logging.getLogger(__name__)
+router = APIRouter(tags=["health"])
 
-router = APIRouter()
-
-@router.get("/health", tags=["system"])
+@router.get("/health")
 async def health_check(
-    db: AsyncSession = Depends(get_db),
-    redis_client: redis.Redis = Depends(get_redis_client)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Performs health checks on critical system components (DB, Cache).
@@ -33,21 +31,27 @@ async def health_check(
         logger.debug("Database connection successful.")
     except Exception as e:
         logger.error(f"Database health check failed: {e}")
-    db_latency = (time.monotonic() - db_check_start) * 1000 # milliseconds
+    db_latency = (time.monotonic() - db_check_start) * 1000  # milliseconds
 
     # Check Redis Connection
     redis_check_start = time.monotonic()
     try:
-        await redis_client.ping()
-        redis_ok = True
+        redis_client = get_redis_client()
+        # Try to set and get a test value
+        test_key = "health_check_test"
+        test_value = "ok"
+        redis_client.set(test_key, test_value)
+        result = redis_client.get(test_key)
+        redis_client.delete(test_key)
+        redis_ok = result == test_value
         logger.debug("Redis connection successful.")
     except Exception as e:
         logger.error(f"Redis health check failed: {e}")
-    redis_latency = (time.monotonic() - redis_check_start) * 1000 # milliseconds
+    redis_latency = (time.monotonic() - redis_check_start) * 1000  # milliseconds
 
     total_latency = (time.monotonic() - start_time) * 1000
 
-    status_code = 200 if db_ok and redis_ok else 503 # Service Unavailable
+    status_code = 200 if db_ok and redis_ok else 503  # Service Unavailable
 
     response = {
         "status": "healthy" if db_ok and redis_ok else "unhealthy",

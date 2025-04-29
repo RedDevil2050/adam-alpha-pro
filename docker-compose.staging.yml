@@ -12,6 +12,7 @@ services:
       - "8000:8000"
     volumes:
       - .:/app
+    command: uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 --reload
     depends_on:
       - redis
       - postgres
@@ -82,7 +83,7 @@ services:
     depends_on:
       - prometheus
     ports:
-      - "3000:3000"
+      - "3001:3000"  # Changed from 3000:3000 to avoid conflict
     volumes:
       - ./monitoring/grafana/dashboards:/etc/grafana/dashboards
       - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources

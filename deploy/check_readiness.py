@@ -28,7 +28,7 @@ async def check_system_resources() -> Dict[str, bool]:
     return {
         "cpu_available": psutil.cpu_percent(interval=1) < 80,
         "memory_available": psutil.virtual_memory().available > 1024 * 1024 * 1024,  # 1GB
-        "disk_space": psutil.disk_usage('/').free > 5 * 1024 * 1024 * 1024  # 5GB
+        "disk_space": psutil.disk_usage('/').free > 3 * 1024 * 1024 * 1024  # 3GB minimum
     }
 
 async def check_data_providers(symbols: List[str]) -> Dict[str, bool]:

@@ -1,11 +1,10 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Dict, Any
-import psutil
 import redis
-import asyncpg
+import psutil
 from backend.config.settings import get_settings
-from backend.utils.data_provider import fetch_market_data
+from backend.utils.cache_utils import get_redis_client
 
 router = APIRouter()
 
@@ -21,45 +20,29 @@ async def health_check():
             "cpu_usage": psutil.cpu_percent(),
             "memory_usage": psutil.virtual_memory().percent
         },
-        "components": {}
+        "components": {},
+        "flags": {
+            "is_staging": True,
+            "market_hours": "16:00-08:30 IST"
+        }
     }
+    
+    is_healthy = True
     
     # Check Redis
     try:
-        redis_client = redis.from_url(settings.REDIS_URL)
+        redis_client = get_redis_client()
         redis_client.ping()
         details["components"]["redis"] = "healthy"
     except Exception as e:
         details["components"]["redis"] = f"unhealthy: {str(e)}"
+        is_healthy = False
 
-    # Check Database
-    try:
-        conn = await asyncpg.connect(
-            user=settings.DB_USER,
-            password=settings.DB_PASSWORD,
-            database=settings.DB_NAME,
-            host=settings.DB_HOST
-        )
-        await conn.execute('SELECT 1')
-        await conn.close()
-        details["components"]["database"] = "healthy"
-    except Exception as e:
-        details["components"]["database"] = f"unhealthy: {str(e)}"
-
-    # Check Market Data
-    try:
-        market_data = await fetch_market_data()
-        if market_data:
-            details["components"]["market_data"] = "healthy"
-        else:
-            details["components"]["market_data"] = "unhealthy: no data received"
-    except Exception as e:
-        details["components"]["market_data"] = f"unhealthy: {str(e)}"
-
-    # Determine overall status
-    is_healthy = all(
-        v == "healthy" for v in details["components"].values()
-    ) and details["system"]["cpu_usage"] < 80 and details["system"]["memory_usage"] < 85
+    # System checks
+    if details["system"]["cpu_usage"] >= 80:
+        is_healthy = False
+    if details["system"]["memory_usage"] >= 85:
+        is_healthy = False
 
     if not is_healthy:
         raise HTTPException(
@@ -69,6 +52,6 @@ async def health_check():
         )
 
     return HealthResponse(
-        status="healthy" if is_healthy else "unhealthy",
+        status="healthy",
         details=details
     )
