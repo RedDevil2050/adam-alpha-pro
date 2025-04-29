@@ -43,7 +43,7 @@ class DeploymentValidator:
         """Check if the health endpoint returns a healthy status"""
         logger.info("Checking health endpoint...")
         try:
-            health_url = urljoin(self.base_url, "/api/v1/health")
+            health_url = urljoin(self.base_url, "/api/v1/health") # Original path
             response = requests.get(health_url, timeout=self.timeout)
             response.raise_for_status()
             health_data = response.json()

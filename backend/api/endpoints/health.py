@@ -46,8 +46,9 @@ async def health_check(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
     # Check Redis connection if used
     try:
         from ...utils.cache_utils import redis_client
+        redis_start_time = time.time()
         if await redis_client.ping():
-            redis_latency = await redis_client.ping(['PONG'])
+            redis_latency = time.time() - redis_start_time
             health_data["services"]["redis"] = {
                 "status": "up",
                 "latency_ms": round(redis_latency * 1000, 2)
@@ -70,7 +71,9 @@ async def health_check(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
     
     # Return 503 Service Unavailable if critical services are down
     if health_data["status"] != "healthy":
-        if health_data["services"].get("database", {}).get("status") == "down":
+        # Raise 503 if either DB or Redis is down
+        if (health_data["services"].get("database", {}).get("status") == "down" or
+            health_data["services"].get("redis", {}).get("status") == "down"):
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=health_data

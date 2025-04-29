@@ -1,4 +1,4 @@
-version: '3.8'  # Specify the version of docker-compose
+# Specify the version of docker-compose
 
 services:
   backend:
@@ -12,9 +12,13 @@ services:
       - .:/app
     environment:
       - ENV=development
+      - DATABASE_URL=postgresql+asyncpg://user:password@db:5432/app_db # Added DB URL
+      - REDIS_URL=redis://redis:6379/0 # Added Redis URL
     depends_on:
-      - redis
-      - db       # Also good to wait for the DB
+      db: # Use service condition for better readiness check
+        condition: service_healthy
+      redis: # Use service condition for better readiness check
+        condition: service_started
     networks:
       - app-network
     command: ["python", "run.py"]
@@ -42,6 +46,11 @@ services:
       - db_data:/var/lib/postgresql/data
     networks:
       - app-network
+    healthcheck: # Added healthcheck for Postgres
+      test: ["CMD-SHELL", "pg_isready -U user -d app_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     container_name: zion-redis
@@ -53,6 +62,11 @@ services:
       - app-network
     volumes:
       - redis_data:/data
+    healthcheck: # Added healthcheck for Redis
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   db_data:
