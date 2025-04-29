@@ -7,7 +7,8 @@ import ssl
 import shutil
 import socket
 import pkg_resources
-from importlib.metadata import version, PackageNotFoundError
+from importlib.metadata import version, PackageNotFoundError, distributions
+from packaging.version import parse as parse_version
 
 def check_network():
     dns_servers = [
@@ -96,7 +97,7 @@ def check_dependencies():
 
     try:
         import pip
-        if pkg_resources.parse_version(pip.__version__) < pkg_resources.parse_version('21.0'):
+        if parse_version(pip.__version__) < parse_version('21.0'):
             raise ImportError("Pip version too old")
     except ImportError:
         print("pip is not installed or outdated. Installing/upgrading pip...")
@@ -168,13 +169,14 @@ def check_dependencies():
     
     try:
         installed = {}
-        for pkg in pkg_resources.working_set:
+        installed_packages = {dist.metadata['Name']: dist.metadata['Version'] for dist in distributions() if hasattr(dist.metadata, 'Name') and hasattr(dist.metadata, 'Version')}
+        for pkg, ver in installed_packages.items():
             try:
                 # Normalize package names and handle multiple formats
-                name = pkg.key.replace('-', '_').lower()
-                installed[name] = pkg.version
+                name = pkg.replace('-', '_').lower()
+                installed[name] = ver
                 if name in pkg_mapping:
-                    installed[pkg_mapping[name]] = pkg.version
+                    installed[pkg_mapping[name]] = ver
             except Exception as e:
                 print(f"Warning: Error processing package {pkg}: {e}")
                 continue
@@ -190,7 +192,7 @@ def check_dependencies():
             try:
                 if check_name not in installed:
                     missing.append(package)
-                elif pkg_resources.parse_version(installed[check_name]) < pkg_resources.parse_version(min_version):
+                elif parse_version(installed[check_name]) < parse_version(min_version):
                     outdated.append(package)
             except (TypeError, ValueError) as e:
                 print(f"Warning: Version comparison failed for {package}: {e}")
