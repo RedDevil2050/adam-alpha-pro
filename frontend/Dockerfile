@@ -1,8 +1,8 @@
-# Use the recommended Node.js tag for stability and security
-FROM node:23-slim AS build
+# Use a specific Node.js v22 Alpine tag with fewer known vulnerabilities
+FROM node:22.15.0-alpine AS build
 
-# Update and install security patches
-RUN apt-get update && apt-get upgrade -y && apt-get install -y bash && rm -rf /var/lib/apt/lists/*
+# Update and install security patches (using apk for alpine)
+RUN apk update && apk upgrade --no-cache && apk add --no-cache bash
 
 # Set NODE_ENV to production for optimized builds
 ENV NODE_ENV=production
@@ -18,6 +18,9 @@ RUN npm install
 
 # Copy the rest of the application to the working directory
 COPY . .
+
+# Add this line to enable legacy OpenSSL provider as a workaround (needed for Node >= 17)
+ENV NODE_OPTIONS=--openssl-legacy-provider
 
 # Build the application for production
 RUN npm run build
