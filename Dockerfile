@@ -1,11 +1,11 @@
 # Use Alpine-based Python image for a smaller attack surface
-FROM python:3.12-alpine
+FROM python:3.13-alpine
 
 # Set the working directory in the container
 WORKDIR /app
 
 # Copy the requirements file into the container
-COPY requirements.txt ./
+COPY requirements.txt ./ 
 
 # Install necessary build tools for Python package compilation
 RUN apk add --no-cache gcc musl-dev linux-headers python3-dev
