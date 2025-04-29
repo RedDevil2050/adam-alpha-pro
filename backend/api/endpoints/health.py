@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from backend.database.db import get_db # Use absolute import from project root
+from sqlalchemy import text
+from backend.db.session import get_db
 import redis.asyncio as redis
-from backend.utils.cache_utils import get_redis_client # Use absolute import from project root
+from backend.utils.cache_utils import get_redis_client
 import time
 import logging
 
@@ -27,8 +28,7 @@ async def health_check(
     # Check Database Connection
     db_check_start = time.monotonic()
     try:
-        # Execute a simple query
-        await db.execute("SELECT 1")
+        await db.execute(text("SELECT 1"))
         db_ok = True
         logger.debug("Database connection successful.")
     except Exception as e:
