@@ -49,14 +49,33 @@ class GeminiProvider(AIProvider):
             return resp.json()
 
 
+class LovableProvider(AIProvider):
+    def __init__(self, api_key: str, model: str = "lovable-ai"):
+        self.api_key = api_key
+        self.model = model
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=5))
+    @circuit(failure_threshold=2, recovery_timeout=60)
+    async def call(self, prompt: str, **kwargs) -> dict:
+        headers = {"Authorization": f"Bearer {self.api_key}"}
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                f"https://api.lovable.ai/v1/{self.model}/completions",
+                json={"prompt": prompt, **kwargs},
+                headers=headers,
+            )
+            resp.raise_for_status()
+            return resp.json()
+
+
 # Additional providers can be added similarly
 PROVIDERS = {
     "openai": OpenAIProvider,
     "gemini": GeminiProvider,
+    "lovable": LovableProvider,
     # "perplexity": PerplexityProvider,
     # "depseek": DepseekProvider,
     # "aistudio": AIStudioProvider,
     # "firebase": FirebaseMLProvider,
-    # "lovable": LovableProvider,
     # "redisai": RedisAIProvider,
 }

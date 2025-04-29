@@ -129,7 +129,8 @@ class SystemOrchestrator:
         dependencies = {}
         for category in CategoryType:
             deps = self.category_manager.get_dependencies(category)
-            dependencies[category.value] = [d.value for d in deps]
+            # Convert dependency strings to CategoryType values
+            dependencies[category.value] = [CategoryType[d].value for d in deps]
         return dependencies
 
     async def _get_cached_analysis(self, symbol: str) -> Optional[Dict]:

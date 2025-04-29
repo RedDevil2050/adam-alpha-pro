@@ -249,8 +249,8 @@ class Settings(BaseSettings):
     DEBUG: bool = Field(default=True, env="DEBUG")
     HOST: str = Field(default="0.0.0.0", env="HOST")
     PORT: int = Field(default=8000, env="PORT")
-    # Add ALLOWED_ORIGINS for CORS configuration
-    ALLOWED_ORIGINS: List[str] = Field(default=["*"], env="ALLOWED_ORIGINS") # Default to allow all for dev/test
+    # Update ALLOWED_ORIGINS to include the specific URL of the lovable frontend
+    ALLOWED_ORIGINS: List[str] = Field(default=["http://lovable-frontend-url.com"], env="ALLOWED_ORIGINS")
 
     # Nested settings
     api_keys: APIKeys = APIKeys()

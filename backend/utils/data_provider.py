@@ -674,9 +674,9 @@ async def fetch_historical_price_series(symbol: str, years: int = 5) -> pd.Serie
             period = "10y"
 
         # Get historical prices
-        history_data = await fetch_historical_prices(symbol, period)
+        history_data = await fetch_price_series(symbol, period)
 
-        if not history_data or "dates" not in history_data or not history_data["dates"]:
+        if history_data.empty or history_data.index.empty:
             logger.warning(f"No historical price data found for {symbol}")
             return None
 
@@ -701,7 +701,7 @@ async def fetch_historical_price_series(symbol: str, years: int = 5) -> pd.Serie
 
 
 @async_retry(max_retries=2, base_delay=1.0, max_delay=5.0)
-async def fetch_book_value(symbol: str) -> float | None:
+async def fetch_book_value(symbol: str) -> Union[float, None]:
     """
     Fetch the latest book value per share for a company.
 
