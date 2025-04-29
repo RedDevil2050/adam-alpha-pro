@@ -1,7 +1,6 @@
 from typing import Dict, List, Optional
 from backend.agents.categories import CategoryManager, CategoryType
-from backend.utils.monitoring import SystemMonitor
-from backend.utils.cache_utils import redis_client
+from backend.utils.system_monitor import SystemMonitor
 from backend.utils.metrics_collector import MetricsCollector
 from datetime import datetime
 import asyncio
@@ -9,29 +8,37 @@ from loguru import logger
 
 
 class SystemOrchestrator:
-    def __init__(self):
+    def __init__(self, cache_client):
         self.category_manager = CategoryManager()
-        self.system_monitor = SystemMonitor()
-        self.metrics_collector = MetricsCollector()
-        self.cache = redis_client
-        self._initialize_system()
+        self.cache = cache_client
+        self.category_dependencies: Dict[str, List[str]] = {}
 
-    def _initialize_system(self):
-        """Initialize system components and verify connections"""
-        self.system_monitor.register_component("orchestrator")
-        self.category_dependencies = self._build_dependency_graph()
-        logger.info("System orchestrator initialized")
+    async def initialize(self, monitor: SystemMonitor):
+        """Initialize orchestrator components and update status."""
+        component_name = "orchestrator"
+        try:
+            self.category_dependencies = self._build_dependency_graph()
+            # Add any other orchestrator-specific async setup here
+            # await some_orchestrator_setup()
+            logger.info("System orchestrator initialized")
+            monitor.update_component_status(component_name, "healthy")
+        except Exception as e:
+            logger.error(f"Orchestrator initialization failed: {e}")
+            monitor.update_component_status(component_name, "failed")
+            raise
 
     async def analyze_symbol(
         self,
         symbol: str,
+        monitor: SystemMonitor,
+        metrics_collector: MetricsCollector,
         categories: Optional[List[str]] = None,
         force_refresh: bool = False,
     ) -> Dict:
         """Run full analysis with advanced caching and error recovery"""
         analysis_id = f"{symbol}_{datetime.now().timestamp()}"
         try:
-            self.system_monitor.start_analysis(analysis_id)
+            monitor.start_analysis(analysis_id)
 
             # Check cache if not forced refresh
             if not force_refresh:
@@ -56,7 +63,7 @@ class SystemOrchestrator:
                     executed_categories.add(category)
 
                     # Collect metrics
-                    self.metrics_collector.record_category_execution(
+                    metrics_collector.record_category_execution(
                         category,
                         len(category_result),
                         bool(category_result.get("error")),
@@ -68,29 +75,29 @@ class SystemOrchestrator:
 
             # Generate final verdict
             final_verdict = self._generate_composite_verdict(results)
-            system_health = self.system_monitor.get_health_metrics()
+            system_health = monitor.get_health_metrics()
 
             # Cache results
             await self._cache_analysis(symbol, final_verdict)
 
-            self.system_monitor.end_analysis(analysis_id, "success")
+            monitor.end_analysis(analysis_id, "success")
             return {
                 "symbol": symbol,
                 "analysis_id": analysis_id,
                 "verdict": final_verdict,
                 "category_results": results,
                 "system_health": system_health,
-                "execution_metrics": self.metrics_collector.get_metrics(),
+                "execution_metrics": metrics_collector.get_metrics(),
             }
 
         except Exception as e:
-            self.system_monitor.end_analysis(analysis_id, "error")
+            monitor.end_analysis(analysis_id, "error")
             logger.error(f"System analysis failed for {symbol}: {e}")
             return {
                 "symbol": symbol,
                 "analysis_id": analysis_id,
                 "error": str(e),
-                "system_health": self.system_monitor.get_health_metrics(),
+                "system_health": monitor.get_health_metrics(),
             }
 
     async def _execute_category_with_retry(
@@ -127,7 +134,7 @@ class SystemOrchestrator:
     def _build_dependency_graph(self) -> Dict[str, List[str]]:
         """Build category dependency graph"""
         dependencies = {}
-        for category_enum_member in CategoryType: # Iterate through Enum members
+        for category_enum_member in CategoryType:  # Iterate through Enum members
             # Get dependency names (e.g., ["MARKET", "TECHNICAL"])
             dep_names = self.category_manager.get_dependencies(category_enum_member)
             dep_values = []
@@ -152,12 +159,27 @@ class SystemOrchestrator:
     async def _get_cached_analysis(self, symbol: str) -> Optional[Dict]:
         """Get cached analysis if available"""
         cache_key = f"analysis:{symbol}"
-        return await self.cache.get(cache_key)
+        cached_data = await self.cache.get(cache_key)
+        if cached_data:
+            # Assuming data is stored as JSON string
+            import json
+
+            try:
+                return json.loads(cached_data)
+            except json.JSONDecodeError:
+                logger.warning(f"Failed to decode cached JSON for {symbol}")
+                return None
+        return None
 
     async def _cache_analysis(self, symbol: str, analysis: Dict):
         """Cache analysis results"""
         cache_key = f"analysis:{symbol}"
-        await self.cache.set(cache_key, analysis, ex=3600)  # 1 hour expiry
+        import json
+
+        try:
+            await self.cache.set(cache_key, json.dumps(analysis), ex=3600)  # 1 hour expiry
+        except Exception as e:
+            logger.error(f"Failed to cache analysis for {symbol}: {e}")
 
     def _get_default_categories(self) -> List[str]:
         """Get default categories for analysis"""
