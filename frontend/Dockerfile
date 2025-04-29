@@ -1,11 +1,11 @@
-# Use an official Node.js runtime as a parent image
-FROM node:20-bullseye-slim AS build
+# Use the latest digest for Node.js 23-slim
+FROM node:23-slim AS build
 
 # Update and install security patches
-RUN apt-get update && apt-get upgrade -y && apt-get clean
+RUN apt-get update && apt-get upgrade -y && apt-get install -y bash && rm -rf /var/lib/apt/lists/*
 
-# Update and install security patches
-RUN apt-get update && apt-get upgrade -y && apt-get clean
+# Set NODE_ENV to production for optimized builds
+ENV NODE_ENV=production
 
 # Set the working directory in the container
 WORKDIR /app
