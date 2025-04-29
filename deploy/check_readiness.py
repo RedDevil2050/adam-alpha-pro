@@ -11,11 +11,17 @@ from datetime import datetime, time as dt_time
 from typing import Dict, List, Any
 
 async def check_market_hours() -> bool:
-    """Check if current time is within staging hours (4 PM - 8 PM IST)"""
+    """Check if current time is within staging hours (4 PM - 8:30 AM IST next day)"""
     current_time = datetime.now().time()
     start = dt_time(16, 0)  # 4 PM
-    end = dt_time(20, 0)    # 8 PM
-    return start <= current_time <= end
+    end = dt_time(8, 30)    # 8:30 AM
+
+    # If end time is earlier than start time, it means the period crosses midnight
+    if end < start:
+        # Return True if time is after start OR before end
+        return current_time >= start or current_time <= end
+    else:
+        return start <= current_time <= end
 
 async def check_system_resources() -> Dict[str, bool]:
     """Verify system resources meet minimum requirements"""
@@ -68,7 +74,7 @@ async def main():
     
     # Check market hours
     if not await check_market_hours():
-        print("❌ Outside staging hours (4 PM - 8 PM IST)")
+        print("❌ Outside staging hours (4 PM - 8:30 AM IST)")
         return False
 
     # Check system resources
