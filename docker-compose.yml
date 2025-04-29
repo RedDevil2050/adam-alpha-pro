@@ -1,5 +1,6 @@
 services:
-  app:
+  backend:
+    container_name: zion-backend
     build:
       context: .
       dockerfile: Dockerfile
@@ -10,7 +11,20 @@ services:
     environment:
       - ENV=development
 
+  frontend:
+    container_name: zion-frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+    environment:
+      - REACT_APP_BACKEND_URL=http://localhost:8000
+
   db:
+    container_name: zion-db
     image: postgres:13
     environment:
       POSTGRES_USER: user
@@ -22,6 +36,7 @@ services:
       - db_data:/var/lib/postgresql/data
 
   redis:
+    container_name: zion-redis
     image: redis:6.2
     ports:
       - "6379:6379"
