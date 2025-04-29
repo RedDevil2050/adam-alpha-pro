@@ -1,4 +1,4 @@
-# Use the latest digest for Node.js 23-slim
+# Use the recommended Node.js tag for stability and security
 FROM node:23-slim AS build
 
 # Update and install security patches
@@ -22,10 +22,10 @@ COPY . .
 # Build the application for production
 RUN npm run build
 
-# Use a lightweight web server to serve the production build
+# Use Nginx to serve the production build
 FROM nginx:alpine
 
-# Copy the production build from the previous stage
+# Copy the production build from the build stage
 COPY --from=build /app/build /usr/share/nginx/html
 
 # Expose the port the app runs on
