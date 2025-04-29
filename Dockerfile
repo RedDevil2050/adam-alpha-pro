@@ -7,8 +7,15 @@ WORKDIR /app
 # Copy the requirements file into the container
 COPY requirements.txt ./
 
-# Install the dependencies
-RUN pip install --upgrade setuptools
+# Install necessary build tools for Alpine
+RUN apk add --no-cache gcc musl-dev linux-headers
+
+# Install dependencies from requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Use a virtual environment for better isolation
+RUN python -m venv /app/venv
+ENV PATH="/app/venv/bin:$PATH"
 
 # Copy the rest of the application code into the container
 COPY . .
