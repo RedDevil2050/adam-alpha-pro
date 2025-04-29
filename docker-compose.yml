@@ -17,11 +17,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
-    volumes:
-      - ./frontend:/app
-    environment:
-      - REACT_APP_BACKEND_URL=http://localhost:8000
+      - "3000:80"  # Changed from 3000:3000 to map host 3000 to container 80 (Nginx)
 
   db:
     container_name: zion-db
