@@ -43,6 +43,7 @@ azure-keyvault>=4.2.0
 pyjwt>=2.8.0
 aioredis>=2.0.1
 circuitbreaker>=1.4.0
+psutil
 
 # Data visualization
 matplotlib>=3.7.2

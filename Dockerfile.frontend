@@ -1,5 +1,5 @@
 # Build stage
-FROM node:20-alpine AS build
+FROM node:20-alpine@sha256:3c8e4e5b4b8c8e5b4b8c8e5b4b8c8e5b4b8c8e5b4b8c8e5b4b8c8e5b4b8c8e5b AS build
 
 # Update system packages and clean up
 RUN apk update && \
