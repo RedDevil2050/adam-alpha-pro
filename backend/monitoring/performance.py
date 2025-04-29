@@ -1,5 +1,31 @@
 from prometheus_client import Counter, Histogram, Gauge
 
+# Data collection resilience metrics
+DATA_COLLECTION_ATTEMPTS = Counter(
+    "data_collection_attempts_total",
+    "Total number of data collection attempts",
+    ["symbol", "data_type"]
+)
+
+DATA_SOURCE_SWITCHES = Counter(
+    "data_source_switches_total",
+    "Number of times collection switched from API to scraping",
+    ["symbol", "from_source", "to_source"]
+)
+
+DATA_QUALITY_GAUGE = Gauge(
+    "data_quality",
+    "Quality/confidence level of collected data",
+    ["symbol", "data_type", "source"]
+)
+
+COLLECTION_LATENCY = Histogram(
+    "data_collection_latency_seconds",
+    "Latency for data collection including fallbacks",
+    ["symbol", "data_type", "final_source"],
+    buckets=[0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0]
+)
+
 # Scraping failure metrics
 SCRAPING_FAILURES = Counter(
     "scraping_failures_total",
@@ -108,3 +134,28 @@ def record_agent_failure(agent_name: str, category: str, error_type: str):
     AGENT_EXECUTION_FAILURES.labels(
         agent_name=agent_name, category=category, error_type=error_type
     ).inc()
+
+
+def record_collection_attempt(symbol: str, data_type: str):
+    """Record a data collection attempt"""
+    DATA_COLLECTION_ATTEMPTS.labels(symbol=symbol, data_type=data_type).inc()
+
+def record_source_switch(symbol: str, from_source: str, to_source: str):
+    """Record when collection switches from one source to another"""
+    DATA_SOURCE_SWITCHES.labels(
+        symbol=symbol,
+        from_source=from_source,
+        to_source=to_source
+    ).inc()
+
+def record_data_quality(symbol: str, data_type: str, source: str, confidence: float):
+    """Record the quality/confidence of collected data"""
+    DATA_QUALITY_GAUGE.labels(symbol=symbol, data_type=data_type, source=source).set(confidence)
+
+def record_collection_latency(symbol: str, data_type: str, source: str, duration: float):
+    """Record the total time taken to collect data"""
+    COLLECTION_LATENCY.labels(
+        symbol=symbol,
+        data_type=data_type,
+        final_source=source
+    ).observe(duration)

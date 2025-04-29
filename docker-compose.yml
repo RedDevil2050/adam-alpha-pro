@@ -1,77 +1,57 @@
-# Specify the version of docker-compose
+version: '3.8'
 
 services:
   backend:
-    container_name: zion-backend
     build:
       context: .
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
-    volumes:
-      - .:/app
-    environment:
-      - ENV=development
-      - DATABASE_URL=postgresql+asyncpg://user:password@db:5432/app_db # Added DB URL
-      - REDIS_URL=redis://redis:6379/0 # Added Redis URL
+    env_file:
+      - deploy/staging-config.env
+      - api_keys.env
     depends_on:
-      db: # Use service condition for better readiness check
-        condition: service_healthy
-      redis: # Use service condition for better readiness check
-        condition: service_started
-    networks:
-      - app-network
-    command: ["python", "run.py"]
+      - redis
+      - postgres
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
 
-  frontend:
-    container_name: zion-frontend
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+  redis:
+    image: redis:alpine
     ports:
-      - "3000:80"
-    networks:
-      - app-network
+      - "6379:6379"
 
-  db:
-    container_name: zion-db
+  postgres:
     image: postgres:13
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: app_db
+      POSTGRES_DB: zion_staging
+      POSTGRES_USER: zion_staging
+      POSTGRES_PASSWORD: staging_pass
     ports:
       - "5432:5432"
     volumes:
-      - db_data:/var/lib/postgresql/data
-    networks:
-      - app-network
-    healthcheck: # Added healthcheck for Postgres
-      test: ["CMD-SHELL", "pg_isready -U user -d app_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - postgres_data:/var/lib/postgresql/data
 
-  redis:
-    container_name: zion-redis
-    image: redis:6.2
+  prometheus:
+    image: prom/prometheus
     ports:
-      - "6379:6379"
-    command: ["redis-server", "--appendonly", "yes"]
-    networks:
-      - app-network
+      - "9090:9090"
     volumes:
-      - redis_data:/data
-    healthcheck: # Added healthcheck for Redis
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - ./monitoring/prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./monitoring/grafana:/etc/grafana
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
 
 volumes:
-  db_data:
-  redis_data: {} # Define the redis volume
-
-networks:
-  app-network:
-    driver: bridge
+  postgres_data:
+  prometheus_data:
+  grafana_data:
