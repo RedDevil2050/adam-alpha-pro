@@ -1,30 +1,29 @@
-# Use Alpine-based Python image for a smaller attack surface
-FROM python:3.13-alpine
+# Define an ARG with a default value for the base image tag
+ARG TAG=3.12-slim
+FROM python:${TAG}
 
-# Set the working directory in the container
 WORKDIR /app
 
-# Copy the requirements file into the container
+# Install build dependencies for scientific libraries
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    python3-dev \
+    liblapack-dev \
+    libopenblas-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Upgrade pip, setuptools, and wheel
+RUN pip install --upgrade pip setuptools wheel
+
+# Copy requirements and install dependencies
 COPY requirements.txt ./ 
-
-# Install necessary build tools for Python package compilation
-RUN apk add --no-cache gcc musl-dev linux-headers python3-dev
-
-# Upgrade pip and setuptools to the latest versions
-RUN pip install --upgrade pip setuptools
-
-# Install dependencies from requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Use a virtual environment for better isolation
-RUN python -m venv /app/venv
-ENV PATH="/app/venv/bin:$PATH"
-
-# Copy the rest of the application code into the container
+# Copy the rest of the application code
 COPY . .
 
-# Expose the port the app runs on
+# Expose the application port
 EXPOSE 8000
 
 # Command to run the application
-CMD ["python", "run.py"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
