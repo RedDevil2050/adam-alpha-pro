@@ -1,166 +1,102 @@
 #!/usr/bin/env python3
 """
-Deployment validation script for Zion Market Analysis Platform.
-This script checks if all required services are running and accessible.
+Staging environment readiness check script for Zion Market Analysis Platform.
+This script checks if the staging environment is ready for testing.
 """
-import argparse
-import json
-import sys
+import asyncio
+import httpx
+import psutil
 import time
-import requests
-from urllib.parse import urljoin
-import logging
+from datetime import datetime, time as dt_time
+from typing import Dict, List, Any
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
-logger = logging.getLogger("deployment-validator")
+async def check_market_hours() -> bool:
+    """Check if current time is within staging hours (4 PM - 8 PM IST)"""
+    current_time = datetime.now().time()
+    start = dt_time(16, 0)  # 4 PM
+    end = dt_time(20, 0)    # 8 PM
+    return start <= current_time <= end
 
-class DeploymentValidator:
-    def __init__(self, base_url, timeout=5, max_retries=12, retry_interval=5):
-        self.base_url = base_url.rstrip("/")
-        self.timeout = timeout
-        self.max_retries = max_retries
-        self.retry_interval = retry_interval
-        self.failures = []
+async def check_system_resources() -> Dict[str, bool]:
+    """Verify system resources meet minimum requirements"""
+    return {
+        "cpu_available": psutil.cpu_percent(interval=1) < 80,
+        "memory_available": psutil.virtual_memory().available > 1024 * 1024 * 1024,  # 1GB
+        "disk_space": psutil.disk_usage('/').free > 5 * 1024 * 1024 * 1024  # 5GB
+    }
 
-    def validate_api_availability(self):
-        """Check if the API is reachable"""
-        logger.info("Checking API availability...")
+async def check_data_providers(symbols: List[str]) -> Dict[str, bool]:
+    """Test data provider connectivity for test symbols"""
+    async with httpx.AsyncClient() as client:
+        results = {}
+        for symbol in symbols:
+            try:
+                response = await client.get(
+                    f"http://localhost:8000/api/market/test/{symbol}",
+                    timeout=5.0
+                )
+                results[symbol] = response.status_code == 200
+            except Exception:
+                results[symbol] = False
+        return results
+
+async def check_monitoring_setup() -> Dict[str, bool]:
+    """Verify monitoring infrastructure is ready"""
+    async with httpx.AsyncClient() as client:
         try:
-            response = requests.get(self.base_url, timeout=self.timeout)
-            response.raise_for_status()
-            logger.info(f"✅ API is available. Status: {response.status_code}")
-            return True
-        except Exception as e:
-            logger.error(f"❌ API is not available: {str(e)}")
-            self.failures.append(f"API availability check failed: {str(e)}")
-            return False
-
-    def validate_health_endpoint(self):
-        """Check if the health endpoint returns a healthy status"""
-        logger.info("Checking health endpoint...")
-        try:
-            health_url = urljoin(self.base_url, "/api/v1/health") # Original path
-            response = requests.get(health_url, timeout=self.timeout)
-            response.raise_for_status()
-            health_data = response.json()
+            prometheus = await client.get("http://localhost:9090/-/healthy")
+            grafana = await client.get("http://localhost:3000/api/health")
+            metrics = await client.get("http://localhost:8000/metrics")
             
-            if health_data.get("status") == "healthy":
-                logger.info("✅ Health check passed")
-                logger.info(f"   Database status: {health_data.get('services', {}).get('database', {}).get('status', 'unknown')}")
-                logger.info(f"   Redis status: {health_data.get('services', {}).get('redis', {}).get('status', 'unknown')}")
-                return True
-            else:
-                logger.warning(f"❌ Health check returned non-healthy status: {health_data.get('status')}")
-                self.failures.append(f"Health check failed with status: {health_data.get('status')}")
-                return False
+            return {
+                "prometheus": prometheus.status_code == 200,
+                "grafana": grafana.status_code == 200,
+                "metrics_endpoint": metrics.status_code == 200
+            }
         except Exception as e:
-            logger.error(f"❌ Health check failed: {str(e)}")
-            self.failures.append(f"Health check failed: {str(e)}")
-            return False
+            print(f"Monitoring check failed: {e}")
+            return {
+                "prometheus": False,
+                "grafana": False,
+                "metrics_endpoint": False
+            }
 
-    def validate_metrics_endpoint(self):
-        """Check if the metrics endpoint is accessible"""
-        logger.info("Checking metrics endpoint...")
-        try:
-            metrics_url = urljoin(self.base_url, "/api/v1/metrics")
-            response = requests.get(metrics_url, timeout=self.timeout)
-            response.raise_for_status()
-            
-            # Prometheus metrics are plain text
-            if response.text and "zion_" in response.text:
-                logger.info("✅ Metrics endpoint is accessible")
-                return True
-            else:
-                logger.warning("❌ Metrics endpoint returned unexpected data")
-                self.failures.append("Metrics endpoint returned unexpected data")
-                return False
-        except Exception as e:
-            logger.error(f"❌ Metrics check failed: {str(e)}")
-            self.failures.append(f"Metrics check failed: {str(e)}")
-            return False
+async def main():
+    test_symbols = ["TCS", "INFY", "RELIANCE"]
+    
+    print("🔍 Checking Staging Environment Readiness...")
+    
+    # Check market hours
+    if not await check_market_hours():
+        print("❌ Outside staging hours (4 PM - 8 PM IST)")
+        return False
 
-    def validate_docs_endpoint(self):
-        """Check if API documentation is accessible"""
-        logger.info("Checking API documentation...")
-        try:
-            docs_url = urljoin(self.base_url, "/api/docs")
-            response = requests.get(docs_url, timeout=self.timeout)
-            response.raise_for_status()
-            
-            if "swagger" in response.text.lower():
-                logger.info("✅ API documentation is accessible")
-                return True
-            else:
-                logger.warning("❌ API documentation returned unexpected content")
-                self.failures.append("API documentation returned unexpected content")
-                return False
-        except Exception as e:
-            logger.error(f"❌ API documentation check failed: {str(e)}")
-            self.failures.append(f"API documentation check failed: {str(e)}")
-            return False
+    # Check system resources
+    resources = await check_system_resources()
+    if not all(resources.values()):
+        print("❌ System resources check failed:")
+        for resource, status in resources.items():
+            print(f"  - {resource}: {'✅' if status else '❌'}")
+        return False
 
-    def run_all_validations(self, wait_for_readiness=False):
-        """Run all validation checks"""
-        if wait_for_readiness:
-            logger.info(f"Waiting for services to become ready (max {self.max_retries * self.retry_interval} seconds)...")
-            for attempt in range(1, self.max_retries + 1):
-                logger.info(f"Attempt {attempt}/{self.max_retries}...")
-                if self.validate_api_availability():
-                    break
-                if attempt < self.max_retries:
-                    logger.info(f"Waiting {self.retry_interval} seconds before next attempt...")
-                    time.sleep(self.retry_interval)
-            else:
-                logger.error("Max retries reached. API is not available.")
-                return False
-        else:
-            if not self.validate_api_availability():
-                return False
-        
-        # Reset failures before running other validations
-        self.failures = []
-        
-        # Run all other validations
-        health_ok = self.validate_health_endpoint()
-        metrics_ok = self.validate_metrics_endpoint()
-        docs_ok = self.validate_docs_endpoint()
-        
-        all_passed = all([health_ok, metrics_ok, docs_ok])
-        
-        if all_passed:
-            logger.info("🎉 All validation checks passed! Deployment is ready.")
-            return True
-        else:
-            logger.error("⚠️ Some validation checks failed:")
-            for i, failure in enumerate(self.failures, 1):
-                logger.error(f"  {i}. {failure}")
-            return False
+    # Check data providers
+    providers = await check_data_providers(test_symbols)
+    if not all(providers.values()):
+        print("❌ Data provider check failed:")
+        for symbol, status in providers.items():
+            print(f"  - {symbol}: {'✅' if status else '❌'}")
+        return False
 
-def main():
-    parser = argparse.ArgumentParser(description="Validate Zion Market Analysis Platform deployment")
-    parser.add_argument("--base-url", default="http://localhost:8000", help="Base URL of the deployed API")
-    parser.add_argument("--timeout", type=int, default=5, help="Request timeout in seconds")
-    parser.add_argument("--wait", action="store_true", help="Wait for services to become ready")
-    parser.add_argument("--max-retries", type=int, default=12, help="Maximum number of retry attempts when waiting")
-    parser.add_argument("--retry-interval", type=int, default=5, help="Seconds to wait between retry attempts")
-    
-    args = parser.parse_args()
-    
-    validator = DeploymentValidator(
-        base_url=args.base_url,
-        timeout=args.timeout,
-        max_retries=args.max_retries,
-        retry_interval=args.retry_interval
-    )
-    
-    success = validator.run_all_validations(wait_for_readiness=args.wait)
-    
-    # Exit with appropriate code for CI/CD pipelines
-    sys.exit(0 if success else 1)
+    # Check monitoring
+    monitoring = await check_monitoring_setup()
+    if not all(monitoring.values()):
+        print("❌ Monitoring setup check failed:")
+        for component, status in monitoring.items():
+            print(f"  - {component}: {'✅' if status else '❌'}")
+        return False
+
+    print("✅ All checks passed! Staging environment is ready.")
+    return True
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

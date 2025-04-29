@@ -1,0 +1,37 @@
+groups:
+  - name: market_alerts
+    rules:
+      - alert: DataProviderFailure
+        expr: rate(data_provider_failures_total[5m]) > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Data provider failures detected
+          description: "{{ $value }} data provider failures in the last 5 minutes"
+
+      - alert: DataQualityIssue
+        expr: data_provider_availability < 0.95
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Data quality issues detected
+          description: "Data provider availability below 95%"
+
+      - alert: APIRateLimitApproaching
+        expr: rate(data_provider_failures_total{error_type="rate_limit"}[1h]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: API rate limit warnings
+          description: "Rate limit errors detected in the last hour"
+
+      - alert: MarketDataLatency
+        expr: data_provider_latency_seconds > 2
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: High market data latency
+          description: "Market data latency exceeds 2 seconds"

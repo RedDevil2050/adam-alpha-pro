@@ -17,15 +17,6 @@ except Exception as e:
     redis_client = None
 
 
-async def get_redis_client() -> Redis:
-    """
-    FastAPI dependency that provides Redis client.
-    """
-    if not redis_client:
-        raise Exception("Redis client not initialized")
-    return redis_client
-
-
 def cache_data_provider(ttl=3600):
     def decorator(func):
         async def wrapper(*args, **kwargs):
