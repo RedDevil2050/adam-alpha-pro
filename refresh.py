@@ -6,7 +6,7 @@ from loguru import logger
 sys.path.append(str(Path(__file__).parent))
 
 from backend.startup import initialize_system
-from backend.utils.cache_utils import redis_client
+from backend.utils.cache_utils import get_redis_client
 from backend.utils.system_monitor import SystemMonitor
 
 async def refresh_system():
@@ -14,6 +14,7 @@ async def refresh_system():
     
     try:
         # Clear Redis cache
+        redis_client = get_redis_client()
         await redis_client.flushall()
         logger.info("Cache cleared")
         

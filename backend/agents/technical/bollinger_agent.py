@@ -1,6 +1,6 @@
 import pandas as pd
 from backend.utils.data_provider import fetch_ohlcv_series
-from backend.utils.cache_utils import redis_client
+from backend.utils.cache_utils import get_redis_client
 from backend.agents.technical.utils import tracker
 
 agent_name = "bollinger_agent"
@@ -8,6 +8,7 @@ agent_name = "bollinger_agent"
 
 async def run(symbol: str, window: int = 20, num_std: float = 2.0) -> dict:
     cache_key = f"{agent_name}:{symbol}:{window}:{num_std}"
+    redis_client = get_redis_client()
     # 1) Cache check
     cached = await redis_client.get(cache_key)
     if cached:

@@ -3,7 +3,7 @@
 import functools
 import json
 from loguru import logger
-from backend.utils.cache_utils import redis_client
+from backend.utils.cache_utils import get_redis_client
 
 # Import the tracker access function (adjust path if needed)
 from backend.monitor.tracker import get_tracker
@@ -43,7 +43,7 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
 
             try:
                 # 1. Cache Check
-                cached_data = await redis_client.get(cache_key)
+                cached_data = await get_redis_client().get(cache_key)
                 if cached_data:
                     try:
                         # Attempt to deserialize cached data
@@ -66,7 +66,7 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
                 if result and result.get("verdict") not in ["ERROR", "NO_DATA", None]:
                     try:
                         # Serialize result before caching
-                        await redis_client.set(
+                        await get_redis_client().set(
                             cache_key, json.dumps(result), ex=cache_ttl
                         )
                         logger.debug(

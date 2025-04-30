@@ -1,9 +1,10 @@
-from backend.utils.cache_utils import redis_client
+from backend.utils.cache_utils import get_redis_client
 from backend.agents.intelligence.utils import tracker
 from backend.config.settings import settings
 
 agent_name = "smart_explanation_agent"
 
+redis_client = get_redis_client()
 
 async def run(symbol: str, agent_outputs: dict) -> dict:
     cache_key = f"{agent_name}:{symbol}"

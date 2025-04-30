@@ -1,6 +1,6 @@
 import pkgutil
 import importlib
-from backend.utils.cache_utils import redis_client
+from backend.utils.cache_utils import get_redis_client
 from backend.utils.data_provider import fetch_price_series
 from backend.agents.intelligence.utils import tracker
 
@@ -8,6 +8,7 @@ agent_name = "composite_valuation_agent"
 
 
 async def run(symbol: str) -> dict:
+    redis_client = await get_redis_client()
     cache_key = f"{agent_name}:{symbol}"
     cached = await redis_client.get(cache_key)
     if cached:

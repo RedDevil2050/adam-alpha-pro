@@ -1,5 +1,5 @@
 import httpx
-from backend.utils.cache_utils import redis_client
+from backend.utils.cache_utils import get_redis_client
 from backend.agents.event.utils import tracker
 
 agent_name = "earnings_calendar_agent"
@@ -7,7 +7,7 @@ agent_name = "earnings_calendar_agent"
 
 async def run(symbol: str) -> dict:
     cache_key = f"{agent_name}:{symbol}"
-    cached = await redis_client.get(cache_key)
+    cached = await get_redis_client().get(cache_key)
     if cached:
         return cached
 
@@ -49,6 +49,6 @@ async def run(symbol: str) -> dict:
             "agent_name": agent_name,
         }
 
-    await redis_client.set(cache_key, result, ex=86400)
+    await get_redis_client().set(cache_key, result, ex=86400)
     tracker.update("event", agent_name, "implemented")
     return result

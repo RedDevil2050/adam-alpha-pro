@@ -46,7 +46,7 @@ prices_insufficient = generate_prices(100, 0.001, 0.01, 100)      # Not enough d
 @pytest.mark.asyncio
 @patch('backend.agents.technical.momentum_agent.get_settings')
 @patch('backend.agents.technical.momentum_agent.fetch_historical_price_series', new_callable=AsyncMock)
-@patch('backend.utils.cache_utils.redis_client', new_callable=AsyncMock)  # Corrected patch target
+@patch('backend.utils.cache_utils.get_redis_client', new_callable=AsyncMock)  # Corrected patch target
 async def test_momentum_strong_positive(mock_fetch_hist, mock_get_settings, mock_redis_client): # Updated mock name
     mock_settings = mock_get_settings.return_value
     # Arrange
@@ -71,7 +71,7 @@ async def test_momentum_strong_positive(mock_fetch_hist, mock_get_settings, mock
 @pytest.mark.asyncio
 @patch('backend.agents.technical.momentum_agent.get_settings')
 @patch('backend.agents.technical.momentum_agent.fetch_historical_price_series', new_callable=AsyncMock)
-@patch('backend.utils.cache_utils.redis_client', new_callable=AsyncMock)  # Corrected patch target
+@patch('backend.utils.cache_utils.get_redis_client', new_callable=AsyncMock)  # Corrected patch target
 async def test_momentum_positive(mock_fetch_hist, mock_get_settings, mock_redis_client, mock_settings): # Updated mock name
     # Arrange
     mock_get_settings.return_value = mock_settings
@@ -91,7 +91,7 @@ async def test_momentum_positive(mock_fetch_hist, mock_get_settings, mock_redis_
 @pytest.mark.asyncio
 @patch('backend.agents.technical.momentum_agent.get_settings')
 @patch('backend.agents.technical.momentum_agent.fetch_historical_price_series', new_callable=AsyncMock)
-@patch('backend.utils.cache_utils.redis_client', new_callable=AsyncMock)  # Corrected patch target
+@patch('backend.utils.cache_utils.get_redis_client', new_callable=AsyncMock)  # Corrected patch target
 async def test_momentum_negative(mock_fetch_hist, mock_get_settings, mock_redis_client, mock_settings): # Updated mock name
     # Arrange
     mock_get_settings.return_value = mock_settings
@@ -111,7 +111,7 @@ async def test_momentum_negative(mock_fetch_hist, mock_get_settings, mock_redis_
 @pytest.mark.asyncio
 @patch('backend.agents.technical.momentum_agent.get_settings')
 @patch('backend.agents.technical.momentum_agent.fetch_historical_price_series', new_callable=AsyncMock)
-@patch('backend.utils.cache_utils.redis_client', new_callable=AsyncMock)  # Corrected patch target
+@patch('backend.utils.cache_utils.get_redis_client', new_callable=AsyncMock)  # Corrected patch target
 async def test_momentum_strong_negative(mock_fetch_hist, mock_get_settings, mock_redis_client, mock_settings): # Updated mock name
     # Arrange
     mock_get_settings.return_value = mock_settings
@@ -131,7 +131,7 @@ async def test_momentum_strong_negative(mock_fetch_hist, mock_get_settings, mock
 @pytest.mark.asyncio
 @patch('backend.agents.technical.momentum_agent.get_settings')
 @patch('backend.agents.technical.momentum_agent.fetch_historical_price_series', new_callable=AsyncMock)
-@patch('backend.utils.cache_utils.redis_client', new_callable=AsyncMock)  # Corrected patch target
+@patch('backend.utils.cache_utils.get_redis_client', new_callable=AsyncMock)  # Corrected patch target
 async def test_momentum_no_data_insufficient_history(mock_fetch_hist, mock_get_settings, mock_redis_client, mock_settings): # Updated mock name
     # Arrange
     mock_get_settings.return_value = mock_settings
@@ -152,7 +152,7 @@ async def test_momentum_no_data_insufficient_history(mock_fetch_hist, mock_get_s
 @pytest.mark.asyncio
 @patch('backend.agents.technical.momentum_agent.get_settings')
 @patch('backend.agents.technical.momentum_agent.fetch_historical_price_series', new_callable=AsyncMock)
-@patch('backend.utils.cache_utils.redis_client', new_callable=AsyncMock)  # Corrected patch target
+@patch('backend.utils.cache_utils.get_redis_client', new_callable=AsyncMock)  # Corrected patch target
 async def test_momentum_no_data_fetch_error(mock_fetch_hist, mock_get_settings, mock_redis_client, mock_settings): # Updated mock name
     # Arrange
     mock_get_settings.return_value = mock_settings
@@ -174,7 +174,7 @@ async def test_momentum_no_data_fetch_error(mock_fetch_hist, mock_get_settings, 
 @pytest.mark.asyncio
 @patch('backend.agents.technical.momentum_agent.get_settings')
 @patch('backend.agents.technical.momentum_agent.fetch_historical_price_series', new_callable=AsyncMock)
-@patch('backend.utils.cache_utils.redis_client', new_callable=AsyncMock)  # Corrected patch target
+@patch('backend.utils.cache_utils.get_redis_client', new_callable=AsyncMock)  # Corrected patch target
 async def test_momentum_no_data_fetch_returns_none(mock_fetch_hist, mock_get_settings, mock_redis_client, mock_settings): # Updated mock name
     # Arrange
     mock_get_settings.return_value = mock_settings
@@ -195,7 +195,7 @@ async def test_momentum_no_data_fetch_returns_none(mock_fetch_hist, mock_get_set
 @pytest.mark.asyncio
 @patch('backend.agents.technical.momentum_agent.get_settings')
 @patch('backend.agents.technical.momentum_agent.fetch_historical_price_series', new_callable=AsyncMock)
-@patch('backend.utils.cache_utils.redis_client', new_callable=AsyncMock)  # Corrected patch target
+@patch('backend.utils.cache_utils.get_redis_client', new_callable=AsyncMock)  # Corrected patch target
 async def test_momentum_no_lookbacks_configured(mock_fetch_hist, mock_get_settings, mock_redis_client, mock_settings): # Updated mock name
     # Arrange
     # Modify settings to have no lookbacks
@@ -218,7 +218,7 @@ async def test_momentum_no_lookbacks_configured(mock_fetch_hist, mock_get_settin
 @pytest.mark.asyncio
 @patch('backend.agents.technical.momentum_agent.get_settings')
 @patch('backend.agents.technical.momentum_agent.fetch_historical_price_series', new_callable=AsyncMock)
-@patch('backend.utils.cache_utils.redis_client', new_callable=AsyncMock)  # Corrected patch target
+@patch('backend.utils.cache_utils.get_redis_client', new_callable=AsyncMock)  # Corrected patch target
 async def test_momentum_partial_returns_calculable(mock_fetch_hist, mock_get_settings, mock_redis_client, mock_settings): # Updated mock name
     # Arrange
     # Use data that's long enough for short periods but not the longest (252)
@@ -245,7 +245,7 @@ async def test_momentum_partial_returns_calculable(mock_fetch_hist, mock_get_set
 @pytest.mark.asyncio
 @patch('backend.agents.technical.momentum_agent.get_settings')
 @patch('backend.agents.technical.momentum_agent.fetch_historical_price_series', new_callable=AsyncMock)
-@patch('backend.utils.cache_utils.redis_client', new_callable=AsyncMock)  # Corrected patch target
+@patch('backend.utils.cache_utils.get_redis_client', new_callable=AsyncMock)  # Corrected patch target
 async def test_momentum_returns_with_nan_or_zero(mock_fetch_hist, mock_get_settings, mock_redis_client, mock_settings): # Updated mock name
     # Arrange
     prices = prices_positive.copy()

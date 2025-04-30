@@ -1,6 +1,6 @@
 import httpx
 from backend.config.settings import settings
-from backend.utils.cache_utils import redis_client
+from backend.utils.cache_utils import get_redis_client
 from backend.agents.sentiment.utils import analyzer, normalize_compound, tracker
 
 agent_name = "social_sentiment_agent"
@@ -8,6 +8,7 @@ agent_name = "social_sentiment_agent"
 
 async def run(symbol: str) -> dict:
     cache_key = f"{agent_name}:{symbol}"
+    redis_client = get_redis_client()
     # Cache check
     cached = await redis_client.get(cache_key)
     if cached:

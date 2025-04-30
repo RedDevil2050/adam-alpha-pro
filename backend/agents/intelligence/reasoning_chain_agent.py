@@ -1,4 +1,4 @@
-from backend.utils.cache_utils import redis_client
+from backend.utils.cache_utils import get_redis_client
 from backend.agents.intelligence.utils import tracker
 from backend.config.settings import settings
 
@@ -6,6 +6,7 @@ agent_name = "reasoning_chain_agent"
 
 
 async def run(symbol: str, agent_outputs: dict) -> dict:
+    redis_client = get_redis_client()
     cache_key = f"{agent_name}:{symbol}"
     cached = await redis_client.get(cache_key)
     if cached:

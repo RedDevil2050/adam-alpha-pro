@@ -1,6 +1,6 @@
 import httpx
 from backend.config.settings import settings
-from backend.utils.cache_utils import redis_client
+from backend.utils.cache_utils import get_redis_client
 from backend.agents.sentiment.utils import tracker
 
 agent_name = "news_volume_spike_agent"
@@ -9,7 +9,7 @@ agent_name = "news_volume_spike_agent"
 async def run(symbol: str, window_hours: int = 24) -> dict:
     cache_key = f"{agent_name}:{symbol}:{window_hours}"
     # Cache check
-    cached = await redis_client.get(cache_key)
+    cached = await get_redis_client().get(cache_key)
     if cached:
         return cached
 
@@ -46,6 +46,6 @@ async def run(symbol: str, window_hours: int = 24) -> dict:
     }
 
     # Cache & track
-    await redis_client.set(cache_key, result, ex=3600)
+    await get_redis_client().set(cache_key, result, ex=3600)
     tracker.update("sentiment", agent_name, "implemented")
     return result

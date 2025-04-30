@@ -1,7 +1,11 @@
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 from backend.utils.cache_utils import redis_client
 from backend.utils.data_provider import fetch_transcript
-from backend.agents.management.utils import tracker
+# Adjust the import below to the correct path where 'tracker' is defined
+# For example, if 'utils.py' is in the same directory:
+from . import utils as tracker
+# Or, if 'tracker' is a variable or function inside 'utils.py':
+# from .utils import tracker
 
 agent_name = "management_track_record_agent"
 

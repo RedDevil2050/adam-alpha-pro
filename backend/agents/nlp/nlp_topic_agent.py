@@ -1,11 +1,15 @@
 from gensim import corpora, models
-from backend.utils.cache_utils import redis_client
-from backend.agents.nlp.utils import tracker
+from backend.utils.cache_utils import get_redis_client
+from backend.utils.progress_tracker import ProgressTracker
 
 agent_name = "nlp_topic_agent"
 
+# Define or initialize the tracker instance
+tracker = ProgressTracker(filepath="backend/utils/progress.json")
+
 
 async def run(texts: list) -> dict:
+    redis_client = get_redis_client()
     cache_key = f"{agent_name}"
     cached = await redis_client.get(cache_key)
     if cached:

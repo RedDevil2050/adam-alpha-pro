@@ -2,11 +2,12 @@ import os
 import asyncio
 from pathlib import Path
 from loguru import logger
-from backend.utils.cache_utils import redis_client
+from backend.utils.cache_utils import get_redis_client
 from backend.startup import initialize_system
 
 async def check_redis():
     try:
+        redis_client = await get_redis_client()
         pong = await redis_client.ping()
         return pong
     except Exception as e:

@@ -1,11 +1,12 @@
-from backend.utils.cache_utils import redis_client
-from backend.utils.data_provider import fetch_news, fetch_social_sentiment
+from backend.utils.cache_utils import get_redis_client
+from backend.utils.data_provider import fetch_news, fetch_social_sentiment, fetch_news_sentiment
 from backend.agents.sentiment.utils import tracker
 
 agent_name = "overall_sentiment_agent"
 
 
 async def run(symbol: str) -> dict:
+    redis_client = get_redis_client()
     cache_key = f"{agent_name}:{symbol}"
     cached = await redis_client.get(cache_key)
     if cached:

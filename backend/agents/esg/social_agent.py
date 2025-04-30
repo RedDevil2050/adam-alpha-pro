@@ -1,4 +1,4 @@
-from backend.utils.cache_utils import redis_client
+from backend.utils.cache_utils import get_redis_client
 from backend.agents.esg.utils import fetch_esg_breakdown, tracker
 
 agent_name = "social_agent"
@@ -6,6 +6,7 @@ agent_name = "social_agent"
 
 async def run(symbol: str) -> dict:
     cache_key = f"{agent_name}:{symbol}"
+    redis_client = get_redis_client()
     # Cache check
     cached = await redis_client.get(cache_key)
     if cached:

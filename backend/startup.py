@@ -3,7 +3,7 @@ import asyncio
 from backend.core.orchestrator import SystemOrchestrator
 from backend.utils.system_monitor import SystemMonitor
 # Assuming redis_client is the cache client needed by Orchestrator
-from backend.utils.cache_utils import redis_client
+from backend.utils.cache_utils import get_redis_client
 from backend.config.settings import settings
 from backend.config.logging_config import setup_logging
 from loguru import logger
@@ -22,13 +22,13 @@ async def initialize_system():
         # Initialize core components first
         system_monitor = SystemMonitor()
         # Instantiate Orchestrator, passing dependencies
-        orchestrator = SystemOrchestrator(cache_client=redis_client)
+        orchestrator = SystemOrchestrator(cache_client=get_redis_client())
 
         # Register components first, setting them to initializing
         await register_components(system_monitor) # Registers orchestrator, redis, api, cache
 
         # Initialize and verify Redis, then update status
-        await verify_redis_connection(system_monitor) # Updates 'redis' status
+        await verify_redis_connection(system_monitor, get_redis_client()) # Updates 'redis' status
 
         # Initialize Orchestrator, updating its status
         await orchestrator.initialize(system_monitor) # Updates 'orchestrator' status
@@ -73,7 +73,7 @@ async def initialize_system():
         raise
 
 
-async def verify_redis_connection(monitor: SystemMonitor): # Accept monitor instance
+async def verify_redis_connection(monitor: SystemMonitor, redis_client): # Accept monitor instance and redis_client
     """Verify Redis connection and update status"""
     component_name = "redis"
     try:

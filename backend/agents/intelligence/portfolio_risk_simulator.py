@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from backend.utils.cache_utils import redis_client
+from backend.utils.cache_utils import get_redis_client
 from backend.utils.data_provider import fetch_price_series
 from backend.agents.intelligence.utils import tracker
 
@@ -8,6 +8,7 @@ agent_name = "portfolio_risk_simulator"
 
 
 async def run(symbols: list, weights: list = None) -> dict:
+    redis_client = get_redis_client()
     cache_key = f"{agent_name}:{','.join(symbols)}"
     cached = await redis_client.get(cache_key)
     if cached:

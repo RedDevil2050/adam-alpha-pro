@@ -1,14 +1,14 @@
 import asyncio
 from typing import Dict, Any
 import pandas as pd
-from backend.utils.cache_utils import redis_client
+from backend.utils.cache_utils import get_redis_client
 
 
 class MarketContext:
     _instance = None
 
     def __init__(self):
-        self.cache = redis_client
+        self.cache = get_redis_client()
         self.state = {}
         self.update_interval = 300  # 5 minutes
         self._lock = asyncio.Lock()

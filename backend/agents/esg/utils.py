@@ -1,7 +1,7 @@
 import httpx
 from bs4 import BeautifulSoup
 from backend.config.settings import settings
-from backend.utils.cache_utils import redis_client
+from backend.utils.cache_utils import get_redis_client
 from backend.utils.data_provider import fetch_alpha_vantage
 from backend.utils.progress_tracker import ProgressTracker
 

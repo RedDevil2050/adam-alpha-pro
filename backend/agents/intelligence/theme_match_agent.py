@@ -1,5 +1,5 @@
 import httpx
-from backend.utils.cache_utils import redis_client
+from backend.utils.cache_utils import get_redis_client
 from backend.agents.intelligence.utils import tracker
 
 agent_name = "theme_match_agent"
@@ -8,6 +8,7 @@ themes = ["Regulatory", "Earnings", "M&A", "Product", "Leadership"]
 
 async def run(symbol: str) -> dict:
     cache_key = f"{agent_name}:{symbol}"
+    redis_client = await get_redis_client()
     cached = await redis_client.get(cache_key)
     if cached:
         return cached

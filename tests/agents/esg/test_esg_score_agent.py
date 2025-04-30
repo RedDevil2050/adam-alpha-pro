@@ -12,7 +12,7 @@ AGENT_NAME = "esg_score_agent"
 async def mock_dependencies():
     # Mock the data provider
     with patch('backend.agents.esg.esg_score_agent.fetch_esg_data', new_callable=AsyncMock) as mock_fetch, \
-         patch('backend.agents.decorators.redis_client', new_callable=AsyncMock) as mock_redis, \
+         patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock) as mock_redis, \
          patch('backend.agents.decorators.get_tracker') as mock_get_tracker:
 
         # Mock the tracker methods if needed (decorator uses it)

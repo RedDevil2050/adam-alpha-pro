@@ -1,5 +1,5 @@
 import asyncio, pkgutil, importlib
-from backend.utils.cache_utils import redis_client
+from backend.utils.cache_utils import get_redis_client
 from backend.config.settings import settings
 from backend.agents.automation.utils import tracker
 
@@ -7,6 +7,7 @@ agent_name = "ask_alpha_agent"
 
 
 async def run(symbol: str, agent_outputs: dict = {}, question: str = "") -> dict:
+    redis_client = await get_redis_client()
     cache_key = f"{agent_name}:{symbol}:{question}"
     cached = await redis_client.get(cache_key)
     if cached:

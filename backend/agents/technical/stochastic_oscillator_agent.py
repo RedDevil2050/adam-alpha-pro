@@ -1,6 +1,6 @@
 import pandas as pd
 from backend.utils.data_provider import fetch_ohlcv_series
-from backend.utils.cache_utils import redis_client
+from backend.utils.cache_utils import get_redis_client
 from backend.agents.technical.utils import tracker
 
 agent_name = "stochastic_oscillator_agent"
@@ -8,6 +8,7 @@ agent_name = "stochastic_oscillator_agent"
 
 async def run(symbol: str) -> dict:
     cache_key = f"{agent_name}:{symbol}"
+    redis_client = get_redis_client()
     # Cache check
     cached = await redis_client.get(cache_key)
     if cached:

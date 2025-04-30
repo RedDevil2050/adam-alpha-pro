@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional, Tuple
 import logging
 from datetime import datetime
-from backend.utils.cache_utils import redis_client
+from backend.utils.cache_utils import get_redis_client
 from backend.config.settings import settings
 from backend.agents.categories import CategoryType, CategoryManager
 
@@ -10,7 +10,7 @@ from backend.agents.categories import CategoryType, CategoryManager
 class AgentBase(ABC):
     def __init__(self):
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.cache = redis_client
+        self.cache = get_redis_client()
         self.ttl = settings.agent_cache_ttl
         self.context = {}
         self.metrics = {"calls": 0, "errors": 0, "avg_latency": 0}
