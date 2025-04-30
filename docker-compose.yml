@@ -32,6 +32,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./deploy/init-staging-db.sql:/docker-entrypoint-initdb.d/init-staging-db.sql
 
   prometheus:
     image: prom/prometheus
@@ -56,6 +57,14 @@ services:
       - GF_DATABASE_NAME=zion_staging
       - GF_DATABASE_USER=grafana
       - GF_DATABASE_PASSWORD=grafana_pass
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    ports:
+      - "9100:9100"
+    networks:
+      - default
 
 volumes:
   postgres_data:

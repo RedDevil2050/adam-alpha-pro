@@ -9,8 +9,7 @@ alerting:
           - alertmanager:9093
 
 rule_files:
-  - "rules/market_alerts.yml"
-  - "rules/system_alerts.yml"
+  - "rules/alerts.yml"
 
 scrape_configs:
   - job_name: "prometheus"
@@ -18,7 +17,7 @@ scrape_configs:
       - targets: ["localhost:9090"]
 
   - job_name: "zion_backend"
-    metrics_path: "/api/v1/metrics"
+    metrics_path: "/metrics"
     scrape_interval: 10s
     static_configs:
       - targets: ["backend:8000"]
