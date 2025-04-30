@@ -2,7 +2,7 @@ import pandas as pd
 from backend.utils.data_provider import fetch_price_series, fetch_eps_data
 from backend.agents.event.earnings_date_agent import run as earnings_run
 from backend.agents.event.corporate_actions_agent import run as corp_run
-from backend.utils.cache_utils import redis_client
+from backend.utils.cache_utils import get_redis_client
 from backend.config.settings import settings
 from backend.agents.automation.utils import tracker
 
@@ -10,6 +10,7 @@ agent_name = "alert_engine_agent"
 
 
 async def run(symbol: str, agent_outputs: dict = {}) -> dict:
+    redis_client = get_redis_client()
     cache_key = f"{agent_name}:{symbol}"
     cached = await redis_client.get(cache_key)
     if cached:
