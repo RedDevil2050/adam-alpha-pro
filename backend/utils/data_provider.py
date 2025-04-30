@@ -1,4 +1,5 @@
 import asyncio
+import aiohttp
 from backend.data.providers.unified_provider import UnifiedDataProvider
 
 provider = UnifiedDataProvider()
@@ -314,3 +315,32 @@ async def fetch_price_tradingview(symbol: str):
         Dictionary with TradingView price data.
     """
     return await provider.fetch_data_resilient(symbol, "tradingview")
+
+async def fetch_price_alpha_vantage(symbol: str):
+    """
+    Fetch the latest price for a given symbol from Alpha Vantage.
+
+    Args:
+        symbol: Ticker symbol to fetch the price for.
+
+    Returns:
+        A dictionary containing the latest price or an error message.
+    """
+    api_key = "your_alpha_vantage_api_key"  # Replace with actual API key
+    base_url = "https://www.alphavantage.co/query"
+    params = {
+        "function": "GLOBAL_QUOTE",
+        "symbol": symbol,
+        "apikey": api_key,
+    }
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(base_url, params=params) as response:
+            if response.status != 200:
+                return {"error": f"HTTP error {response.status}"}
+
+            data = await response.json()
+            if "Global Quote" in data and "05. price" in data["Global Quote"]:
+                return {"price": float(data["Global Quote"]["05. price"])}
+
+            return {"error": "Price data not found in response"}
