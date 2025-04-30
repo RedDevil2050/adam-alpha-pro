@@ -1,4 +1,5 @@
 import sys, os
+import json # Add json import
 
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -154,8 +155,11 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     )
 
     # Determine Verdict
+    # Define a small tolerance for neutrality
+    neutral_tolerance = 1e-4 # Consider momentum between -0.01% and +0.01% as neutral
+
     if average_momentum is None:
-        verdict = "NO_DATA"  # Could not calculate any valid returns
+        verdict = "NO_DATA"
         confidence = 0.0
         details["reason"] = "Could not calculate momentum for any lookback period."
     elif average_momentum > mom_settings.THRESHOLD_STRONG_POSITIVE:
@@ -164,14 +168,17 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     elif average_momentum < mom_settings.THRESHOLD_STRONG_NEGATIVE:
         verdict = "STRONG_NEGATIVE_MOMENTUM"
         confidence = 0.7
-    elif average_momentum > 0:  # Positive but not strong
+    elif average_momentum > neutral_tolerance: # Clearly positive, but not strong
         verdict = "POSITIVE_MOMENTUM"
         confidence = 0.5
-    else:  # Negative but not strong
+    elif average_momentum < -neutral_tolerance: # Clearly negative, but not strong
         verdict = "NEGATIVE_MOMENTUM"
         confidence = 0.5
+    else: # Close to zero
+        verdict = "NEUTRAL_MOMENTUM"
+        confidence = 0.4 # Lower confidence for neutral
 
-    # Add config to details
+    # Add config to details - Directly use attribute values from the settings object
     details["config_used"] = {
         "lookback_periods": mom_settings.LOOKBACK_PERIODS,
         "threshold_strong_positive": mom_settings.THRESHOLD_STRONG_POSITIVE,
@@ -186,8 +193,9 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         "confidence": round(confidence, 4),
         "value": (
             round(average_momentum * 100, 2) if average_momentum is not None else None
-        ),  # Return avg momentum %
+        ),
         "details": details,
         "agent_name": agent_name,
     }
+
     return result
