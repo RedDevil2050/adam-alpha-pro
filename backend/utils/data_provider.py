@@ -1,30 +1,31 @@
-import httpx
+import asyncio
+from backend.data.providers.unified_provider import UnifiedDataProvider
 
-async def fetch_price_alpha_vantage(symbol: str) -> float:
+provider = UnifiedDataProvider()
+
+async def fetch_price_series(symbol: str, start_date: str, end_date: str, interval: str = "1d"):
     """
-    Fetch the latest stock price for the given symbol using Alpha Vantage API.
+    Fetch historical price data for a given symbol.
 
     Args:
-        symbol (str): The stock symbol to fetch the price for.
+        symbol: Ticker symbol to fetch data for.
+        start_date: Start date for historical data.
+        end_date: End date for historical data.
+        interval: Data interval (e.g., "1d" for daily).
 
     Returns:
-        float: The latest stock price.
+        DataFrame with historical price data.
     """
-    api_key = "your_alpha_vantage_api_key"  # Replace with your actual API key
-    base_url = "https://www.alphavantage.co/query"
-    params = {
-        "function": "GLOBAL_QUOTE",
-        "symbol": symbol,
-        "apikey": api_key,
-    }
+    return await provider.fetch_price_data(symbol, start_date, end_date, interval)
 
-    async with httpx.AsyncClient() as client:
-        response = await client.get(base_url, params=params)
-        response.raise_for_status()
-        data = response.json()
+async def fetch_price_point(symbol: str):
+    """
+    Fetch the latest price point for a given symbol.
 
-    try:
-        price = float(data["Global Quote"]["05. price"])
-        return price
-    except (KeyError, ValueError):
-        raise ValueError("Failed to fetch or parse the stock price.")
+    Args:
+        symbol: Ticker symbol to fetch the latest price for.
+
+    Returns:
+        Dictionary with the latest price data.
+    """
+    return await provider.fetch_quote(symbol)

@@ -477,3 +477,28 @@ class UnifiedDataProvider(BaseDataProvider):
                         return {"volume": float(data["v"])}
 
         return None
+
+    async def fetch_price_data(self, symbol: str, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None, interval: str = "1d") -> pd.DataFrame:
+        """
+        Fetch historical price data for a given symbol.
+        """
+        return await self._fetch_from_provider("yahoo_finance", symbol, "price")
+
+    async def fetch_quote(self, symbol: str) -> Dict[str, Any]:
+        """
+        Fetch the latest quote for a given symbol.
+        """
+        return await self._fetch_from_provider("yahoo_finance", symbol, "price")
+
+    async def search_symbols(self, query: str) -> List[Dict[str, Any]]:
+        """
+        Search for symbols matching a query.
+        """
+        # Placeholder implementation
+        return []
+
+    async def fetch_company_info(self, symbol: str) -> Dict[str, Any]:
+        """
+        Fetch company information for a given symbol.
+        """
+        return await self._fetch_from_provider("yahoo_finance", symbol, "company_info")

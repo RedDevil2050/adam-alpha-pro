@@ -109,10 +109,10 @@ class BaseDataProvider(ABC):
         Raises:
             ValueError: If the provider is not found
         """
-        from backend.data.providers.yahoo_finance_provider import YahooFinanceProvider
-        from backend.data.providers.alpha_vantage_provider import AlphaVantageProvider
-        from backend.data.providers.polygon_provider import PolygonProvider
-        from backend.data.providers.finnhub_provider import FinnhubProvider
+        from .yahoo_finance_provider import YahooFinanceProvider
+        from .alpha_vantage_provider import AlphaVantageProvider
+        from .polygon_provider import PolygonProvider
+        from .finnhub_provider import FinnhubProvider
 
         providers = {
             "yahoo_finance": YahooFinanceProvider,
