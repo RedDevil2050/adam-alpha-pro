@@ -35,13 +35,13 @@ async def run(symbol: str, agent_outputs: dict = {}) -> dict:
             "agent_name": agent_name,
         }
     except Exception as e:
-        logger.error(f"Price/Sales error: {e}")
+        logger.error(f"Price/Sales error for symbol {symbol}: {e}", exc_info=True)
         return {
             "symbol": symbol,
             "verdict": "ERROR",
             "confidence": 0.0,
             "value": None,
             "details": {},
-            "error": str(e),
+            "error": f"Error during Price/Sales calculation: {e}",
             "agent_name": agent_name,
         }

@@ -11,7 +11,8 @@ from dataclasses import dataclass
 from sklearn.cluster import KMeans
 from scipy import stats
 from sklearn.linear_model import LinearRegression
-from functools import cached_property
+from functools import cached_property, lru_cache
+import time
 
 
 @dataclass

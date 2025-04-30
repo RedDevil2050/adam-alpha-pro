@@ -1,13 +1,11 @@
 import psutil
 from datetime import datetime
 import aioredis
-from ..config.settings import get_settings
-from ..monitoring.metrics import metrics_collector
+from backend.config.settings import get_settings
 
 class SystemMonitor:
     def __init__(self):
         self.settings = get_settings()
-        self.metrics = metrics_collector
         self.thresholds = {
             'cpu_percent': 80.0,
             'memory_percent': 85.0,
@@ -20,8 +18,8 @@ class SystemMonitor:
         disk_usage = psutil.disk_usage('/').percent
         
         # Update metrics
-        self.metrics.system_cpu.set(cpu_usage)
-        self.metrics.system_memory.set(memory_usage)
+        # self.metrics.system_cpu.set(cpu_usage)
+        # self.metrics.system_memory.set(memory_usage)
         
         # Check component health
         components = {
@@ -34,7 +32,7 @@ class SystemMonitor:
         return {
             'status': 'healthy' if all(components.values()) else 'unhealthy',
             'components': components,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(datetime.UTC).isoformat()
         }
 
     def _check_threshold(self, metric: str, value: float) -> bool:

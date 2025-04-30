@@ -1,5 +1,6 @@
 from backend.agents.base import AgentBase
 from backend.agents.categories import CategoryType
+from typing import List
 
 
 class ValuationAgentBase(AgentBase):

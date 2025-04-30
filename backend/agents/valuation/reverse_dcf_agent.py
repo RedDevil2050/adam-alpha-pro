@@ -67,8 +67,8 @@ class ReverseDCFAgent(ValuationAgentBase):
             }
 
         except Exception as e:
-            logger.error(f"Reverse DCF error: {e}")
-            return self._error_response(symbol, str(e))
+            logger.error(f"Reverse DCF error for symbol {symbol}: {e}", exc_info=True)
+            return self._error_response(symbol, f"Error during Reverse DCF calculation: {e}")
 
     def _calculate_dcf(
         self,

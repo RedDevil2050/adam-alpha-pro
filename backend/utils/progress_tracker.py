@@ -33,7 +33,7 @@ class ProgressTracker:
             json.dump(data, f, indent=2)
 
     def backup(self):
-        timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+        timestamp = datetime.now(datetime.UTC).strftime("%Y%m%dT%H%M%SZ")
         backup_path = os.path.join(self.backup_dir, f"progress_{timestamp}.json")
         shutil.copy2(self.filepath, backup_path)
 
@@ -43,7 +43,7 @@ class ProgressTracker:
             cats = data.setdefault("categories", {})
             agents = cats.setdefault(category, {})
             agents[agent] = status
-            data["last_updated"] = datetime.utcnow().isoformat() + "Z"
+            data["last_updated"] = datetime.now(datetime.UTC).isoformat() + "Z"
             self.backup()
             self._write(data)
 

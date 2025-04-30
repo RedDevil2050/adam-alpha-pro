@@ -11,7 +11,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
-    expire = datetime.utcnow() + (
+    expire = datetime.now(datetime.UTC) + (
         expires_delta
         or timedelta(minutes=settings.security.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
     )
