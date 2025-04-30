@@ -314,15 +314,10 @@ class Settings(BaseSettings):
                     pass
         return 6379
         
-    @property
-    def REDIS_URL(self) -> str:
-        """Get Redis URL from various possible sources"""
-        # First check direct attribute from env vars
-        direct_url = getattr(self.api_keys, 'REDIS_URL', None)
-        if direct_url:
-            return direct_url
-        # Default fallback
-        return 'redis://localhost:6379/0'
+@property
+def REDIS_URL(self) -> str:
+    """Get Redis URL from various possible sources"""
+    return "redis://redis:6379"
 
     def get_api_key(self, provider: str) -> Optional[str]:
         provider = provider.upper()
