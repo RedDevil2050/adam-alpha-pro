@@ -1,6 +1,7 @@
 from backend.utils.data_provider import fetch_price_series
 import pandas as pd
 from backend.agents.decorators import standard_agent_execution
+import asyncio
 
 agent_name = "MarketRegimeAgent"
 AGENT_CATEGORY = "market"
