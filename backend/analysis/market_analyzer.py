@@ -173,7 +173,7 @@ class MarketAnalyzer:
 
             return float(betas.mean())
         except KeyError:
-            logging.warning("SPY data not found, using fallback beta calculation")
+            logging.warning(f"SPY data not found in columns {returns.columns}. Using fallback beta calculation.")
             return self._calculate_fallback_beta(returns)
 
     @staticmethod

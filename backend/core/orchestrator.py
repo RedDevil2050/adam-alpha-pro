@@ -147,7 +147,7 @@ class SystemOrchestrator:
                 except KeyError:
                     # Log error if a dependency name doesn't match an Enum member
                     logger.error(
-                        f"Invalid category dependency name '{name}' found for {category_enum_member.name}"
+                        f"Invalid category dependency name '{name}' found for {category_enum_member.name}. Skipping dependency."
                     )
                     # Decide how to handle: skip, raise, etc. Skipping for now.
                     continue

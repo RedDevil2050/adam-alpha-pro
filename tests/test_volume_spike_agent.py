@@ -27,4 +27,7 @@ def mock_data(monkeypatch):
 @pytest.mark.asyncio
 async def test_volume_spike_agent():
     result = await run('TEST', {})
-    assert 'spike_ratio' in result and 'verdict' in result and 'confidence' in result
+    assert 'spike_ratio' in result
+    assert 'verdict' in result
+    assert 'confidence' in result
+    assert isinstance(result['confidence'], float)

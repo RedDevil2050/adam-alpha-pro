@@ -67,6 +67,9 @@ class APIKeys(BaseSettings):
     REDIS_URL: Optional[str] = Field(None, env="REDIS_URL")
     METRICS_PORT: Optional[int] = Field(None, env="METRICS_PORT")
     LOG_LEVEL: Optional[str] = Field(None, env="LOG_LEVEL")
+    JWT_SECRET: Optional[str] = Field(None, env="JWT_SECRET")
+    API_PASS: Optional[str] = Field(None, env="API_PASS")
+    API_PASS_HASH: Optional[str] = Field(None, env="API_PASS_HASH")
 
     # Additional fields to resolve validation errors
     ENV: Optional[str] = Field(None, env="ENV")

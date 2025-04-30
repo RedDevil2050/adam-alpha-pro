@@ -2,6 +2,8 @@ import numpy as np
 from sklearn.mixture import GaussianMixture
 from backend.utils.data_provider import fetch_price_series
 from backend.utils.cache_utils import get_redis_client
+import logging
+
 # Adjust the import path as needed; for example, if 'utils.py' is in the same directory:
 # from .utils import tracker
 # Or if it's one level up:
@@ -10,6 +12,7 @@ from backend.utils.cache_utils import get_redis_client
 # from backend.agents.ml.utils import tracker  # TODO: Fix import path if unresolved
 
 agent_name = "market_regime_agent"
+logger = logging.getLogger(__name__)  # Set up a logger for this module
 
 
 class MarketRegimeDetector:
@@ -60,11 +63,23 @@ async def run(symbol: str) -> dict:
         detector = MarketRegimeDetector()
         regime_data = detector.detect_regime(returns, np.full_like(returns, volatility))
 
+        current_regime = regime_data.get("current_regime")
+        if current_regime is None:
+            logger.warning(f"[{agent_name}] Missing 'current_regime' in regime_data for {symbol}")
+            return {
+                "symbol": symbol,
+                "verdict": "NO_DATA",
+                "confidence": 0.0,
+                "value": None,
+                "details": {"reason": "Missing 'current_regime' in regime_data"},
+                "agent_name": agent_name,
+            }
+
         result = {
             "symbol": symbol,
-            "verdict": f"REGIME_{regime_data['current_regime']}",
-            "confidence": round(regime_data["regime_probability"], 4),
-            "value": regime_data["current_regime"],
+            "verdict": f"REGIME_{current_regime}",
+            "confidence": round(regime_data.get("regime_probability", 0.0), 4),
+            "value": current_regime,
             "details": regime_data,
             "agent_name": agent_name,
         }

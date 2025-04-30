@@ -27,4 +27,7 @@ def mock_data(monkeypatch):
 @pytest.mark.asyncio
 async def test_trend_strength_agent():
     result = await run('TEST', {})
-    assert 'adx' in result and 'verdict' in result and 'confidence' in result
+    assert 'adx' in result
+    assert 'verdict' in result
+    assert 'confidence' in result
+    assert isinstance(result['confidence'], float)
