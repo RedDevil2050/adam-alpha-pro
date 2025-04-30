@@ -6,7 +6,7 @@ from backend.agents.technical.utils import tracker
 agent_name = "adx_agent"
 
 
-async def run(symbol: str) -> dict:
+async def run(symbol: str, agent_outputs: dict = None) -> dict:
     cache_key = f"{agent_name}:{symbol}"
     redis_client = get_redis_client()
     # 1) Cache check

@@ -174,6 +174,8 @@ async def run(
 
     # Verdict based on mean intrinsic value (Core Logic)
     intrinsic_value = mean_value
+    # Add debug logging for intrinsic value
+    logger.debug(f"Calculated intrinsic value for {symbol}: {intrinsic_value}")
     margin_of_safety = (
         (intrinsic_value - current_price) / current_price * 100
         if current_price > 0

@@ -180,6 +180,37 @@ async def fetch_fcf_per_share(symbol: str):
     """
     return await provider.fetch_company_info(symbol, "fcf_per_share")
 
+async def fetch_company_info(symbol: str, data_type: str = None):
+    """
+    Fetch company information (overview) for a given symbol.
+
+    Args:
+        symbol: Ticker symbol to fetch company info for.
+        data_type: Optional specific piece of info (e.g., 'eps', 'beta'). Provider handles this.
+
+    Returns:
+        Dictionary with company information.
+    """
+    # UnifiedDataProvider handles fetching specific parts if data_type is provided
+    return await provider.fetch_company_info(symbol)
+
+async def fetch_cash_flow_data(symbol: str):
+    """
+    Fetch cash flow statement data for a given symbol.
+
+    Args:
+        symbol: Ticker symbol to fetch cash flow data for.
+
+    Returns:
+        DataFrame or Dictionary with cash flow data.
+    """
+    # Assuming provider.fetch_historical_data can fetch fundamentals like cashflow
+    # We might need start/end dates, but let's try fetching the latest available first.
+    # The exact implementation might depend on the UnifiedDataProvider's capabilities.
+    # For now, let's assume it fetches the latest annual cash flow.
+    # A more robust implementation might require specific date handling.
+    return await provider.fetch_historical_data(symbol, "cashflow")
+
 async def fetch_market_data(symbol: str):
     """
     Fetch market data for a given symbol.

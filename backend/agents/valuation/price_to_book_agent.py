@@ -1,5 +1,5 @@
 import asyncio
-from backend.utils.data_provider import fetch_alpha_vantage
+from backend.utils.data_provider import fetch_company_info, fetch_price_point # Use unified provider
 from loguru import logger
 from backend.agents.decorators import standard_agent_execution
 import math
@@ -14,50 +14,67 @@ AGENT_CATEGORY = "valuation"
 async def run(symbol: str, agent_outputs: dict = None) -> dict:
     # Boilerplate handled by decorator
 
-    # Fetch overview data which contains PriceToBookRatio
-    overview_data = await fetch_alpha_vantage(
-        "query", {"function": "OVERVIEW", "symbol": symbol}
-    )
+    # Fetch necessary data using unified provider
+    company_info_task = fetch_company_info(symbol)
+    price_data_task = fetch_price_point(symbol)
+    company_info, price_data = await asyncio.gather(company_info_task, price_data_task)
 
-    if not overview_data:
+    if not company_info or not price_data or "error" in price_data:
+        reason = "Could not fetch required data (company info or price)."
+        if price_data and "error" in price_data:
+            reason += f" Price fetch error: {price_data['error']}"
+        logger.warning(f"[{agent_name}] {reason} for {symbol}")
         return {
-            "symbol": symbol,
-            "verdict": "NO_DATA",
-            "confidence": 0.0,
-            "value": None,
-            "details": {"reason": "Could not fetch overview data from Alpha Vantage"},
+            "symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None,
+            "details": {"reason": reason}, "agent_name": agent_name,
+        }
+
+    bvps_str = company_info.get("BookValuePerShare") # Key might differ based on provider
+    current_price = price_data.get("price")
+
+    if current_price is None:
+         logger.warning(f"[{agent_name}] Current price not available for {symbol}")
+         return {
+             "symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None,
+             "details": {"reason": "Current price not available"}, "agent_name": agent_name,
+         }
+
+    bvps = None
+    # ... parsing logic for bvps_str and current_price ...
+    try:
+        bvps = float(bvps_str)
+        current_price = float(current_price)
+        if current_price <= 0:
+             raise ValueError("Price must be positive") # Price shouldn't be zero/negative
+    except (ValueError, TypeError, AttributeError):
+        logger.warning(
+            f"[{agent_name}] Could not parse BVPS ('{bvps_str}') or price ('{current_price}') for {symbol}"
+        )
+        return {
+            "symbol": symbol, "verdict": "INVALID_DATA", "confidence": 0.1, "value": None,
+            "details": {"raw_bvps": bvps_str, "raw_price": current_price, "reason": "Could not parse BVPS or price"},
             "agent_name": agent_name,
         }
 
-    # Extract PriceToBookRatio
-    pb_ratio_str = overview_data.get("PriceToBookRatio")
-    pb_ratio = None
-    reason = "PriceToBookRatio not available in overview data."
+    if bvps is None: # Should be caught above, but double-check
+         logger.warning(f"[{agent_name}] BVPS is None after parsing for {symbol}")
+         return {
+             "symbol": symbol, "verdict": "INVALID_DATA", "confidence": 0.1, "value": None,
+             "details": {"reason": "BVPS became None unexpectedly"}, "agent_name": agent_name,
+         }
 
-    if pb_ratio_str and pb_ratio_str.lower() not in ["none", "-", ""]:
-        try:
-            pb_ratio = float(pb_ratio_str)
-            if math.isnan(pb_ratio) or pb_ratio <= 0:
-                reason = f"Invalid PriceToBookRatio found: {pb_ratio_str}"
-                pb_ratio = None  # Treat non-positive or NaN as unavailable
-            else:
-                reason = None  # Successfully parsed
-        except (ValueError, TypeError):
-            reason = f"Could not parse PriceToBookRatio: {pb_ratio_str}"
-            pb_ratio = None
-
-    # Check if P/B ratio was successfully extracted
-    if pb_ratio is None:
+    if bvps <= 0:
+        logger.info(f"[{agent_name}] Book Value Per Share is zero or negative ({bvps}) for {symbol}. P/B not meaningful.")
         return {
-            "symbol": symbol,
-            "verdict": "NO_DATA",
-            "confidence": 0.1,  # Low confidence as P/B is unavailable
-            "value": None,
-            "details": {"reason": reason, "raw_value": pb_ratio_str},
+            "symbol": symbol, "verdict": "NEGATIVE_OR_ZERO_BV", "confidence": 0.8, "value": None,
+            "details": {"reason": "Book Value Per Share <= 0", "bvps": bvps, "price": current_price},
             "agent_name": agent_name,
         }
 
-    # Determine verdict based on P/B ratio
+    # Calculate Price-to-Book (P/B) Ratio
+    pb_ratio = current_price / bvps
+
+    # Determine verdict based on P/B ratio (example thresholds)
     # Common interpretation: < 1 potentially undervalued, 1-3 fairly valued, > 3 potentially overvalued
     if pb_ratio < 1.0:
         verdict = "BUY"
@@ -79,15 +96,20 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         }
 
     details["pb_ratio"] = round(pb_ratio, 2)
-    details["data_source"] = "alpha_vantage_overview"
+    details["data_source"] = "unified_provider" # Adjust as needed
 
     # Return success result with the P/B ratio and verdict
     return {
         "symbol": symbol,
         "verdict": verdict,
-        "confidence": confidence,
-        "value": round(pb_ratio, 2),
-        "details": details,
+        "confidence": round(confidence, 4),
+        "value": round(pb_ratio, 4),
+        "details": {
+            "price_to_book": round(pb_ratio, 4),
+            "current_price": round(current_price, 4),
+            "book_value_per_share": round(bvps, 4),
+            "data_source": "unified_provider", # Adjust as needed
+        },
         "agent_name": agent_name,
     }
 

@@ -7,7 +7,7 @@ from backend.config.settings import settings
 agent_name = "stochastic_agent"
 
 
-async def run(symbol: str) -> dict:
+async def run(symbol: str, agent_outputs: dict = None) -> dict:
     cache_key = f"{agent_name}:{symbol}"
     redis_client = await get_redis_client()
     # Cache check

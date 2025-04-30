@@ -1,5 +1,5 @@
 import asyncio
-from backend.utils.data_provider import fetch_alpha_vantage  # Use fetch_alpha_vantage
+from backend.utils.data_provider import fetch_company_info # Use unified provider
 from loguru import logger
 from backend.agents.decorators import standard_agent_execution  # Import decorator
 from backend.config.settings import get_settings  # Added import
@@ -12,165 +12,120 @@ AGENT_CATEGORY = "valuation"  # Define category for the decorator
     agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600
 )
 async def run(symbol: str, agent_outputs: dict = None) -> dict:
-    """
-    Calculates the Price/Earnings-to-Growth (PEG) ratio for a given stock symbol and assesses its valuation relative to growth expectations.
+    # Boilerplate handled by decorator
 
-    Purpose:
-        Determines the PEG ratio, which adjusts the P/E ratio by factoring in the expected earnings growth rate.
-        It helps assess if a stock's price is justified by its earnings growth prospects.
-        A PEG ratio around 1 is often considered fairly valued, < 1 potentially undervalued, and > 1 potentially overvalued.
+    # 1. Get PE Ratio from pe_ratio_agent output if available
+    pe_ratio = None
+    pe_source = "N/A"
+    if agent_outputs and symbol in agent_outputs and "pe_ratio_agent" in agent_outputs[symbol]:
+        pe_data = agent_outputs[symbol]["pe_ratio_agent"]
+        if pe_data and "value" in pe_data and isinstance(pe_data["value"], (int, float)):
+            pe_ratio = pe_data["value"]
+            pe_source = "pe_ratio_agent"
+            logger.debug(f"[{agent_name}] Using PE Ratio {pe_ratio} from pe_ratio_agent for {symbol}")
 
-    Metrics Calculated:
-        - PEG Ratio (P/E Ratio / Annual EPS Growth Rate)
+    # 2. Fetch Company Info for Growth Rate (and PE if not from agent)
+    company_info = await fetch_company_info(symbol)
 
-    Logic:
-        1. Fetches company overview data from Alpha Vantage, which may include a pre-calculated PEG ratio.
-        2. Attempts to parse the provided PEG ratio. Handles cases where data is missing, 'None', or non-numeric.
-        3. (Future Enhancement: If PEG is not provided, it could be calculated using P/E ratio (also from overview) and an externally sourced EPS growth rate. This is not currently implemented due to lack of a reliable growth rate source in the overview data.)
-        4. Compares the PEG ratio against configurable thresholds (THRESHOLD_LOW_PEG, THRESHOLD_HIGH_PEG):
-            - If PEG <= 0: Verdict is 'NEGATIVE_OR_ZERO_PEG' (indicates negative earnings or growth).
-            - If 0 < PEG < THRESHOLD_LOW_PEG: Verdict is 'UNDERVALUED'.
-            - If THRESHOLD_LOW_PEG <= PEG <= THRESHOLD_HIGH_PEG: Verdict is 'FAIRLY_VALUED'.
-            - If PEG > THRESHOLD_HIGH_PEG: Verdict is 'OVERVALUED'.
-        5. Sets a fixed confidence score based on the verdict category.
-
-    Dependencies:
-        - Requires company overview data containing the PEG ratio (e.g., from Alpha Vantage).
-        - (Calculation fallback would require P/E ratio and a reliable EPS growth rate source).
-
-    Configuration Used (from settings.py -> AgentSettings -> PegRatioAgentSettings): # Updated docstring section
-        - `THRESHOLD_LOW_PEG`: Upper bound for 'UNDERVALUED'.
-        - `THRESHOLD_HIGH_PEG`: Upper bound for 'FAIRLY VALUED'.
-
-    Return Structure:
-        A dictionary containing:
-        - symbol (str): The stock symbol.
-        - verdict (str): 'UNDERVALUED', 'FAIRLY_VALUED', 'OVERVALUED', 'NEGATIVE_OR_ZERO_PEG', 'NO_DATA', or 'INVALID_DATA'.
-        - confidence (float): A fixed score based on the verdict category (0.0 to 1.0).
-        - value (float | None): The calculated/provided PEG ratio, or None if not available/applicable.
-        - details (dict): Contains the raw PEG/PE ratios, data source, and configured thresholds.
-        - agent_name (str): The name of this agent.
-        - error (str | None): Error message if an issue occurred (handled by decorator).
-    """
-    # Fetch settings
-    settings = get_settings()
-    peg_settings = settings.agent_settings.peg_ratio
-
-    # Thresholds now come from settings
-    # THRESHOLD_LOW_PEG = 1.0 # Removed hardcoded value
-    # THRESHOLD_HIGH_PEG = 2.0 # Removed hardcoded value
-
-    # Fetch overview data which contains PE Ratio and PEG Ratio
-    # Note: Alpha Vantage provides PEG directly, but also PE and Analyst Target Price (which might imply growth)
-    # We will prioritize the directly provided PEG, but calculate if needed/possible from PE and Growth Estimate
-    overview_data = await fetch_alpha_vantage(
-        "query", {"function": "OVERVIEW", "symbol": symbol}
-    )
-
-    if not overview_data:
+    if not company_info:
+        logger.warning(f"[{agent_name}] Could not fetch company info for {symbol}")
         return {
             "symbol": symbol,
             "verdict": "NO_DATA",
             "confidence": 0.0,
             "value": None,
-            "details": {"reason": "Could not fetch overview data from Alpha Vantage"},
+            "details": {"reason": "Could not fetch company info"},
             "agent_name": agent_name,
         }
 
-    peg_ratio_str = overview_data.get("PEGRatio")
-    pe_ratio_str = overview_data.get("PERatio")
-    # Growth rate isn't directly in overview, often needs separate source or estimation
-    # Alpha Vantage doesn't reliably provide a standard EPS growth rate here.
-    # We will rely on the provided PEG ratio first.
+    # 3. Get Analyst Target Price (often includes growth estimates) or specific growth fields
+    # Alpha Vantage OVERVIEW often has 'AnalystTargetPrice', sometimes growth fields directly.
+    # Let's prioritize 'EPSGrowthRate5Years' if available, else try parsing from other fields.
+    # This part is highly dependent on the actual fields returned by fetch_company_info
+    # Adjust the keys based on provider output. Example keys:
+    growth_rate_str = company_info.get("EPSGrowthRate5Years") # Example key
+    if not growth_rate_str:
+         growth_rate_str = company_info.get("EstimatedGrowthRate") # Another example
 
-    peg_ratio = None
-    data_source = "alpha_vantage_overview_peg"
-
-    # 1. Try using the directly provided PEG Ratio
-    if peg_ratio_str and peg_ratio_str.lower() not in ["none", "-", "", "0"]:
+    growth_rate = None
+    if growth_rate_str and growth_rate_str.lower() not in ["none", "-", ""]:
         try:
-            peg_ratio = float(peg_ratio_str)
-            logger.info(
-                f"[{agent_name}] Using directly provided PEG ratio for {symbol}: {peg_ratio}"
-            )
+            # Growth rate might be percentage, remove '%' if present
+            growth_rate = float(growth_rate_str.replace('%', ''))
+            # If PE wasn't obtained from agent, try getting it from company_info
+            if pe_ratio is None:
+                pe_ratio_str = company_info.get("PERatio")
+                if pe_ratio_str and pe_ratio_str.lower() not in ["none", "-", ""]:
+                    pe_ratio = float(pe_ratio_str)
+                    pe_source = "company_info"
+
         except (ValueError, TypeError):
             logger.warning(
-                f"[{agent_name}] Could not parse provided PEG ratio for {symbol}: {peg_ratio_str}. Will attempt calculation if possible."
+                f"[{agent_name}] Could not parse growth rate ('{growth_rate_str}') or PE ('{company_info.get('PERatio')}') for {symbol}"
             )
-            peg_ratio = None  # Ensure it's None if parsing failed
+            # Continue without growth rate if PE is available, or return error
+            if pe_ratio is None:
+                 return {
+                    "symbol": symbol, "verdict": "INVALID_DATA", "confidence": 0.1, "value": None,
+                    "details": {"reason": "Could not parse PE Ratio or Growth Rate"}, "agent_name": agent_name,
+                 }
+            # else: proceed to calculate PEG=infinity if growth is zero/negative later
 
-    # 2. Fallback: Calculate PEG if PE is available (Requires external growth rate source - NOT IMPLEMENTED here)
-    # This section is commented out as reliable growth rate isn't in overview
-    # if peg_ratio is None:
-    #     logger.info(f"[{agent_name}] Provided PEG not available/parseable for {symbol}. Calculation fallback not implemented due to missing growth rate.")
-    # pe_ratio = None
-    # growth_rate = None # Needs to be fetched from another source
-    # data_source = "calculated (fallback - growth rate source needed)"
-    # if pe_ratio_str and pe_ratio_str.lower() not in ["none", "-", ""]:
-    #     try:
-    #         pe_ratio = float(pe_ratio_str)
-    #     except (ValueError, TypeError):
-    #         pe_ratio = None
-    #
-    # # Placeholder: Fetch or estimate growth rate (e.g., from analyst estimates)
-    # # growth_rate = await fetch_some_growth_rate_source(symbol) # Example
-    #
-    # if pe_ratio and growth_rate and growth_rate > 0:
-    #     peg_ratio = pe_ratio / (growth_rate * 100) # Assuming growth rate is percentage e.g., 15 for 15%
-    #     logger.info(f"[{agent_name}] Calculated PEG ratio for {symbol}: {peg_ratio}")
-    # else:
-    #     logger.warning(f"[{agent_name}] Cannot calculate PEG for {symbol} due to missing PE ({pe_ratio}) or growth rate ({growth_rate}).")
-
-    # 3. Check if we have a valid PEG ratio
-    if peg_ratio is None:
-        details = {
-            "raw_peg_ratio": peg_ratio_str,
-            "raw_pe_ratio": pe_ratio_str,
-            "reason": "PEG ratio not provided by Alpha Vantage or could not be parsed. Fundamental calculation fallback not implemented due to missing growth rate source.",
-        }
+    # 4. Validate PE and Growth Rate
+    if pe_ratio is None or growth_rate is None:
+        missing = []
+        if pe_ratio is None: missing.append("PE Ratio")
+        if growth_rate is None: missing.append("EPS Growth Rate")
+        reason = f"Missing required data: {', '.join(missing)}"
+        logger.warning(f"[{agent_name}] {reason} for {symbol}")
         return {
-            "symbol": symbol,
-            "verdict": "NO_DATA",
-            "confidence": 0.1,
-            "value": None,
-            "details": details,
+            "symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None,
+            "details": {"reason": reason, "pe_source": pe_source}, "agent_name": agent_name,
+        }
+
+    if pe_ratio <= 0:
+        logger.info(f"[{agent_name}] PE Ratio is zero or negative ({pe_ratio}) for {symbol}. Cannot calculate PEG.")
+        return {
+            "symbol": symbol, "verdict": "NOT_APPLICABLE", "confidence": 0.8, "value": None,
+            "details": {"reason": "PE Ratio is zero or negative", "pe_ratio": pe_ratio, "growth_rate": growth_rate, "pe_source": pe_source},
             "agent_name": agent_name,
         }
 
-    # 4. Determine Verdict based on standardized PEG ratio thresholds
-    if peg_ratio <= 0:
-        # Negative PEG usually means negative earnings (negative PE) or zero/negative growth
-        verdict = "NEGATIVE_OR_ZERO_PEG"  # Specific case
-        confidence = 0.6  # Confidence that the value is problematic or indicates negative earnings/growth
-    elif peg_ratio < peg_settings.THRESHOLD_LOW_PEG:  # Use setting
-        verdict = (
-            "UNDERVALUED"  # Standardized verdict (potentially high growth for price)
-        )
-        confidence = 0.7
-    elif peg_ratio <= peg_settings.THRESHOLD_HIGH_PEG:  # Use setting
-        verdict = "FAIRLY_VALUED"  # Standardized verdict
-        confidence = 0.5
-    else:  # peg_ratio > peg_settings.THRESHOLD_HIGH_PEG
-        verdict = (
-            "OVERVALUED"  # Standardized verdict (potentially low growth for price)
-        )
-        confidence = 0.4
+    if growth_rate <= 0:
+        logger.info(f"[{agent_name}] Growth rate is zero or negative ({growth_rate}) for {symbol}. PEG is not meaningful.")
+        # You could return a very high PEG or a specific verdict
+        return {
+            "symbol": symbol, "verdict": "LOW_OR_NEG_GROWTH", "confidence": 0.8, "value": float('inf'), # Or None
+            "details": {"reason": "Growth rate is zero or negative", "pe_ratio": pe_ratio, "growth_rate": growth_rate, "pe_source": pe_source},
+            "agent_name": agent_name,
+        }
 
-    # Create success result dictionary
-    result = {
+    # 5. Calculate PEG Ratio
+    peg_ratio = pe_ratio / growth_rate
+
+    # 6. Determine Verdict (Example thresholds)
+    # Example verdict logic based on PEG ratio
+    if peg_ratio < 1:
+        verdict = "UNDERVALUED"
+        confidence = 0.9
+    elif 1 <= peg_ratio <= 2:
+        verdict = "FAIR_VALUE"
+        confidence = 0.7
+    else:
+        verdict = "OVERVALUED"
+        confidence = 0.6
+
+    return {
         "symbol": symbol,
         "verdict": verdict,
         "confidence": round(confidence, 4),
-        "value": round(peg_ratio, 2),  # Return the PEG ratio
+        "value": round(peg_ratio, 4),
         "details": {
-            "peg_ratio": round(peg_ratio, 2),
-            "data_source": data_source,
-            "raw_peg_provided": peg_ratio_str,  # Include raw value for context
-            "raw_pe_provided": pe_ratio_str,
-            "threshold_undervalued": peg_settings.THRESHOLD_LOW_PEG,  # Use setting
-            "threshold_overvalued": peg_settings.THRESHOLD_HIGH_PEG,  # Use setting
+            "peg_ratio": round(peg_ratio, 4),
+            "pe_ratio": round(pe_ratio, 4),
+            "growth_rate_pct": round(growth_rate, 4),
+            "pe_source": pe_source,
+            "data_source": "alpha_vantage_overview", # Or adjust based on actual provider
         },
         "agent_name": agent_name,
     }
-
-    return result

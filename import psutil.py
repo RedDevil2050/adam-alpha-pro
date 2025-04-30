@@ -1,5 +1,5 @@
 import psutil
-from datetime import datetime
+import datetime
 import aioredis
 from backend.config.settings import get_settings
 
@@ -32,7 +32,7 @@ class SystemMonitor:
         return {
             'status': 'healthy' if all(components.values()) else 'unhealthy',
             'components': components,
-            'timestamp': datetime.now(datetime.UTC).isoformat()
+            'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat()
         }
 
     def _check_threshold(self, metric: str, value: float) -> bool:

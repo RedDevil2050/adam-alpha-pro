@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from jose import jwt, JWTError
 from fastapi import Depends, HTTPException, status
@@ -9,18 +9,17 @@ settings = get_settings()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
-    expire = datetime.now(datetime.UTC) + (
-        expires_delta
-        or timedelta(minutes=settings.security.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
-    )
+    if expires_delta:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(
+            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
+        )
     to_encode.update({"exp": expire})
-    return jwt.encode(
-        to_encode,
-        settings.security.JWT_SECRET_KEY,
-        algorithm=settings.security.JWT_ALGORITHM,
-    )
+    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    return encoded_jwt
 
 
 async def verify_token(token: str = Depends(oauth2_scheme)) -> dict:

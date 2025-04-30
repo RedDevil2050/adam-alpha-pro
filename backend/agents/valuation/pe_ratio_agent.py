@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from backend.utils.data_provider import (
     fetch_price_point,
-    fetch_latest_eps,
+    fetch_latest_eps,  # Corrected import
     fetch_historical_price_series,
 )  # Updated imports
 from loguru import logger
@@ -77,11 +77,11 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     # Fetch current price, latest EPS, and historical prices concurrently
     try:
         price_task = fetch_price_point(symbol)
-        eps_task = fetch_latest_eps(symbol)
+        eps_task = fetch_latest_eps(symbol)  # Corrected call
         hist_price_task = fetch_historical_price_series(
             symbol, years=pe_settings.HISTORICAL_YEARS
         )
-        price_data, current_eps, historical_prices = await asyncio.gather(
+        price_data, current_eps_data, historical_prices = await asyncio.gather(  # Renamed variable
             price_task, eps_task, hist_price_task
         )
     except Exception as fetch_err:
@@ -96,6 +96,8 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         }
 
     current_price = price_data.get("latestPrice") if price_data else None
+    # Extract EPS value from the fetched data
+    current_eps = current_eps_data.get("eps") if current_eps_data else None
 
     # Validate fetched data
     if current_price is None or current_price <= 0:

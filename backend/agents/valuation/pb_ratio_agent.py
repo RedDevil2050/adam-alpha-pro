@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from backend.utils.data_provider import (
     fetch_price_point,
-    fetch_latest_bvps,
+    fetch_latest_bvps,  # Corrected import
     fetch_historical_price_series,
 )  # Updated imports
 from loguru import logger
@@ -77,11 +77,11 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     # Fetch current price, latest BVPS, and historical prices concurrently
     try:
         price_task = fetch_price_point(symbol)
-        bvps_task = fetch_latest_bvps(symbol)
+        bvps_task = fetch_latest_bvps(symbol)  # Corrected call
         hist_price_task = fetch_historical_price_series(
             symbol, years=pb_settings.HISTORICAL_YEARS
         )
-        price_data, current_bvps, historical_prices = await asyncio.gather(
+        price_data, current_bvps_data, historical_prices = await asyncio.gather(  # Renamed variable
             price_task, bvps_task, hist_price_task
         )
     except Exception as fetch_err:
@@ -96,6 +96,8 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         }
 
     current_price = price_data.get("latestPrice") if price_data else None
+    # Extract BVPS value from the fetched data
+    current_bvps = current_bvps_data.get("bookValuePerShare") if current_bvps_data else None
 
     # Validate fetched data
     if current_price is None or current_price <= 0:

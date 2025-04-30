@@ -1,7 +1,7 @@
 import asyncio
 from backend.utils.data_provider import (
     fetch_price_point,
-    fetch_alpha_vantage,
+    fetch_company_info, # Corrected import
 )  # Use fetch_alpha_vantage
 from loguru import logger
 from backend.agents.decorators import standard_agent_execution  # Import decorator
@@ -97,10 +97,8 @@ async def run(symbol: str, agent_outputs: dict = {}) -> dict:
 
     # 2. If not available from dividend_agent, fetch data directly
     if dividend_yield is None and annual_dividend is None:
-        data_source = "alpha_vantage + price_point"
-        overview_task = fetch_alpha_vantage(
-            "query", {"function": "OVERVIEW", "symbol": symbol}
-        )
+        data_source = "company_info + price_point" # Updated source
+        overview_task = fetch_company_info(symbol) # Corrected call
         price_task = fetch_price_point(symbol)
         overview_data, price_data = await asyncio.gather(overview_task, price_task)
 
@@ -210,7 +208,7 @@ async def run(symbol: str, agent_outputs: dict = {}) -> dict:
             "annual_dividend_per_share": (
                 round(annual_dividend, 4) if annual_dividend is not None else None
             ),
-            "data_source": data_source,
+            "data_source": data_source, # Ensure data_source reflects the change
             "threshold_high": yield_settings.THRESHOLD_HIGH,  # Use setting
             "threshold_attractive": yield_settings.THRESHOLD_ATTRACTIVE,  # Use setting
             "threshold_moderate": yield_settings.THRESHOLD_MODERATE,  # Use setting

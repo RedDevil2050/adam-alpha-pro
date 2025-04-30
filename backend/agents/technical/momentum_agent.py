@@ -11,7 +11,7 @@ from backend.utils.data_provider import fetch_historical_price_series
 from backend.agents.decorators import standard_agent_execution
 from backend.config.settings import get_settings
 from loguru import logger
-import asyncio  # Import asyncio
+import asyncio
 
 agent_name = "momentum_agent"
 AGENT_CATEGORY = "technical"
@@ -75,7 +75,6 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         }
 
     max_lookback = max(mom_settings.LOOKBACK_PERIODS)
-    # Fetch slightly more data than needed for buffer
     required_years = int(max_lookback / 252) + 1
 
     try:
@@ -129,56 +128,57 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
 
     for period in mom_settings.LOOKBACK_PERIODS:
         try:
-            # Ensure index exists before accessing
             if -1 - period >= -len(historical_prices):
                 past_price = historical_prices.iloc[-1 - period]
                 if pd.notna(past_price) and past_price > 0:
+                    # Calculate return as a fraction
                     period_return = (latest_price / past_price) - 1
                     returns[f"{period}d"] = period_return
                     details[f"return_{period}d_pct"] = round(period_return * 100, 2)
                 else:
-                    details[f"return_{period}d_pct"] = None  # Invalid past price
+                    details[f"return_{period}d_pct"] = None
             else:
-                details[f"return_{period}d_pct"] = (
-                    None  # Not enough data points historically
-                )
+                details[f"return_{period}d_pct"] = None
         except IndexError:
-            details[f"return_{period}d_pct"] = (
-                None  # Should not happen with length check, but safety
-            )
+            details[f"return_{period}d_pct"] = None
 
     # Calculate Average Momentum
     valid_returns = [r for r in returns.values() if r is not None and pd.notna(r)]
+    # average_momentum is the average of fractional returns
     average_momentum = np.mean(valid_returns) if valid_returns else None
     details["average_momentum_pct"] = (
-        round(average_momentum * 100, 2) if average_momentum is not None else None
+        round(average_momentum * 100, 2) if average_momentum is not None and pd.notna(average_momentum) else None
     )
 
+    # Log the calculated average momentum before verdict logic
+    logger.debug(f"[{agent_name}:{symbol}] Calculated average momentum (fraction): {average_momentum}")
+
     # Determine Verdict
-    # Define a small tolerance for neutrality
     neutral_tolerance = 1e-4 # Consider momentum between -0.01% and +0.01% as neutral
 
-    if average_momentum is None:
+    # Ensure average_momentum is a valid number before comparison
+    if average_momentum is None or not pd.notna(average_momentum):
         verdict = "NO_DATA"
         confidence = 0.0
         details["reason"] = "Could not calculate momentum for any lookback period."
-    elif average_momentum > mom_settings.THRESHOLD_STRONG_POSITIVE:
+    # Compare average_momentum (fraction) directly with fractional thresholds
+    elif average_momentum > mom_settings.THRESHOLD_STRONG_POSITIVE: # e.g., > 0.15
         verdict = "STRONG_POSITIVE_MOMENTUM"
-        confidence = 0.7
-    elif average_momentum < mom_settings.THRESHOLD_STRONG_NEGATIVE:
+        confidence = 0.8 # Updated confidence
+    elif average_momentum < mom_settings.THRESHOLD_STRONG_NEGATIVE: # e.g., < -0.10
         verdict = "STRONG_NEGATIVE_MOMENTUM"
-        confidence = 0.7
-    elif average_momentum > neutral_tolerance: # Clearly positive, but not strong
+        confidence = 0.8 # Updated confidence
+    elif average_momentum > neutral_tolerance: # e.g., > 0.0001 (and <= 0.15)
         verdict = "POSITIVE_MOMENTUM"
-        confidence = 0.5
-    elif average_momentum < -neutral_tolerance: # Clearly negative, but not strong
+        confidence = 0.6 # Updated confidence
+    elif average_momentum < -neutral_tolerance: # e.g., < -0.0001 (and >= -0.10)
         verdict = "NEGATIVE_MOMENTUM"
-        confidence = 0.5
-    else: # Close to zero
+        confidence = 0.6 # Updated confidence
+    else: # Between -neutral_tolerance and neutral_tolerance (approx zero)
         verdict = "NEUTRAL_MOMENTUM"
-        confidence = 0.4 # Lower confidence for neutral
+        confidence = 0.4
 
-    # Add config to details - Directly use attribute values from the settings object
+    # Add config to details - Ensure these values are serializable
     details["config_used"] = {
         "lookback_periods": mom_settings.LOOKBACK_PERIODS,
         "threshold_strong_positive": mom_settings.THRESHOLD_STRONG_POSITIVE,
@@ -186,14 +186,17 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     }
     details["data_source"] = "historical_prices"
 
-    # Return result
+    # Return result - Ensure 'value' is correctly calculated and rounded
+    result_value = None
+    if average_momentum is not None and pd.notna(average_momentum):
+        # average_momentum is a fraction, convert to percentage for 'value'
+        result_value = round(average_momentum * 100, 2)
+
     result = {
         "symbol": symbol,
         "verdict": verdict,
         "confidence": round(confidence, 4),
-        "value": (
-            round(average_momentum * 100, 2) if average_momentum is not None else None
-        ),
+        "value": result_value, # This is the percentage value
         "details": details,
         "agent_name": agent_name,
     }

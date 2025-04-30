@@ -1,4 +1,4 @@
-from backend.utils.data_provider import fetch_alpha_vantage  # Use fetch_alpha_vantage
+from backend.utils.data_provider import fetch_company_info # Use unified provider
 from loguru import logger
 from backend.agents.decorators import standard_agent_execution  # Import decorator
 
@@ -12,22 +12,20 @@ AGENT_CATEGORY = "valuation"  # Define category for the decorator
 async def run(symbol: str, agent_outputs: dict = None) -> dict:
     # Boilerplate handled by decorator
 
-    # Fetch overview data which contains EPS
-    overview_data = await fetch_alpha_vantage(
-        "query", {"function": "OVERVIEW", "symbol": symbol}
-    )
+    # Fetch overview data which contains EPS using unified provider
+    company_info = await fetch_company_info(symbol)
 
-    if not overview_data:
+    if not company_info:
         return {
             "symbol": symbol,
             "verdict": "NO_DATA",
             "confidence": 0.0,
             "value": None,
-            "details": {"reason": "Could not fetch overview data from Alpha Vantage"},
+            "details": {"reason": "Could not fetch company info"},
             "agent_name": agent_name,
         }
 
-    eps_str = overview_data.get("EPS")
+    eps_str = company_info.get("EPS")
     eps = None
 
     if eps_str and eps_str.lower() not in ["none", "-", ""]:

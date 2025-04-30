@@ -2,11 +2,12 @@ import pandas as pd
 from backend.utils.data_provider import fetch_ohlcv_series
 from backend.utils.cache_utils import get_redis_client
 from backend.agents.technical.utils import tracker
+from datetime import datetime, timedelta
 
 agent_name = "moving_average_agent"
 
 
-async def run(symbol: str, window: int = 20) -> dict:
+async def run(symbol: str, window: int = 20, agent_outputs: dict = None) -> dict:
     cache_key = f"{agent_name}:{symbol}:{window}"
     redis_client = get_redis_client()
     # 1) Cache check
@@ -14,8 +15,14 @@ async def run(symbol: str, window: int = 20) -> dict:
     if cached:
         return cached
 
-    # 2) Fetch OHLCV data (API first, then scraper)
-    df = await fetch_ohlcv_series(symbol, source_preference=["api", "scrape"])
+    # Define date range for the past year
+    end_date = datetime(2025, 4, 30)
+    start_date = end_date - timedelta(days=365)
+    end_date_str = end_date.strftime('%Y-%m-%d')
+    start_date_str = start_date.strftime('%Y-%m-%d')
+
+    # 2) Fetch OHLCV data
+    df = await fetch_ohlcv_series(symbol, start_date=start_date_str, end_date=end_date_str)
     if df is None or df.empty or len(df) < window + 1:
         result = {
             "symbol": symbol,

@@ -24,7 +24,7 @@ class BollingerBandAgent:
         }
 
 
-def run(prices: List[float]) -> Dict[str, float]:
+def run(prices: List[float], agent_outputs: dict = None) -> Dict[str, float]:
     """Run the Bollinger Band calculation."""
     agent = BollingerBandAgent()
     return agent.calculate(prices)

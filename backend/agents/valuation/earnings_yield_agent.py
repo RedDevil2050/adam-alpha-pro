@@ -1,9 +1,5 @@
 import asyncio
-from backend.utils.data_provider import (
-    fetch_price_point,
-    fetch_eps,
-    fetch_alpha_vantage,
-)  # Added fetch_alpha_vantage
+from backend.utils.data_provider import fetch_company_info, fetch_price_point # Use unified provider
 from loguru import logger
 from backend.agents.decorators import standard_agent_execution  # Import decorator
 
@@ -17,66 +13,55 @@ AGENT_CATEGORY = "valuation"  # Define category for the decorator
 async def run(symbol: str, agent_outputs: dict = None) -> dict:
     # Boilerplate handled by decorator
 
-    current_price = None
+    # Fetch necessary data using unified provider
+    company_info_task = fetch_company_info(symbol)
+    price_data_task = fetch_price_point(symbol)
+    company_info, price_data = await asyncio.gather(company_info_task, price_data_task)
+
+    if not company_info or not price_data or "error" in price_data:
+        reason = "Could not fetch required data (company info or price)."
+        if price_data and "error" in price_data:
+            reason += f" Price fetch error: {price_data['error']}"
+        logger.warning(f"[{agent_name}] {reason} for {symbol}")
+        return {
+            "symbol": symbol,
+            "verdict": "NO_DATA",
+            "confidence": 0.0,
+            "value": None,
+            "details": {"reason": reason},
+            "agent_name": agent_name,
+        }
+
+    eps_str = company_info.get("EPS")
+    current_price = price_data.get("price") # Assuming fetch_price_point returns {'price': ...}
+
+    if current_price is None:
+         logger.warning(f"[{agent_name}] Current price not available for {symbol}")
+         return {
+             "symbol": symbol,
+             "verdict": "NO_DATA",
+             "confidence": 0.0,
+             "value": None,
+             "details": {"reason": "Current price not available"},
+             "agent_name": agent_name,
+         }
+
     eps = None
     eps_source = "unknown"
 
-    # 1. Fetch Price
-    price_data_task = fetch_price_point(symbol)
-
-    # 2. Determine EPS source and fetch if necessary
-    eps_task = None
-    if (
-        agent_outputs
-        and "eps_agent" in agent_outputs
-        and agent_outputs["eps_agent"].get("value") is not None
-    ):
+    # Extract EPS if available
+    if eps_str and eps_str.lower() not in ["none", "-", ""]:
         try:
-            eps = float(agent_outputs["eps_agent"]["value"])
-            eps_source = "eps_agent"
-            logger.info(f"[{agent_name}] Using EPS from eps_agent for {symbol}")
+            eps = float(eps_str)
+            eps_source = "company_info"
         except (ValueError, TypeError):
             logger.warning(
-                f"[{agent_name}] Could not parse EPS from eps_agent for {symbol}, falling back."
+                f"[{agent_name}] Could not parse EPS from company info for {symbol}: {eps_str}"
             )
-            # Fallback: Fetch EPS directly or from overview
-            eps_task = fetch_alpha_vantage(
-                "query", {"function": "OVERVIEW", "symbol": symbol}
-            )
-            eps_source = "alpha_vantage_overview_fallback"
     else:
-        # Fetch EPS from overview if not available from agent
-        eps_task = fetch_alpha_vantage(
-            "query", {"function": "OVERVIEW", "symbol": symbol}
+        logger.warning(
+            f"[{agent_name}] EPS not found in company info for {symbol}"
         )
-        eps_source = "alpha_vantage_overview"
-
-    # 3. Gather results
-    results = await asyncio.gather(price_data_task, eps_task, return_exceptions=True)
-
-    price_data = results[0] if not isinstance(results[0], Exception) else None
-    overview_data = (
-        results[1] if eps_task and not isinstance(results[1], Exception) else None
-    )
-
-    # Extract price
-    if price_data:
-        current_price = price_data.get("latestPrice")
-
-    # Extract EPS if fetched via fallback/direct
-    if eps is None and overview_data:
-        eps_str = overview_data.get("EPS")
-        if eps_str and eps_str.lower() not in ["none", "-", ""]:
-            try:
-                eps = float(eps_str)
-            except (ValueError, TypeError):
-                logger.warning(
-                    f"[{agent_name}] Could not parse EPS from Alpha Vantage overview for {symbol}: {eps_str}"
-                )
-        else:
-            logger.warning(
-                f"[{agent_name}] EPS not found in Alpha Vantage overview for {symbol}"
-            )
 
     # 4. Validate data
     if eps is None or eps <= 0 or current_price is None or current_price <= 0:
@@ -99,10 +84,41 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         # If EPS is negative, proceed but note it
         logger.info(f"[{agent_name}] Proceeding with negative EPS for {symbol}: {eps}")
 
-    # 5. Calculate Earnings Yield (Core Logic)
-    earnings_yield = (eps / current_price) * 100
+    # Ensure eps and current_price are floats before division
+    try:
+        eps = float(eps_str)
+        current_price = float(current_price) # Ensure price is float
+        if current_price <= 0:
+             raise ValueError("Price must be positive")
+    except (ValueError, TypeError, AttributeError):
+        logger.warning(
+            f"[{agent_name}] Could not parse EPS ('{eps_str}') or price ('{current_price}') for {symbol}"
+        )
+        return {
+            "symbol": symbol,
+            "verdict": "INVALID_DATA",
+            "confidence": 0.1,
+            "value": None,
+            "details": {"raw_eps": eps_str, "raw_price": current_price, "reason": "Could not parse EPS or price"},
+            "agent_name": agent_name,
+        }
 
-    # 6. Determine Verdict (using fixed thresholds, market regime logic removed)
+    if eps is None: # Handle case where EPS parsing failed earlier but wasn't caught (shouldn't happen with above logic, but good practice)
+         logger.warning(f"[{agent_name}] EPS is None after parsing for {symbol}")
+         return {
+             "symbol": symbol,
+             "verdict": "INVALID_DATA",
+             "confidence": 0.1,
+             "value": None,
+             "details": {"reason": "EPS became None unexpectedly"},
+             "agent_name": agent_name,
+         }
+
+
+    # Calculate Earnings Yield
+    earnings_yield = (eps / current_price) * 100 if current_price else 0
+
+    # Determine verdict based on yield (example thresholds)
     # Thresholds can be adjusted based on general market conditions or preferences
     high_threshold = 8.0  # e.g., > 8% is attractive
     low_threshold = 4.0  # e.g., < 4% is expensive
@@ -131,7 +147,6 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
             "current_price": round(current_price, 2),
             "eps": round(eps, 4),
             "eps_source": eps_source,
-            # "market_regime": "NOT_IMPLEMENTED" # Market regime logic removed
         },
         "agent_name": agent_name,
     }

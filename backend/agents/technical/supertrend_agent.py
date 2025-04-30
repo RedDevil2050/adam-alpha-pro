@@ -3,6 +3,7 @@ from backend.utils.data_provider import fetch_ohlcv_series
 import pandas as pd
 import numpy as np
 from loguru import logger
+from datetime import datetime, timedelta
 
 agent_name = "supertrend_agent"
 
@@ -10,7 +11,13 @@ agent_name = "supertrend_agent"
 class SupertrendAgent(TechnicalAgent):
     async def _execute(self, symbol: str, agent_outputs: dict) -> dict:
         try:
-            df = await fetch_ohlcv_series(symbol)
+            # Define date range for the past year
+            end_date = datetime(2025, 4, 30)
+            start_date = end_date - timedelta(days=365)
+            end_date_str = end_date.strftime('%Y-%m-%d')
+            start_date_str = start_date.strftime('%Y-%m-%d')
+
+            df = await fetch_ohlcv_series(symbol, start_date=start_date_str, end_date=end_date_str)
             if df is None or df.empty:
                 return self._error_response(symbol, "No data available")
 

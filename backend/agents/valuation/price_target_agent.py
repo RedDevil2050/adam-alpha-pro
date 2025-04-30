@@ -1,5 +1,5 @@
 import asyncio
-from backend.utils.data_provider import fetch_alpha_vantage  # Use standard fetcher
+from backend.utils.data_provider import fetch_company_info  # Use fetch_company_info
 from loguru import logger
 from backend.agents.decorators import standard_agent_execution
 import math  # Import math for isnan
@@ -15,9 +15,7 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     # Boilerplate handled by decorator
 
     # Fetch overview data which contains AnalystTargetPrice
-    overview_data = await fetch_alpha_vantage(
-        "query", {"function": "OVERVIEW", "symbol": symbol}
-    )
+    overview_data = await fetch_company_info(symbol) # Corrected call
 
     if not overview_data:
         return {
@@ -25,7 +23,7 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
             "verdict": "NO_DATA",
             "confidence": 0.0,
             "value": None,
-            "details": {"reason": "Could not fetch overview data from Alpha Vantage"},
+            "details": {"reason": "Could not fetch company info"}, # Updated reason
             "agent_name": agent_name,
         }
 
@@ -65,7 +63,7 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         "value": round(target_price, 2),
         "details": {
             "analyst_target_price": round(target_price, 2),
-            "data_source": "alpha_vantage_overview",
+            "data_source": "company_info", # Updated source
         },
         "agent_name": agent_name,
     }
