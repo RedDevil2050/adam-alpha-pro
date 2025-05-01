@@ -142,19 +142,28 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     z_score = None
     data_source = "calculated_fundamental"
 
-    if historical_prices is not None and not historical_prices.empty:
+    # First, check if historical_prices exists
+    if historical_prices is not None:
         # Ensure historical_prices is a pandas Series
         if not isinstance(historical_prices, pd.Series):
             try:
-                # Attempt conversion assuming dict {date: price} or similar
+                # Attempt conversion assuming dict {date: price} or similar list
                 historical_prices = pd.Series(historical_prices)
-                historical_prices.index = pd.to_datetime(historical_prices.index)
+                # If index is not datetime-like, conversion might fail or be meaningless for time series
+                # We might need more robust handling depending on expected list format
+                if not pd.api.types.is_datetime64_any_dtype(historical_prices.index):
+                     # Attempt to infer datetime index if it looks like dates, otherwise use default numeric
+                     try:
+                         historical_prices.index = pd.to_datetime(historical_prices.index)
+                     except (ValueError, TypeError):
+                         logger.warning(f"[{agent_name}] Could not infer datetime index for {symbol}, using default index.")
             except Exception as conversion_err:
                 logger.warning(
                     f"[{agent_name}] Could not convert historical_prices to Series for {symbol}: {conversion_err}"
                 )
                 historical_prices = None  # Invalidate if conversion fails
 
+        # Now check if conversion was successful and series is not empty
         if historical_prices is not None and not historical_prices.empty:
             # Calculate historical P/E using historical prices and CURRENT EPS (simplification!)
             historical_pe_series = historical_prices / current_eps
@@ -165,33 +174,44 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
                 mean_hist_pe = historical_pe_series.mean()
                 std_hist_pe = historical_pe_series.std()
 
-                # Calculate percentile rank of current P/E relative to history
-                try:
-                    # Use scipy if available for potentially more accurate percentileofscore
-                    from scipy import stats
+                # Check for zero standard deviation BEFORE calculating percentile/z-score
+                if std_hist_pe is None or std_hist_pe < 1e-9:
+                    logger.warning(f"[{agent_name}] Historical P/E std dev is zero or None for {symbol}. Cannot calculate percentile/z-score.")
+                    percentile_rank = None # Ensure these are None
+                    z_score = None
+                    data_source += " (historical std dev zero)" # Add note to data source
+                else:
+                    # Calculate percentile rank of current P/E relative to history
+                    try:
+                        # Use scipy if available for potentially more accurate percentileofscore
+                        from scipy import stats
 
-                    percentile_rank = stats.percentileofscore(
-                        historical_pe_series, current_pe, kind="rank"
-                    )
-                except ImportError:
-                    # Fallback numpy/pandas calculation (less precise for ties)
-                    percentile_rank = (historical_pe_series < current_pe).mean() * 100
+                        percentile_rank = stats.percentileofscore(
+                            historical_pe_series, current_pe, kind="rank"
+                        )
+                    except ImportError:
+                        # Fallback numpy/pandas calculation (less precise for ties)
+                        percentile_rank = (historical_pe_series < current_pe).mean() * 100
 
-                # Calculate Z-score
-                if std_hist_pe and std_hist_pe > 1e-9:  # Avoid division by near-zero
+                    # Calculate Z-score (already checked std_hist_pe > 1e-9)
                     z_score = (current_pe - mean_hist_pe) / std_hist_pe
             else:
                 logger.warning(
                     f"[{agent_name}] Historical P/E series empty after calculation for {symbol}"
                 )
                 data_source = "calculated_fundamental (historical calc failed)"
-        else:
+        # This else corresponds to the check after conversion attempt
+        elif historical_prices is not None: # It exists but is empty
+             logger.warning(f"[{agent_name}] Historical price series is empty for {symbol}")
+             data_source = "calculated_fundamental (empty historical data)"
+        else: # Conversion failed or original was None
             logger.warning(
-                f"[{agent_name}] Invalid historical price series format for {symbol}"
+                f"[{agent_name}] Invalid or missing historical price series format for {symbol}"
             )
-            data_source = "calculated_fundamental (invalid historical data)"
+            data_source = "calculated_fundamental (invalid/missing historical data)"
 
     # Determine Verdict based on Percentile Rank
+    # This logic remains largely the same, but now percentile_rank will be None if std dev was zero
     if percentile_rank is None:
         verdict = "NO_HISTORICAL_CONTEXT"
         confidence = 0.3  # Low confidence as only current PE is known

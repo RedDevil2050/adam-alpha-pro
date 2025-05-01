@@ -15,10 +15,10 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
         expire = datetime.now(timezone.utc) + expires_delta
     else:
         expire = datetime.now(timezone.utc) + timedelta(
-            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
+            minutes=settings.security.ACCESS_TOKEN_EXPIRE_MINUTES
         )
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, settings.security.JWT_SECRET_KEY, algorithm=settings.security.ALGORITHM)
     return encoded_jwt
 
 
@@ -32,7 +32,7 @@ async def verify_token(token: str = Depends(oauth2_scheme)) -> dict:
         payload = jwt.decode(
             token,
             settings.security.JWT_SECRET_KEY,
-            algorithms=[settings.security.JWT_ALGORITHM],
+            algorithms=[settings.security.ALGORITHM], 
         )
         if payload.get("sub") is None:
             raise credentials_exception

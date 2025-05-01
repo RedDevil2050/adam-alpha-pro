@@ -130,6 +130,12 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
             "agent_name": agent_name,
         }
 
+    # Fetch EV and EBITDA concurrently
+    # Add await
+    ev_data = await fetch_latest_ev(symbol)
+    # Add await
+    ebitda_data = await fetch_latest_ebitda(symbol)
+
     # Calculate Current EV/EBITDA Ratio
     current_ev_ebitda = current_ev / current_ebitda
 

@@ -1,4 +1,5 @@
 import pandas as pd
+import json
 from backend.utils.data_provider import fetch_price_series, fetch_eps_data
 from backend.agents.event.earnings_calendar_agent import run as earnings_run
 from backend.agents.event.corporate_actions_agent import run as corp_run
@@ -14,7 +15,8 @@ async def run(symbol: str, agent_outputs: dict = {}) -> dict:
     cache_key = f"{agent_name}:{symbol}"
     cached = await redis_client.get(cache_key)
     if cached:
-        return cached
+        # Parse the JSON string from cache before returning
+        return json.loads(cached)
 
     # 1) Fetch price series (60d) and compute 50-day MA
     prices = await fetch_price_series(symbol, source_preference=["api", "scrape"])
@@ -71,6 +73,7 @@ async def run(symbol: str, agent_outputs: dict = {}) -> dict:
         "agent_name": agent_name,
     }
 
-    await redis_client.set(cache_key, result, ex=settings.agent_cache_ttl)
+    # Convert result to JSON string before caching
+    await redis_client.set(cache_key, json.dumps(result), ex=settings.agent_cache_ttl)
     tracker.update("automation", agent_name, "implemented")
     return result

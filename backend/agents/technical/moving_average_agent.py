@@ -12,7 +12,8 @@ agent_name = "moving_average_agent"
 
 
 @standard_agent_execution(agent_name=agent_name, category="technical") # Add agent_name
-async def run(symbol: str, window: int = 20, agent_outputs: dict = None) -> dict:
+# Correct signature: agent_outputs is second, window is keyword arg
+async def run(symbol: str, agent_outputs: dict = None, window: int = 20) -> dict:
     cache_key = f"{agent_name}:{symbol}:{window}"
     redis_client = await get_redis_client() # Await redis client
     # 1) Cache check
@@ -37,24 +38,28 @@ async def run(symbol: str, window: int = 20, agent_outputs: dict = None) -> dict
     # Calculate start date based on window size + buffer for calculation
     start_date = end_date - timedelta(days=window * 2 + 60) # Increased buffer
 
-    # 2) Fetch OHLCV data
-    df = await fetch_ohlcv_series(
+    # 2) Fetch OHLCV data - Always fetch, don't rely on agent_outputs for df
+    ohlcv_data = await fetch_ohlcv_series(
         symbol=symbol,
         start_date=start_date,
         end_date=end_date,
         interval='1d' # Ensure interval is passed
     )
-    if df is None or df.empty or len(df) < window + 1:
+
+    # Check if fetched data is a valid DataFrame
+    if not isinstance(ohlcv_data, pd.DataFrame) or ohlcv_data.empty or len(ohlcv_data) < window + 1:
+        logger.warning(f"[{agent_name}] Insufficient or invalid data for {symbol}. Type: {type(ohlcv_data)}")
         result = {
             "symbol": symbol,
             "verdict": "NO_DATA",
             "confidence": 0.0,
             "value": None,
-            "details": {},
+            "details": {"reason": "Insufficient or invalid OHLCV data received"},
             "agent_name": agent_name,
         }
     else:
-        close = df["close"]
+        # Proceed with calculation using the DataFrame (ohlcv_data)
+        close = ohlcv_data["close"]
         ma = close.rolling(window=window, min_periods=window).mean()
         # Calculate slope percentage of MA
         ma_last = ma.iloc[-1]

@@ -99,6 +99,35 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     # Extract BVPS value from the fetched data
     current_bvps = current_bvps_data.get("bookValuePerShare") if current_bvps_data else None
 
+    # --- Start: Added Type Check/Conversion --- 
+    # Ensure historical_prices is a pandas Series before further checks
+    if historical_prices is not None and not isinstance(historical_prices, pd.Series):
+        try:
+            logger.debug(f"[{agent_name}] Attempting conversion of historical_prices for {symbol}")
+            # Try converting dictionary values if it's a dict, else assume list/iterable
+            if isinstance(historical_prices, dict):
+                historical_prices = pd.Series(historical_prices)
+            else:
+                 # Attempt conversion, assuming index might be date-like if possible
+                 temp_series = pd.Series(historical_prices)
+                 try:
+                     temp_series.index = pd.to_datetime(temp_series.index)
+                 except (TypeError, ValueError):
+                     logger.warning(f"[{agent_name}] Could not convert index to datetime for {symbol}, using default index.")
+                 historical_prices = temp_series
+
+            # Check if conversion resulted in an empty series
+            if historical_prices.empty:
+                 logger.warning(f"[{agent_name}] Historical prices became empty after conversion for {symbol}")
+                 historical_prices = None # Treat as no data if empty after conversion
+
+        except Exception as conversion_err:
+            logger.warning(
+                f"[{agent_name}] Could not convert historical_prices to Series for {symbol}: {conversion_err}"
+            )
+            historical_prices = None # Treat as no data if conversion fails
+    # --- End: Added Type Check/Conversion ---
+
     # Validate fetched data
     if current_price is None or current_price <= 0:
         return {
@@ -142,51 +171,41 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     z_score = None
     data_source = "calculated_fundamental"
 
-    if historical_prices is not None and not historical_prices.empty:
-        # Ensure historical_prices is a pandas Series
-        if not isinstance(historical_prices, pd.Series):
-            try:
-                historical_prices = pd.Series(historical_prices)
-                historical_prices.index = pd.to_datetime(historical_prices.index)
-            except Exception as conversion_err:
-                logger.warning(
-                    f"[{agent_name}] Could not convert historical_prices to Series for {symbol}: {conversion_err}"
-                )
-                historical_prices = None
+    # --- Start: Modified Historical Analysis Block ---
+    if historical_prices is not None and not historical_prices.empty: # Check moved earlier is now redundant if conversion handles empty
+        # Calculate historical P/B using historical prices and CURRENT BVPS (simplification!)
+        historical_pb_series = historical_prices / current_bvps
+        historical_pb_series = historical_pb_series.replace([np.inf, -np.inf], np.nan).dropna()
+        data_source = "calculated_fundamental + historical_prices"
 
-        if historical_prices is not None and not historical_prices.empty:
-            # Calculate historical P/B using historical prices and CURRENT BVPS (simplification!)
-            historical_pb_series = historical_prices / current_bvps
-            historical_pb_series = historical_pb_series.dropna()
-            data_source = "calculated_fundamental + historical_prices"
+        if not historical_pb_series.empty:
+            mean_hist_pb = historical_pb_series.mean()
+            std_hist_pb = historical_pb_series.std()
 
-            if not historical_pb_series.empty:
-                mean_hist_pb = historical_pb_series.mean()
-                std_hist_pb = historical_pb_series.std()
-
+            # If standard deviation is effectively zero, historical context is not meaningful
+            if std_hist_pb is None or std_hist_pb < 1e-9:
+                logger.warning(f"[{agent_name}] Historical P/B std dev is zero or None for {symbol}. No context.")
+                percentile_rank = None # Force NO_HISTORICAL_CONTEXT verdict
+                data_source = "calculated_fundamental (historical std dev zero)"
+            else:
                 # Calculate percentile rank of current P/B relative to history
                 try:
                     from scipy import stats
-
                     percentile_rank = stats.percentileofscore(
                         historical_pb_series, current_pb, kind="rank"
                     )
                 except ImportError:
+                    logger.warning("Scipy not installed, using pandas for percentile calculation.")
                     percentile_rank = (historical_pb_series < current_pb).mean() * 100
 
-                # Calculate Z-score
-                if std_hist_pb and std_hist_pb > 1e-9:
-                    z_score = (current_pb - mean_hist_pb) / std_hist_pb
-            else:
-                logger.warning(
-                    f"[{agent_name}] Historical P/B series empty after calculation for {symbol}"
-                )
-                data_source = "calculated_fundamental (historical calc failed)"
+                # Calculate Z-score (already correctly checks std_hist_pb)
+                z_score = (current_pb - mean_hist_pb) / std_hist_pb
         else:
             logger.warning(
-                f"[{agent_name}] Invalid historical price series format for {symbol}"
+                f"[{agent_name}] Historical P/B series empty after calculation/dropna for {symbol}"
             )
-            data_source = "calculated_fundamental (invalid historical data)"
+            data_source = "calculated_fundamental (historical calc resulted in empty)"
+    # --- End: Modified Historical Analysis Block ---
 
     # Determine Verdict based on Percentile Rank
     if percentile_rank is None:

@@ -3,8 +3,11 @@ import pytest_asyncio
 import asyncio
 from backend.core.orchestrator import SystemOrchestrator
 from backend.agents.categories import CategoryType
-from backend.utils.monitoring import SystemMonitor
+# Correct the import path for SystemMonitor
+from backend.utils.system_monitor import SystemMonitor
 from backend.utils.metrics_collector import MetricsCollector
+# Import the mocked redis client utility
+from backend.utils.cache_utils import get_redis_client
 
 @pytest.mark.asyncio
 class TestSystemIntegration:
@@ -12,7 +15,10 @@ class TestSystemIntegration:
     async def orchestrator(self):
         """Create and properly initialize a SystemOrchestrator instance."""
         monitor = SystemMonitor()
-        instance = SystemOrchestrator()
+        # Get the mocked cache client
+        cache_client = await get_redis_client()
+        # Pass the cache_client to the constructor
+        instance = SystemOrchestrator(cache_client=cache_client)
         # Properly initialize the orchestrator
         await instance.initialize(monitor)
         yield instance
@@ -21,7 +27,16 @@ class TestSystemIntegration:
 
     async def test_full_analysis_flow(self, orchestrator):
         """Test complete analysis pipeline"""
-        result = await orchestrator.analyze_symbol("RELIANCE.NS")
+        # Initialize MetricsCollector - Assuming it doesn't need complex setup for this test
+        metrics_collector = MetricsCollector()
+        monitor = SystemMonitor() # Assuming a fresh monitor per test is okay
+
+        # Pass monitor and metrics_collector to analyze_symbol
+        result = await orchestrator.analyze_symbol(
+            symbol="RELIANCE.NS",
+            monitor=monitor,
+            metrics_collector=metrics_collector
+        )
         
         # Verify basic structure
         assert result["symbol"] == "RELIANCE.NS"
@@ -44,7 +59,17 @@ class TestSystemIntegration:
     async def test_parallel_analysis(self, orchestrator):
         """Test system under parallel load"""
         symbols = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS"]
-        tasks = [orchestrator.analyze_symbol(symbol) for symbol in symbols]
+        # Initialize MetricsCollector and Monitor - Assuming shared instances are okay for parallel test
+        metrics_collector = MetricsCollector()
+        monitor = SystemMonitor()
+
+        tasks = [
+            orchestrator.analyze_symbol(
+                symbol=symbol,
+                monitor=monitor,
+                metrics_collector=metrics_collector
+            ) for symbol in symbols
+        ]
         results = await asyncio.gather(*tasks)
         
         assert len(results) == len(symbols)
@@ -53,37 +78,77 @@ class TestSystemIntegration:
 
     async def test_error_handling(self, orchestrator):
         """Test system error handling"""
-        result = await orchestrator.analyze_symbol("INVALID_SYMBOL")
+        metrics_collector = MetricsCollector()
+        monitor = SystemMonitor()
+        result = await orchestrator.analyze_symbol(
+            symbol="INVALID_SYMBOL",
+            monitor=monitor,
+            metrics_collector=metrics_collector
+        )
         assert "error" in result
-        assert result["system_health"]["components"]["orchestrator"]["status"] == "healthy"
+        # Check component status via the monitor instance used in the call
+        health_metrics = await monitor.get_health_metrics()
+        assert health_metrics["components"]["orchestrator"]["status"] == "healthy"
 
     async def test_caching_mechanism(self, orchestrator):
         """Test caching behavior"""
+        metrics_collector = MetricsCollector()
+        monitor = SystemMonitor()
         # First call
-        result1 = await orchestrator.analyze_symbol("SBIN.NS")
+        result1 = await orchestrator.analyze_symbol(
+            symbol="SBIN.NS",
+            monitor=monitor,
+            metrics_collector=metrics_collector
+        )
         # Second call should use cache
-        result2 = await orchestrator.analyze_symbol("SBIN.NS")
+        # Use separate monitor/collector if needed to isolate metrics, or reuse if appropriate
+        result2 = await orchestrator.analyze_symbol(
+            symbol="SBIN.NS",
+            monitor=monitor, # Reusing monitor
+            metrics_collector=metrics_collector # Reusing collector
+        )
         
         assert result1["verdict"] == result2["verdict"]
         assert result1["analysis_id"] != result2["analysis_id"]
 
     async def test_market_regime_awareness(self, orchestrator):
         """Test market regime adaptation"""
-        result = await orchestrator.analyze_symbol("RELIANCE.NS")
+        metrics_collector = MetricsCollector()
+        monitor = SystemMonitor()
+        result = await orchestrator.analyze_symbol(
+            symbol="RELIANCE.NS",
+            monitor=monitor,
+            metrics_collector=metrics_collector
+        )
         assert "market_regime" in str(result["category_results"])
 
     async def test_system_recovery(self, orchestrator):
         """Test system recovery from failures"""
+        metrics_collector = MetricsCollector()
+        monitor = SystemMonitor() # Use a single monitor instance for the recovery test
         # Simulate multiple failures and verify recovery
         for _ in range(3):
-            result = await orchestrator.analyze_symbol("INVALID_SYMBOL")
-            health_metrics = await orchestrator.system_monitor.get_health_metrics()
-            assert health_metrics["system"]["status"] != "error"
+            result = await orchestrator.analyze_symbol(
+                symbol="INVALID_SYMBOL",
+                monitor=monitor,
+                metrics_collector=metrics_collector
+            )
+            # Access health metrics directly from the monitor instance used
+            health_metrics = await monitor.get_health_metrics()
+            # Check system status, not orchestrator component status specifically
+            assert health_metrics["system"]["status"] != "error" # System should remain operational
 
     async def test_metrics_collection(self, orchestrator):
         """Test metrics collection"""
-        await orchestrator.analyze_symbol("RELIANCE.NS")
-        metrics = orchestrator.metrics_collector.get_metrics()
+        metrics_collector = MetricsCollector() # Create collector for this test
+        monitor = SystemMonitor()
+        await orchestrator.analyze_symbol(
+            symbol="RELIANCE.NS",
+            monitor=monitor,
+            metrics_collector=metrics_collector # Pass the collector
+        )
+        # Get metrics from the collector instance used
+        metrics = metrics_collector.get_metrics()
         
         assert "performance" in metrics
         assert "category_stats" in metrics

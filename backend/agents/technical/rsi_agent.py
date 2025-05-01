@@ -1,4 +1,6 @@
 from backend.agents.technical.base import TechnicalAgent
+# Correct the import path
+from backend.utils.data_provider import fetch_ohlcv_series
 
 
 class RSIAgent(TechnicalAgent):

@@ -1,6 +1,8 @@
 # tests/e2e/test_workflow.py
 import pytest
-from httpx import AsyncClient
+# Use FastAPI's TestClient instead of httpx.AsyncClient
+# from httpx import AsyncClient
+from fastapi.testclient import TestClient
 from fastapi import status
 from backend.api.main import app
 from backend.security.jwt_auth import create_access_token
@@ -13,7 +15,8 @@ os.environ['SECRET_KEY'] = 'test-secret-key-for-jwt'
 os.environ['API_USER'] = 'test_e2e_user'
 os.environ['API_PASS'] = 'test_password'
 
-@pytest.mark.asyncio
+# No longer need asyncio marker if using synchronous TestClient
+# @pytest.mark.asyncio
 class TestCompleteWorkflow:
 
     @pytest.fixture(scope="class")
@@ -25,14 +28,18 @@ class TestCompleteWorkflow:
         logger.debug(f"Generated test token: {token[:10]}...")
         return token
 
-    async def test_analysis_workflow_success(self, access_token):
+    # Remove async keyword from test methods
+    def test_analysis_workflow_success(self, access_token):
         """Tests the happy path for the analysis workflow."""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        # Use TestClient synchronously
+        # async with AsyncClient(app=app, base_url="http://test") as client:
+        with TestClient(app) as client:
             headers = {"Authorization": f"Bearer {access_token}"}
             symbol = "AAPL"
             logger.info(f"--- E2E Test: Starting analysis workflow for {symbol} ---")
 
-            response = await client.get(f"/api/analyze/{symbol}", headers=headers)
+            # Use client directly, no need for await
+            response = client.get(f"/api/analyze/{symbol}", headers=headers)
             logger.debug(f"Response Status Code: {response.status_code}")
             try:
                 logger.debug(f"Response JSON: {response.json()}")
@@ -74,29 +81,29 @@ class TestCompleteWorkflow:
 
             logger.info(f"--- E2E Test: Analysis workflow for {symbol} PASSED ---")
 
-    async def test_analysis_unauthenticated(self):
+    def test_analysis_unauthenticated(self):
         """Tests that the endpoint requires authentication."""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        with TestClient(app) as client:
             symbol = "MSFT"
-            response = await client.get(f"/api/analyze/{symbol}")
+            response = client.get(f"/api/analyze/{symbol}")
             assert response.status_code == status.HTTP_401_UNAUTHORIZED
             assert "Not authenticated" in response.text or "Could not validate credentials" in response.text
 
-    async def test_analysis_invalid_symbol(self, access_token):
+    def test_analysis_invalid_symbol(self, access_token):
         """Tests behavior with invalid symbol."""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        with TestClient(app) as client:
             headers = {"Authorization": f"Bearer {access_token}"}
             invalid_symbol = "INVALID_SYMBOL_XYZ123"
-            response = await client.get(f"/api/analyze/{invalid_symbol}", headers=headers)
+            response = client.get(f"/api/analyze/{invalid_symbol}", headers=headers)
             assert response.status_code == status.HTTP_404_NOT_FOUND
             detail = response.json().get("detail", "")
             assert "Could not retrieve" in detail or "Failed to fetch market data" in detail
 
-    async def test_analysis_malformed_token(self):
+    def test_analysis_malformed_token(self):
         """Tests behavior with malformed token."""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        with TestClient(app) as client:
             headers = {"Authorization": "Bearer invalid.token.string"}
-            response = await client.get("/api/analyze/GOOGL", headers=headers)
+            response = client.get("/api/analyze/GOOGL", headers=headers)
             assert response.status_code == status.HTTP_401_UNAUTHORIZED
             assert "Could not validate credentials" in response.json().get("detail", "")
 

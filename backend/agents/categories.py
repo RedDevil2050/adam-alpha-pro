@@ -196,18 +196,19 @@ class CategoryManager:
 
     @classmethod
     async def execute_category(
-        cls, category: CategoryType, symbol: str, context: Dict = None
+        cls, category: CategoryType, symbol: str, context: Dict = None # Context parameter is kept for signature compatibility but ignored
     ) -> List[Dict]:
-        """Execute all agents in a category"""
+        """Execute all agents in a category, ensuring each agent starts with a clean context."""
         agents = await cls.get_category_agents(category)
         results = []
         for agent in agents:
             try:
-                result = await agent(symbol, context or {})
+                # Pass an empty dictionary to each agent, ignoring the passed context
+                result = await agent(symbol, {})
                 if result:
                     results.append(result)
             except Exception as e:
-                logger.error(f"Agent execution failed: {e}")
+                logger.error(f"Agent execution failed: {agent.__name__ if hasattr(agent, '__name__') else 'unknown'} - {e}") # Added agent name logging
         return results
 
     @classmethod

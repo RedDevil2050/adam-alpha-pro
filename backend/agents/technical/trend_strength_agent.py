@@ -8,6 +8,7 @@ import pandas_ta as ta # Import pandas_ta
 from datetime import datetime, date, timedelta # Import date
 from dateutil.relativedelta import relativedelta
 from backend.utils.cache_utils import get_redis_client # Correct import path
+import pandas as pd # Import pandas for type checking
 
 agent_name = "trend_strength_agent"
 
@@ -20,21 +21,24 @@ class TrendStrengthAgent(TechnicalAgent):
             start_date = end_date - relativedelta(months=7) # Use relativedelta
 
             # Fetch OHLCV data with interval
-            df = await fetch_ohlcv_series(
+            ohlcv_data = await fetch_ohlcv_series(
                 symbol=symbol,
                 start_date=start_date,
                 end_date=end_date,
                 interval='1d' # Added interval
             )
-            if df is None or df.empty:
-                return self._error_response(symbol, "No data available")
+            # Check if fetched data is a valid DataFrame
+            if not isinstance(ohlcv_data, pd.DataFrame) or ohlcv_data.empty:
+                logger.warning(f"[{agent_name} Class] Insufficient or invalid data for {symbol}. Type: {type(ohlcv_data)}")
+                return self._error_response(symbol, f"Insufficient or invalid OHLCV data received. Type: {type(ohlcv_data)}")
 
             # Ensure data has enough points for calculations
-            if len(df) < 50: # Need at least 50 for SMA50
-                return self._error_response(symbol, "Insufficient historical data points")
+            if len(ohlcv_data) < 50: # Need at least 50 for SMA50
+                 logger.warning(f"[{agent_name} Class] Insufficient data points ({len(ohlcv_data)}) for {symbol}.")
+                 return self._error_response(symbol, f"Insufficient historical data points ({len(ohlcv_data)} < 50)")
 
             # Calculate trend metrics
-            close = df["close"]
+            close = ohlcv_data["close"]
             sma20 = close.rolling(window=20).mean()
             sma50 = close.rolling(window=50).mean()
 
@@ -54,7 +58,7 @@ class TrendStrengthAgent(TechnicalAgent):
             slope50 = (sma50.iloc[-1] - sma50_prev) / sma50_prev if sma50_prev != 0 else 0.0
 
             # Volume trend confirmation
-            volume = df["volume"]
+            volume = ohlcv_data["volume"]
             if len(volume) < 20:
                  return self._error_response(symbol, "Insufficient data for volume trend")
             vol_sma = volume.rolling(window=20).mean()
@@ -105,7 +109,8 @@ class TrendStrengthAgent(TechnicalAgent):
 
 
 @standard_agent_execution(agent_name=agent_name, category="technical") # Add agent_name
-async def run(symbol: str, period: int = 14, agent_outputs: dict = None) -> dict:
+# Correct signature: agent_outputs is second, period is keyword arg
+async def run(symbol: str, agent_outputs: dict = None, period: int = 14) -> dict:
     """
     Calculates the Average Directional Index (ADX) to gauge trend strength.
     DEPRECATED: This function seems to be an older implementation or potentially
@@ -123,20 +128,22 @@ async def run(symbol: str, period: int = 14, agent_outputs: dict = None) -> dict
     start_date = end_date - timedelta(days=period * 3 + 90) # Generous buffer
 
     # Fetch OHLCV data with start_date and end_date
-    df = await fetch_ohlcv_series(
+    ohlcv_data = await fetch_ohlcv_series(
         symbol=symbol,
         start_date=start_date,
         end_date=end_date,
         interval='1d' # Assuming daily interval is needed
     )
 
-    if df is None or df.empty or len(df) < period * 2:
+    # Check if fetched data is a valid DataFrame
+    if not isinstance(ohlcv_data, pd.DataFrame) or ohlcv_data.empty or len(ohlcv_data) < period * 2:
+        logger.warning(f"[{agent_name} standalone] Insufficient or invalid data for {symbol}. Type: {type(ohlcv_data)}")
         return {
             "symbol": symbol,
             "verdict": "NO_DATA",
             "confidence": 0.0,
             "value": None,
-            "details": {"reason": "Insufficient data for ADX calculation"},
+            "details": {"reason": f"Insufficient or invalid OHLCV data for ADX. Type: {type(ohlcv_data)}"},
             "agent_name": agent_name,
         }
 
@@ -144,7 +151,7 @@ async def run(symbol: str, period: int = 14, agent_outputs: dict = None) -> dict
         # Placeholder for actual ADX calculation using a library like pandas_ta
         # Example (requires pandas_ta installed):
         # import pandas_ta as ta
-        # adx_df = df.ta.adx(length=period)
+        # adx_df = ohlcv_data.ta.adx(length=period)
         # if adx_df is None or adx_df.empty:
         #     raise ValueError("ADX calculation failed")
         # adx_value = adx_df[f'ADX_{period}'].iloc[-1]

@@ -20,6 +20,7 @@ class ReverseDCFAgent(ValuationAgentBase):
 
     async def execute(self, symbol: str, agent_outputs: dict = None) -> dict:
         try:
+            # Fetch required data concurrently
             price_data = await fetch_price_point(symbol)
             current_price = price_data.get("latestPrice", 0)
             fcf = await fetch_fcf_per_share(symbol)

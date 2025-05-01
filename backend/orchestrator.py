@@ -93,10 +93,24 @@ class Orchestrator:
 
             # Execute agent
             if agent_instance:
-                result = await agent_instance.execute(symbol, self.context)
+                # Ensure context is passed correctly if needed by the instance's execute method
+                result = await agent_instance.execute(symbol, context=self.context)
             else:
-                agent_func = self._agents[name]
-                result = await agent_func(symbol, self.context)
+                # Assume agent_func is the 'run' function for function-based agents
+                agent_func = self._agents.get(name)
+                if callable(agent_func):
+                    # Pass context if the function signature accepts it (optional)
+                    # Inspecting signature might be complex, assume it takes symbol and context for now
+                    try:
+                        # Attempt to call with context
+                        result = await agent_func(symbol, self.context)
+                    except TypeError: # Handle cases where run function doesn't accept context
+                        logger.debug(f"Function agent {name} does not accept context dict. Calling with symbol only.")
+                        result = await agent_func(symbol)
+                else:
+                    logger.error(f"Agent {name} is not callable. Type: {type(agent_func)}")
+                    AGENT_ERRORS.labels(agent_name=name, error_type="not_callable").inc()
+                    result = {"error": f"Agent {name} is not callable", "agent_name": name}
 
             # Update metrics
             execution_time = time.time() - start_time

@@ -115,7 +115,8 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
          }
 
 
-    # Calculate Earnings Yield
+    # Calculate Earnings Yield using the already fetched and validated eps and current_price
+    # Note: Redundant fetches for price_data and eps_data were removed here.
     earnings_yield = (eps / current_price) * 100 if current_price else 0
 
     # Determine verdict based on yield (example thresholds)

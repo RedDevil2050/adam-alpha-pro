@@ -3,6 +3,7 @@ from backend.utils.circuit_breaker import CircuitBreaker
 from abc import ABC, abstractmethod
 from typing import Dict, Any
 import time
+import asyncio
 
 
 class BaseAgent(ABC):
