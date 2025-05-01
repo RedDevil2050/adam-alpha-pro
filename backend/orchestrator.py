@@ -6,7 +6,8 @@ from prometheus_client import Counter, Histogram, Gauge
 from backend.agents.base import AgentBase
 from backend.agents.initialization import get_agent_initializer
 from backend.agents.categories import CategoryType, CategoryManager
-from backend.utils.monitoring import SystemMonitor
+# Correct the import path for SystemMonitor
+from backend.utils.system_monitor import SystemMonitor 
 from backend.config.settings import get_settings
 
 # Prometheus metrics
@@ -233,14 +234,15 @@ class Orchestrator:
             # Verify API endpoints
             # Check data provider access
             healthy = True
+            status = "healthy" if healthy else "failed"
 
-            # Update system monitor
-            self.system_monitor.update_health("orchestrator", healthy)
+            # Update system monitor using the correct method
+            self.system_monitor.update_component_status("orchestrator", status)
 
             return healthy
         except Exception as e:
             logger.error(f"Health check failed: {e}")
-            self.system_monitor.update_health("orchestrator", False)
+            self.system_monitor.update_component_status("orchestrator", "failed")
             return False
 
     async def _maybe_run_health_check(self):
