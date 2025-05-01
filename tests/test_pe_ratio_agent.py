@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 from backend.agents.valuation.pe_ratio_agent import run as pe_run
 
 @pytest.mark.asyncio
-@patch('backend.agents.decorators.get_redis_client')  # Add Redis mock
+@patch('backend.utils.cache_utils.get_redis_client')  # Corrected patch target
 async def test_pe_ratio_agent(mock_get_redis, monkeypatch):
     # Mock the financial data provider with complete data
     async def mock_fetch_financial_data(symbol):

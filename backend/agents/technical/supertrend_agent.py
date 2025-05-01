@@ -5,6 +5,7 @@ import numpy as np
 from loguru import logger
 import datetime
 from dateutil.relativedelta import relativedelta
+from backend.agents.decorators import standard_agent_execution # Import decorator
 
 agent_name = "supertrend_agent"
 
@@ -100,7 +101,8 @@ class SupertrendAgent(TechnicalAgent):
                 "details": {
                     "current_price": round(current_price, 2),
                     "supertrend": round(current_supertrend, 2),
-                    "is_uptrend": is_uptrend,
+                    # Ensure boolean is standard Python bool
+                    "is_uptrend": bool(is_uptrend),
                     "atr": round(df["atr"].iloc[-1], 2),
                     "market_regime": regime,
                 },
@@ -113,6 +115,9 @@ class SupertrendAgent(TechnicalAgent):
             return self._error_response(symbol, str(e))
 
 
+# Apply the decorator to the standalone run function
+@standard_agent_execution(agent_name=agent_name, category="technical")
 async def run(symbol: str, period: int = 7, multiplier: float = 3.0, agent_outputs: dict = None) -> dict:
     agent = SupertrendAgent()
-    return await agent.execute(symbol, agent_outputs)
+    # The decorator now handles caching and error wrapping around this call
+    return await agent._execute(symbol, agent_outputs if agent_outputs else {})

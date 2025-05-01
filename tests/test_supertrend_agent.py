@@ -8,7 +8,7 @@ from backend.agents.technical.supertrend_agent import run as st_run
 import datetime
 
 @pytest.mark.asyncio
-@patch('backend.agents.decorators.get_redis_client')  # Updated patch target
+@patch('backend.utils.cache_utils.get_redis_client') # Correct patch target
 async def test_supertrend_agent(mock_get_redis, monkeypatch):
     # Mock data matching expected OHLCV structure
     dates = pd.to_datetime([datetime.date.today() - datetime.timedelta(days=x) for x in range(9, -1, -1)])

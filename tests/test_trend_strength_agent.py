@@ -8,7 +8,7 @@ from backend.agents.technical.trend_strength_agent import run
 import datetime
 
 @pytest.mark.asyncio
-@patch('backend.agents.decorators.get_redis_client')  # Updated patch target
+@patch('backend.utils.cache_utils.get_redis_client')  # Corrected patch target
 async def test_trend_strength_agent(mock_get_redis, monkeypatch):
     # Create realistic OHLCV data with uptrend
     dates = pd.to_datetime([datetime.date(2025, 4, 30) - datetime.timedelta(days=x) for x in range(60, -1, -1)])

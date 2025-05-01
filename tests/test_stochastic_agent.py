@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch # Add patch to imports
 from backend.agents.technical.stochastic_agent import run as stoch_run
 
 @pytest.mark.asyncio
-@patch('backend.agents.decorators.get_redis_client') # Correct patch target
+@patch('backend.utils.cache_utils.get_redis_client') # Correct patch target
 async def test_stochastic_agent(mock_get_redis, monkeypatch):
     # Create realistic OHLCV data (need enough for window, default K=14, D=3)
     dates = pd.to_datetime([datetime.date(2025, 4, 30) - datetime.timedelta(days=x)

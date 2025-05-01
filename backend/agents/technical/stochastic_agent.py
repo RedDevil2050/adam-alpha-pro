@@ -6,17 +6,20 @@ from backend.agents.technical.utils import tracker
 from backend.config.settings import settings
 import datetime
 from dateutil.relativedelta import relativedelta
+from backend.agents.decorators import standard_agent_execution # Import decorator
 
 agent_name = "stochastic_agent"
 
-
+# Apply the decorator to the standalone run function
+@standard_agent_execution(agent_name=agent_name, category="technical")
 async def run(symbol: str, agent_outputs: dict = None) -> dict:
     cache_key = f"{agent_name}:{symbol}"
+    # The decorator handles cache check now, but we keep redis_client for setting
     redis_client = await get_redis_client()
-    # Cache check
-    cached = await redis_client.get(cache_key)
-    if cached:
-        return cached
+    # Cache check - Handled by decorator
+    # cached = await redis_client.get(cache_key)
+    # if cached:
+    #     return cached
 
     # Define date range (e.g., 7 months for daily data)
     end_date = datetime.date.today()
@@ -30,13 +33,16 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         interval='1d' # Assuming daily interval is needed
     )
     if df is None or df.empty:
-        result = {
+        # Decorator handles error formatting/caching if configured
+        # Return a structure the decorator expects for errors
+        return {
             "symbol": symbol,
             "verdict": "NO_DATA",
             "confidence": 0.0,
             "value": None,
             "details": {},
             "agent_name": agent_name,
+            "error": "No data available" # Add error key for decorator
         }
     else:
         k_window = getattr(settings, 'STOCHASTIC_K_WINDOW', 14) # Default 14
@@ -83,9 +89,11 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
             "details": {"k": latest_k, "d": latest_d},
             "score": score,
             "agent_name": agent_name,
+            "error": None # Explicitly set error to None for success
         }
 
-    # Cache and track
-    await redis_client.set(cache_key, result, ex=3600)
+    # Cache and track - Caching (set) is handled by decorator
+    # await redis_client.set(cache_key, result, ex=3600)
+    # Tracker update might still be needed here or moved inside decorator if appropriate
     await tracker.update("technical", agent_name, "implemented")
     return result

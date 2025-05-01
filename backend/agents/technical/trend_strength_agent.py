@@ -104,10 +104,11 @@ class TrendStrengthAgent(TechnicalAgent):
                 "value": round(strength_score * direction, 4),
                 "details": {
                     "strength_score": round(strength_score, 4),
-                    "direction": direction,
+                    "direction": int(direction), # Ensure int
                     "slope20": round(slope20, 4),
                     "slope50": round(slope50, 4),
-                    "volume_confirms": vol_trend,
+                    # Convert boolean to int for JSON serialization
+                    "volume_confirms": int(vol_trend), # Convert bool to int
                     "market_regime": regime,
                 },
                 "error": None,
