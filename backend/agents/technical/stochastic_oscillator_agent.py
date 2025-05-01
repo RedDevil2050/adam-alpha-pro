@@ -2,6 +2,7 @@ import pandas as pd
 from backend.utils.data_provider import fetch_ohlcv_series
 from backend.utils.cache_utils import get_redis_client
 from backend.agents.technical.utils import tracker
+from datetime import datetime, timedelta # Added imports
 
 agent_name = "stochastic_oscillator_agent"
 
@@ -15,8 +16,11 @@ async def run(symbol: str) -> dict:
         return cached
 
     # Fetch data
-    # Removed source_preference argument as it's not supported by fetch_ohlcv_series
-    df = await fetch_ohlcv_series(symbol)
+    # Calculate default date range (e.g., last year)
+    end_date = datetime.now().date()
+    start_date = end_date - timedelta(days=365)
+    # Pass start_date and end_date to the function
+    df = await fetch_ohlcv_series(symbol, start_date=start_date, end_date=end_date)
     if df is None or df.empty:
         result = {
             "symbol": symbol,
@@ -57,6 +61,13 @@ async def run(symbol: str) -> dict:
         }
 
     # Cache and track
-    await redis_client.set(cache_key, result, ex=3600)
+    # Ensure result is JSON serializable before caching
+    try:
+        await redis_client.set(cache_key, result, ex=3600)
+    except TypeError as e:
+        # Log the serialization error, but don't crash the agent
+        print(f"Error caching result for {agent_name}:{symbol}: {e}") # Or use proper logging
+        # Optionally modify the result to remove non-serializable parts if needed
+
     tracker.update("technical", agent_name, "implemented")
     return result

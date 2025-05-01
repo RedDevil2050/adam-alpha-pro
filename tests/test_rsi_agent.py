@@ -68,7 +68,9 @@ async def test_rsi_agent_oversold(
 
     # --- Assertions ---
     assert result['symbol'] == symbol
-    assert result['agent_name'] == agent_name
+    # Expect the class name, not the module-level variable
+    assert result['agent_name'] == 'RSIAgent'
+    # assert result['agent_name'] == agent_name # Original assertion
     assert result['verdict'] == expected_verdict
     # Check that the calculated RSI ('value') is below the oversold threshold (default 30)
     assert 'value' in result
