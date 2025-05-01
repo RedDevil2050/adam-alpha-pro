@@ -8,17 +8,21 @@ from backend.agents.technical.volume_spike_agent import run
 import datetime
 
 @pytest.mark.asyncio
-@patch('backend.agents.decorators.get_redis_client')  # Add Redis mock
+@patch('backend.utils.cache_utils.get_redis_client')  # Corrected patch target for redis
 async def test_volume_spike_agent(mock_get_redis, monkeypatch):
     # Create realistic OHLCV data with a volume spike at the end
     today = datetime.date(2025, 4, 30)
     dates = pd.to_datetime([today - datetime.timedelta(days=x) for x in range(25, -1, -1)])
     volumes = [1000] * 25 + [3000]  # Normal volume, then a spike
+    closes = [99 + i * 0.2 for i in range(26)] # Slight uptrend
+    # Ensure open is lower than close for a positive price_change
+    opens = [c - 0.1 for c in closes] # Open slightly lower than close
+
     data_df = pd.DataFrame({
-        'high': [100 + i * 0.1 for i in range(26)],
-        'low': [98 + i * 0.1 for i in range(26)],
-        'close': [99 + i * 0.1 for i in range(26)],  # Slight uptrend
-        'open': [99 + i * 0.1 for i in range(26)],
+        'high': [c + 0.1 for c in closes], # Dummy high
+        'low': [o - 0.1 for o in opens],   # Dummy low
+        'close': closes,
+        'open': opens, # Use the adjusted opens
         'volume': volumes
     }, index=dates)
 
@@ -50,9 +54,9 @@ async def test_volume_spike_agent(mock_get_redis, monkeypatch):
     # Expecting bullish volume due to spike + positive price change
     assert result['verdict'] == 'BULLISH_VOLUME'
     assert 'confidence' in result
-    assert isinstance(result['confidence'], float)
-    assert 'value' in result  # Volume ratio
-    assert result['value'] > 2  # Expecting ratio > 2 due to spike
+    assert 'value' in result # Volume ratio
+    assert result['value'] > 2.0 # Check ratio is high
     assert 'details' in result
-    assert 'volume_ratio' in result['details']
-    assert 'price_change' in result['details']
+    assert result['details']['volume_ratio'] == result['value']
+    assert result['details']['price_change'] > 0 # Check price change is positive
+    assert result.get('error') is None

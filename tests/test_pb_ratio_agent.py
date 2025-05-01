@@ -81,7 +81,7 @@ async def test_pb_ratio_agent_undervalued(
     assert details['current_pb_ratio'] == pytest.approx(2.0)
     assert details['current_bvps'] == 50.0
     assert details['current_price'] == 100.0
-    assert details['percentile_rank'] == 15.0
+    assert details['percentile_rank'] == pytest.approx(0.0)
     assert details['historical_mean_pb'] == pytest.approx(3.0) # Mean of linspace(2.5, 3.5)
     assert details['z_score'] < 0 # Current P/B is below the mean
     assert details['data_source'] == "calculated_fundamental + historical_prices"
