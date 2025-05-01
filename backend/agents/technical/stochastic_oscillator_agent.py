@@ -15,7 +15,8 @@ async def run(symbol: str) -> dict:
         return cached
 
     # Fetch data
-    df = await fetch_ohlcv_series(symbol, source_preference=["api", "scrape"])
+    # Removed source_preference argument as it's not supported by fetch_ohlcv_series
+    df = await fetch_ohlcv_series(symbol)
     if df is None or df.empty:
         result = {
             "symbol": symbol,

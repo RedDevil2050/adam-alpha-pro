@@ -22,7 +22,8 @@ async def run(symbol: str) -> dict:
         resp = await client.get(url, params=params)
     headlines = []
     if resp.status_code == 200:
-        data = resp.json()
+        # Await the json() coroutine
+        data = await resp.json()
         for article in data.get("articles", []):
             title = article.get("title")
             if title:
