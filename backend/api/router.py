@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from backend.core.orchestrator import SystemOrchestrator
-from backend.utils.monitoring import SystemMonitor
+from backend.utils.system_monitor import SystemMonitor
 from typing import List, Optional
 import time
 

@@ -6,8 +6,6 @@ from prometheus_client import Counter, Histogram, Gauge
 from backend.agents.base import AgentBase
 from backend.agents.initialization import get_agent_initializer
 from backend.agents.categories import CategoryType, CategoryManager
-# Correct the import path for SystemMonitor
-from backend.utils.system_monitor import SystemMonitor 
 from backend.config.settings import get_settings
 
 # Prometheus metrics
@@ -35,6 +33,7 @@ class Orchestrator:
         self._execution_times: Dict[str, float] = {}
         self.context: Dict = {}
         self.settings = get_settings()
+        from backend.utils.system_monitor import SystemMonitor
         self.system_monitor = SystemMonitor()
         self.agent_initializer = get_agent_initializer()
         self.last_health_check = 0
