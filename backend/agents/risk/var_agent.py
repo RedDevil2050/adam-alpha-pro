@@ -20,7 +20,7 @@ async def run(
     prices = await fetch_price_series(symbol)
     # Use a reasonable lookback period, e.g., 252 trading days (1 year)
     min_days = 60  # Keep minimum requirement
-    if not prices or len(prices) < min_days:
+    if prices is None or prices.empty or len(prices) < min_days:
         # Return NO_DATA format
         return {
             "symbol": symbol,

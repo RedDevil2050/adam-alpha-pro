@@ -8,7 +8,7 @@ import httpx
 import yfinance as yf
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timedelta
 import re
 
 from backend.monitoring.performance import (
@@ -478,11 +478,69 @@ class UnifiedDataProvider(BaseDataProvider):
 
         return None
 
-    async def fetch_price_data(self, symbol: str, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None, interval: str = "1d") -> pd.DataFrame:
+    async def fetch_price_data(self, symbol: str, start_date: Optional[str] = None, end_date: Optional[str] = None, interval: str = "1d") -> pd.DataFrame:
         """
         Fetch historical price data for a given symbol.
+        
+        Args:
+            symbol: Ticker symbol to fetch data for
+            start_date: Start date string in format YYYY-MM-DD
+            end_date: End date string in format YYYY-MM-DD  
+            interval: Data interval (e.g., "1d" for daily)
+            
+        Returns:
+            DataFrame with price data
         """
-        return await self._fetch_from_provider("yahoo_finance", symbol, "price")
+        try:
+            # Convert string dates to datetime objects if provided
+            start_dt = None
+            end_dt = None
+            
+            if start_date and isinstance(start_date, str):
+                start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+            elif start_date and isinstance(start_date, datetime):
+                start_dt = start_date
+                
+            if end_date and isinstance(end_date, str):
+                end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+            elif end_date and isinstance(end_date, datetime):
+                end_dt = end_date
+                
+            # Default to last 365 days if no dates specified
+            if not end_dt:
+                end_dt = datetime.now()
+            if not start_dt:
+                start_dt = end_dt - timedelta(days=365)
+                
+            # Use thread pool to run yfinance in a separate thread
+            def get_historical_data():
+                import yfinance as yf
+                ticker = yf.Ticker(symbol)
+                hist = ticker.history(
+                    start=start_dt.strftime("%Y-%m-%d"),
+                    end=end_dt.strftime("%Y-%m-%d"),
+                    interval=interval
+                )
+                # Ensure column names are lowercase for consistency
+                hist.columns = [col.lower() for col in hist.columns]
+                return hist
+                
+            data = await asyncio.get_event_loop().run_in_executor(
+                self._executor, get_historical_data
+            )
+            
+            # Ensure the returned data is a DataFrame
+            if data is None or data.empty:
+                logger.warning(f"No price data available for {symbol}")
+                # Return empty DataFrame with expected columns
+                return pd.DataFrame(columns=['open', 'high', 'low', 'close', 'volume'])
+                
+            return data
+            
+        except Exception as e:
+            logger.error(f"Error fetching price data for {symbol}: {str(e)}")
+            # Return empty DataFrame with expected columns on error
+            return pd.DataFrame(columns=['open', 'high', 'low', 'close', 'volume'])
 
     async def fetch_quote(self, symbol: str) -> Dict[str, Any]:
         """
@@ -497,15 +555,47 @@ class UnifiedDataProvider(BaseDataProvider):
         # Placeholder implementation
         return []
 
-    async def fetch_company_info(self, symbol: str) -> Dict[str, Any]:
+    async def fetch_company_info(self, symbol: str, data_type: str = None) -> Dict[str, Any]:
         """
         Fetch company information (overview) for a given symbol.
         Uses resilient fetching.
+
+        Args:
+            symbol: Ticker symbol to fetch company info for
+            data_type: Optional specific piece of info (e.g., 'eps', 'book_value')
+
+        Returns:
+            Dictionary with company information or specific data if data_type is provided
         """
         # This method might already exist or need adjustment
         # For now, assume it uses fetch_data_resilient
-        result = await self.fetch_data_resilient(symbol, "company_info")
-        return result.get("data", {})
+        data_category = "company_info"
+        if data_type:
+            data_category = f"{data_category}_{data_type}"
+        
+        result = await self.fetch_data_resilient(symbol, data_category)
+        data = result.get("data", {})
+        
+        # If a specific data type was requested, try to extract that field
+        if data_type and isinstance(data, dict):
+            # Convert data_type to potential field names that might exist in the data
+            possible_fields = [
+                data_type,
+                data_type.lower(),
+                data_type.upper(),
+                "_".join(data_type.split()),
+                "".join(data_type.split()),
+            ]
+            
+            # Try each possible field name
+            for field in possible_fields:
+                if field in data:
+                    return {data_type: data[field]}
+            
+            # If specific field not found, return the full data dictionary
+            logger.warning(f"Specific data field '{data_type}' not found for {symbol}")
+        
+        return data
 
     # --- Implementations for new abstract methods ---
     async def fetch_insider_trades(self, symbol: str) -> List[Dict[str, Any]]:

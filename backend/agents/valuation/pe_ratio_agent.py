@@ -9,6 +9,7 @@ from backend.utils.data_provider import (
 from loguru import logger
 from backend.agents.decorators import standard_agent_execution
 from backend.config.settings import get_settings
+from datetime import datetime, timedelta
 
 agent_name = "pe_ratio_agent"
 AGENT_CATEGORY = "valuation"  # Define category for the decorator
@@ -78,8 +79,13 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     try:
         price_task = fetch_price_point(symbol)
         eps_task = fetch_latest_eps(symbol)  # Corrected call
+        
+        # Convert years to start_date and end_date
+        end_date = datetime.now().strftime("%Y-%m-%d")
+        start_date = (datetime.now() - timedelta(days=pe_settings.HISTORICAL_YEARS * 365)).strftime("%Y-%m-%d")
+        
         hist_price_task = fetch_historical_price_series(
-            symbol, years=pe_settings.HISTORICAL_YEARS
+            symbol, start_date=start_date, end_date=end_date
         )
         price_data, current_eps_data, historical_prices = await asyncio.gather(  # Renamed variable
             price_task, eps_task, hist_price_task

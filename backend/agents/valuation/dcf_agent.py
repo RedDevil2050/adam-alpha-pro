@@ -56,9 +56,7 @@ async def run(
 
     # Fetch required data concurrently (Core Logic)
     price_data_task = fetch_price_point(symbol)
-    overview_data_task = fetch_alpha_vantage(
-        "query", {"function": "OVERVIEW", "symbol": symbol}
-    )
+    overview_data_task = fetch_alpha_vantage(symbol, "overview")
     price_data, overview_data = await asyncio.gather(
         price_data_task, overview_data_task
     )

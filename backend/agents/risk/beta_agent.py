@@ -1,8 +1,12 @@
 import pandas as pd
 import numpy as np
+import logging  # Import the logging module
 from backend.utils.data_provider import fetch_price_series
 from backend.config.settings import get_settings  # Use get_settings()
 from backend.agents.decorators import standard_agent_execution  # Import decorator
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 agent_name = "beta_agent"
 AGENT_CATEGORY = "risk"  # Define category for the decorator
@@ -11,7 +15,7 @@ AGENT_CATEGORY = "risk"  # Define category for the decorator
 @standard_agent_execution(
     agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600
 )
-async def run(symbol: str) -> dict:
+async def run(symbol: str, agent_outputs: dict = None) -> dict:
     """
     Calculates various risk metrics for a given stock symbol relative to a market index.
 
@@ -77,8 +81,8 @@ async def run(symbol: str) -> dict:
 
     # Validate data length (Core Logic)
     if (
-        not symbol_prices
-        or not market_prices
+        symbol_prices is None or symbol_prices.empty
+        or market_prices is None or market_prices.empty
         or len(symbol_prices) < 2
         or len(market_prices) < 2
     ):
@@ -95,14 +99,35 @@ async def run(symbol: str) -> dict:
         }
 
     # Calculate returns (Core Logic)
-    # Ensure consistent indexing if lengths differ slightly (e.g., align dates)
-    sym_series = pd.Series(
-        symbol_prices
-    )  # Assuming prices are just values; if dicts/tuples with dates, adjust
-    mkt_series = pd.Series(market_prices)
-    # A more robust approach would align based on dates if available
-    sym_ret = sym_series.pct_change().dropna()
-    mkt_ret = mkt_series.pct_change().dropna()
+    # Handle 2D price arrays by extracting the closing price column
+    try:
+        # Check if symbol_prices is a 2D array and extract closing prices
+        if isinstance(symbol_prices, np.ndarray) and len(symbol_prices.shape) > 1:
+            close_idx = 3  # Assuming 4th column (index 3) is close price
+            sym_series = pd.Series(symbol_prices[:, close_idx])
+        else:
+            sym_series = pd.Series(symbol_prices)
+            
+        # Similarly for market prices
+        if isinstance(market_prices, np.ndarray) and len(market_prices.shape) > 1:
+            close_idx = 3  # Assuming 4th column (index 3) is close price
+            mkt_series = pd.Series(market_prices[:, close_idx])
+        else:
+            mkt_series = pd.Series(market_prices)
+            
+        # A more robust approach would align based on dates if available
+        sym_ret = sym_series.pct_change().dropna()
+        mkt_ret = mkt_series.pct_change().dropna()
+    except Exception as e:
+        logger.error(f"Error processing price data in beta_agent: {e}")
+        return {
+            "symbol": symbol,
+            "verdict": "ERROR",
+            "confidence": 0.0,
+            "value": None,
+            "details": {"reason": f"Failed to process price data: {str(e)}"},
+            "agent_name": agent_name,
+        }
 
     # Align returns if necessary (simple intersection for now)
     common_index = sym_ret.index.intersection(mkt_ret.index)

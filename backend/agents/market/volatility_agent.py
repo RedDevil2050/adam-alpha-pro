@@ -64,7 +64,7 @@ async def run(
     required_days = max(min_days_30d, min_days_90d, min_days_hist)
 
     if (
-        not prices or len(prices) < min_days_30d
+        prices is None or prices.empty or len(prices) < min_days_30d
     ):  # Need at least 30 days for basic calculation
         # Return NO_DATA format
         return {

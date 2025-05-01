@@ -13,7 +13,11 @@ class MetricsCollector:
             "cache_misses": 0,
             "start_time": datetime.now(),
         }
-        self.gauge = {}  # Adding the missing 'gauge' attribute
+        self.gauges = {}  # Store gauge metrics
+
+    def gauge(self, name: str, value):
+        """Store a gauge metric value"""
+        self.gauges[name] = value
 
     def record_category_execution(
         self, category: str, result_size: int, had_error: bool
@@ -68,4 +72,5 @@ class MetricsCollector:
             "uptime_seconds": (
                 datetime.now() - self.metrics["start_time"]
             ).total_seconds(),
+            "gauges": self.gauges,  # Include gauges in metrics
         }

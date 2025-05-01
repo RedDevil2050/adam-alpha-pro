@@ -8,6 +8,8 @@ services:
     env_file:
       - deploy/staging-config.env
       - api_keys.env
+    environment:
+      - API_PASS_HASH=${API_PASS_HASH}
     depends_on:
       - redis
       - postgres
@@ -30,7 +32,7 @@ services:
     environment:
       POSTGRES_DB: zion_staging
       POSTGRES_USER: zion_staging
-      POSTGRES_PASSWORD: staging_pass
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
@@ -59,7 +61,7 @@ services:
       - GF_DATABASE_HOST=postgres
       - GF_DATABASE_NAME=zion_staging
       - GF_DATABASE_USER=grafana
-      - GF_DATABASE_PASSWORD=grafana_pass
+      - GF_DATABASE_PASSWORD=${GRAFANA_PASSWORD}
 
   node-exporter:
     image: prom/node-exporter:latest

@@ -33,6 +33,17 @@ class SystemMonitor:
             # Optionally log or raise an error for unregistered components
             # logger.warning(f\"Attempted to update status for unregistered component '{name}'.\")
             pass # Or raise ValueError(f\"Component '{name}' not registered.\")
+            
+    def update_health(self, component_name: str, is_healthy: bool):
+        """Update health status of a specific component.
+        
+        Args:
+            component_name: Name of the component to update.
+            is_healthy: Boolean indicating whether the component is healthy.
+        """
+        status = "healthy" if is_healthy else "unhealthy"
+        logger.debug(f"SystemMonitor: Updating health for {component_name} to {status}")
+        self.update_component_status(component_name, status)
 
     def start_analysis(self, analysis_id: str):
         """Record the start time and initial state for an analysis."""
@@ -63,7 +74,7 @@ class SystemMonitor:
         return {
             "system": {
                  "cpu_usage": cpu,
-                 "memory": memory
+                 "memory_usage": memory  # Changed 'memory' to 'memory_usage' to match test expectations
             },
             "component_statuses": self.metrics.get("component_status", {})
             # Add other top-level keys if needed, like overall_status

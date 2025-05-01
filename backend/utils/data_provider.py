@@ -2,6 +2,7 @@ import asyncio
 import aiohttp
 import logging
 from backend.data.providers.unified_provider import UnifiedDataProvider
+from datetime import datetime, timedelta
 
 # Configure logging
 logging.basicConfig(level=logging.INFO) # Or use logging.DEBUG for more verbose output
@@ -36,17 +37,18 @@ async def fetch_historical_price_series(symbol: str, start_date: str, end_date: 
     """
     return await provider.fetch_price_data(symbol, start_date, end_date, interval)
 
-async def fetch_alpha_vantage(symbol: str):
+async def fetch_alpha_vantage(symbol: str, data_type: str = "price"):
     """
     Fetch data from Alpha Vantage for a given symbol.
 
     Args:
         symbol: Ticker symbol to fetch data for.
+        data_type: Type of data to fetch (defaults to "price").
 
     Returns:
         Dictionary with Alpha Vantage data.
     """
-    return await provider._fetch_alpha_vantage(symbol, "price")
+    return await provider._fetch_alpha_vantage(symbol, data_type)
 
 async def fetch_latest_bvps(symbol: str):
     """
@@ -115,23 +117,46 @@ async def fetch_price_series(symbol: str, source_preference: list = None, period
         source_preference = ["api"]
 
     logger.debug(f"Attempting to fetch price series for {symbol} with preference {source_preference}")
+    
+    # Convert period to start_date and end_date format for fetch_price_data
+    end_date = datetime.now().strftime("%Y-%m-%d")
+    
+    # Calculate start_date based on period
+    if period.endswith('y'):
+        years = int(period[:-1])
+        start_date = (datetime.now() - timedelta(days=years*365)).strftime("%Y-%m-%d")
+    elif period.endswith('m'):
+        months = int(period[:-1])
+        start_date = (datetime.now() - timedelta(days=months*30)).strftime("%Y-%m-%d")
+    elif period.endswith('d'):
+        days = int(period[:-1])
+        start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+    else:
+        # Default to 1 year if period format is unknown
+        start_date = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+    
     for source in source_preference:
         try:
             logger.debug(f"Trying source: {source} for {symbol}")
             if source == "api":
-                data = await provider.fetch_price_data(symbol, period=period)
-                if data is not None and not data.empty:
+                # Use start_date and end_date directly
+                data = await provider.fetch_price_data(symbol, start_date, end_date)
+                if data is not None and not isinstance(data, dict) and not data.empty:
                     logger.debug(f"Successfully fetched from source: {source} for {symbol}")
                     return data
                 else:
                     logger.warning(f"Source {source} returned empty/None data for {symbol}")
             elif source == "scrape":
-                data = await provider.scrape_price_data(symbol, period=period)
-                if data is not None and not data.empty:
-                    logger.debug(f"Successfully fetched from source: {source} for {symbol}")
-                    return data
-                else:
-                    logger.warning(f"Source {source} returned empty/None data for {symbol}")
+                try:
+                    # If you implement scrape_price_data in UnifiedDataProvider
+                    data = await provider.scrape_price_data(symbol, start_date=start_date, end_date=end_date)
+                    if data is not None and not isinstance(data, dict) and not data.empty:
+                        logger.debug(f"Successfully fetched from source: {source} for {symbol}")
+                        return data
+                    else:
+                        logger.warning(f"Source {source} returned empty/None data for {symbol}")
+                except AttributeError:
+                    logger.warning(f"scrape_price_data method not available in provider for {symbol}")
         except Exception as e:
             logger.error(f"Failed to fetch from source {source} for {symbol}: {e}", exc_info=True) # Add traceback
             continue

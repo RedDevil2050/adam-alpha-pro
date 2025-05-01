@@ -118,7 +118,19 @@ class TrendStrengthAgent(TechnicalAgent):
             logger.error(f"Trend strength calculation error: {e}")
             return self._error_response(symbol, str(e))
 
-# Remove the old standalone run function as the class now handles execution
-# @standard_agent_execution(agent_name=agent_name, category="technical")
-# async def run(symbol: str, agent_outputs: dict = None, period: int = 14) -> dict:
-#    ... (old implementation) ...
+# Add standalone run function for backward compatibility with tests
+@standard_agent_execution(agent_name=agent_name, category="technical")
+async def run(symbol: str, agent_outputs: dict = None) -> dict:
+    """
+    Standalone run function that creates and calls the TrendStrengthAgent class.
+    This maintains backward compatibility with tests that import this function.
+    
+    Args:
+        symbol: The ticker symbol to analyze
+        agent_outputs: Optional dictionary of outputs from other agents
+        
+    Returns:
+        Dictionary with the trend strength analysis results
+    """
+    agent = TrendStrengthAgent()
+    return await agent.run(symbol, agent_outputs)

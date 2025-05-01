@@ -5,6 +5,7 @@ from loguru import logger
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from typing import Dict # Import Dict
+from backend.agents.decorators import standard_agent_execution # Import decorator
 
 agent_name = "volume_spike_agent"
 
@@ -74,3 +75,20 @@ class VolumeSpikeAgent(TechnicalAgent):
         except Exception as e:
             logger.error(f"Volume spike calculation error: {e}")
             return self._error_response(symbol, str(e))
+
+# Add standalone run function for backward compatibility with tests
+@standard_agent_execution(agent_name=agent_name, category="technical")
+async def run(symbol: str, agent_outputs: dict = None) -> dict:
+    """
+    Standalone run function that creates and calls the VolumeSpikeAgent class.
+    This maintains backward compatibility with tests that import this function.
+    
+    Args:
+        symbol: The ticker symbol to analyze
+        agent_outputs: Optional dictionary of outputs from other agents
+        
+    Returns:
+        Dictionary with the volume spike analysis results
+    """
+    agent = VolumeSpikeAgent()
+    return await agent.run(symbol, agent_outputs)

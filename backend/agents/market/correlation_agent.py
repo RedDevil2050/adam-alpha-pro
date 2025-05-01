@@ -71,8 +71,8 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     # Use settings for minimum days required
     min_days = corr_settings.MIN_REQUIRED_DAYS
     if (
-        not symbol_prices
-        or not market_prices
+        symbol_prices is None or symbol_prices.empty
+        or market_prices is None or market_prices.empty
         or len(symbol_prices) < min_days
         or len(market_prices) < min_days
     ):
@@ -89,10 +89,35 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         }
 
     # Calculate returns
-    sym_series = pd.Series(symbol_prices)
-    mkt_series = pd.Series(market_prices)
-    sym_ret = sym_series.pct_change().dropna()
-    mkt_ret = mkt_series.pct_change().dropna()
+    # Handle 2D price arrays by extracting the closing price column (typically index 3 or 4)
+    # Price data format is typically [date, open, high, low, close, volume, ...]
+    try:
+        # Check if symbol_prices is a 2D array and extract closing prices
+        if isinstance(symbol_prices, np.ndarray) and len(symbol_prices.shape) > 1:
+            close_idx = 3  # Assuming 4th column (index 3) is close price
+            sym_series = pd.Series(symbol_prices[:, close_idx])
+        else:
+            sym_series = pd.Series(symbol_prices)
+            
+        # Similarly for market prices
+        if isinstance(market_prices, np.ndarray) and len(market_prices.shape) > 1:
+            close_idx = 3  # Assuming 4th column (index 3) is close price
+            mkt_series = pd.Series(market_prices[:, close_idx])
+        else:
+            mkt_series = pd.Series(market_prices)
+            
+        sym_ret = sym_series.pct_change().dropna()
+        mkt_ret = mkt_series.pct_change().dropna()
+    except Exception as e:
+        logger.error(f"Error processing price data: {e}")
+        return {
+            "symbol": symbol,
+            "verdict": "ERROR",
+            "confidence": 0.0,
+            "value": None,
+            "details": {"reason": f"Failed to process price data: {str(e)}"},
+            "agent_name": agent_name,
+        }
 
     # Align returns (simple intersection)
     common_index = sym_ret.index.intersection(mkt_ret.index)

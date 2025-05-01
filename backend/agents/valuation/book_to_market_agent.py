@@ -15,6 +15,7 @@ from backend.utils.data_provider import (
 from loguru import logger
 from backend.agents.decorators import standard_agent_execution
 from backend.config.settings import get_settings
+from datetime import datetime, timedelta
 
 agent_name = "book_to_market_agent"
 AGENT_CATEGORY = "valuation"
@@ -84,12 +85,60 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     price, book_value = await asyncio.gather(price_task, book_value_task)
 
     # Validate data
-    if price is None or book_value is None or price <= 0:
+    if price is None or book_value is None:
         # Return NO_DATA format
         details = {
             "book_value_per_share": book_value,
             "latest_price": price,
-            "reason": f"Missing or invalid data (Price: {price}, Book Value: {book_value})",
+            "reason": f"Missing data (Price: {price}, Book Value: {book_value})",
+        }
+        return {
+            "symbol": symbol,
+            "verdict": "NO_DATA",
+            "confidence": 0.0,
+            "value": None,
+            "details": details,
+            "agent_name": agent_name,
+        }
+        
+    # Check if price is a dictionary (which happens in some error cases)
+    if isinstance(price, dict):
+        details = {
+            "book_value_per_share": book_value,
+            "latest_price": price,
+            "reason": f"Price returned as dictionary instead of numeric value",
+        }
+        return {
+            "symbol": symbol,
+            "verdict": "NO_DATA",
+            "confidence": 0.0,
+            "value": None,
+            "details": details,
+            "agent_name": agent_name,
+        }
+        
+    # Check if book_value is a dictionary (which happens in some error cases)
+    if isinstance(book_value, dict):
+        details = {
+            "book_value_per_share": book_value,
+            "latest_price": price,
+            "reason": f"Book value returned as dictionary instead of numeric value",
+        }
+        return {
+            "symbol": symbol,
+            "verdict": "NO_DATA",
+            "confidence": 0.0,
+            "value": None,
+            "details": details,
+            "agent_name": agent_name,
+        }
+        
+    # Now we can safely check numeric values
+    if price <= 0:
+        details = {
+            "book_value_per_share": book_value,
+            "latest_price": price,
+            "reason": f"Invalid price (Price: {price} <= 0)",
         }
         return {
             "symbol": symbol,
@@ -113,8 +162,12 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
 
     # Fetch historical prices
     try:
+        # Convert years to start_date and end_date
+        end_date = datetime.now().strftime("%Y-%m-%d")
+        start_date = (datetime.now() - timedelta(days=btm_settings.HISTORICAL_YEARS * 365)).strftime("%Y-%m-%d")
+        
         historical_prices = await fetch_historical_price_series(
-            symbol, years=btm_settings.HISTORICAL_YEARS
+            symbol, start_date=start_date, end_date=end_date
         )
     except Exception as fetch_err:
         logger.warning(
