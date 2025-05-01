@@ -5,6 +5,7 @@ from backend.agents.decorators import standard_agent_execution
 from backend.config.settings import get_settings
 from datetime import datetime, timedelta
 import numpy as np
+from unittest.mock import MagicMock
 
 agent_name = "earnings_surprise_agent"
 AGENT_CATEGORY = "event"
