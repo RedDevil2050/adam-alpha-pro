@@ -4,6 +4,8 @@ import asyncio
 import random
 from backend.core.orchestrator import SystemOrchestrator
 from backend.utils.monitoring import SystemMonitor
+from unittest.mock import AsyncMock
+from backend.utils.metrics_collector import MetricsCollector
 import time
 
 @pytest.mark.asyncio
@@ -12,7 +14,11 @@ class TestSystemStress:
     async def orchestrator(self):
         """Create and properly initialize a SystemOrchestrator instance."""
         monitor = SystemMonitor()
-        instance = SystemOrchestrator()
+        metrics_collector = MetricsCollector()
+        mock_cache_client = AsyncMock()
+        instance = SystemOrchestrator(cache_client=mock_cache_client)
+        instance.system_monitor = monitor
+        instance.metrics_collector = metrics_collector
         # Properly initialize the orchestrator
         await instance.initialize(monitor)
         yield instance
