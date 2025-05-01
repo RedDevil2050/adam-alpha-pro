@@ -13,6 +13,11 @@ class SystemOrchestrator:
         self.category_manager = CategoryManager()
         self.cache = cache_client
         self.category_dependencies: Dict[str, List[str]] = {}
+        # Initialize internal monitor and metrics collector for use in analyze_symbol
+        from backend.utils.system_monitor import SystemMonitor
+        from backend.utils.metrics_collector import MetricsCollector
+        self.system_monitor = SystemMonitor()
+        self.metrics_collector = MetricsCollector()
 
     async def initialize(self, monitor: SystemMonitor):
         """Initialize orchestrator components and update status."""
@@ -35,15 +40,13 @@ class SystemOrchestrator:
     async def analyze_symbol(
         self,
         symbol: str,
-        monitor: SystemMonitor,
-        metrics_collector: MetricsCollector,
         categories: Optional[List[str]] = None,
         force_refresh: bool = False,
     ) -> Dict:
         """Run full analysis with advanced caching and error recovery"""
         analysis_id = f"{symbol}_{datetime.now().timestamp()}"
         try:
-            monitor.start_analysis(analysis_id)
+            self.system_monitor.start_analysis(analysis_id)
 
             # Check cache if not forced refresh
             if not force_refresh:
@@ -82,10 +85,10 @@ class SystemOrchestrator:
                     executed_categories.add(category_value)
 
                     # Collect metrics based on whether any agent failed
-                    metrics_collector.record_category_execution(
+                    self.metrics_collector.record_category_execution(
                         category_value,
                         num_results,
-                        category_had_errors, # True if any agent had an error
+                        category_had_errors,
                     )
 
                 except Exception as e:
@@ -93,33 +96,33 @@ class SystemOrchestrator:
                     # Store a category-level error
                     results[category_value] = {"error": f"Category execution failed: {str(e)}", "results": []}
                     executed_categories.add(category_value) # Mark as executed even if failed
-                    metrics_collector.record_category_execution(category_value, 0, True) # Record failure
+                    self.metrics_collector.record_category_execution(category_value, 0, True) # Record failure
 
             # Generate final verdict
             final_verdict = self._generate_composite_verdict(results)
-            system_health = monitor.get_health_metrics()
+            system_health = await self.system_monitor.get_health_metrics()
 
             # Cache results
             await self._cache_analysis(symbol, final_verdict)
 
-            monitor.end_analysis(analysis_id, "success")
+            self.system_monitor.end_analysis(analysis_id, "success")
             return {
                 "symbol": symbol,
                 "analysis_id": analysis_id,
                 "verdict": final_verdict,
                 "category_results": results,
                 "system_health": system_health,
-                "execution_metrics": metrics_collector.get_metrics(),
+                "execution_metrics": self.metrics_collector.get_metrics(),
             }
 
         except Exception as e:
-            monitor.end_analysis(analysis_id, "error")
+            self.system_monitor.end_analysis(analysis_id, "error")
             logger.error(f"System analysis failed for {symbol}: {e}")
             return {
                 "symbol": symbol,
                 "analysis_id": analysis_id,
                 "error": str(e),
-                "system_health": monitor.get_health_metrics(),
+                "system_health": await self.system_monitor.get_health_metrics(),
             }
 
     async def _execute_category_with_retry(
