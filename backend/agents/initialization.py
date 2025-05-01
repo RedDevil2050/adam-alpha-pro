@@ -74,7 +74,7 @@ class AgentInitializer:
                     break
 
             # Initialize agent if class exists
-            if agent_class:
+            if (agent_class):
                 try:
                     instance = agent_class()
                     instance_name = f"{category.value}.{agent_name}"

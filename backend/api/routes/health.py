@@ -31,7 +31,7 @@ async def health_check():
     
     # Check Redis
     try:
-        redis_client = get_redis_client()
+        redis_client = await get_redis_client()
         redis_client.ping()
         details["components"]["redis"] = "healthy"
     except Exception as e:

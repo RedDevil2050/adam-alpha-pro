@@ -60,34 +60,35 @@ class SystemMonitor:
         logger.info(f"SystemMonitor: Starting analysis {analysis_id}")
         self._analyses[analysis_id] = {"start_time": datetime.now(), "status": "running"}
 
-def end_analysis(self, analysis_id: str, status: str):
-    """Record the end time and final status for an analysis."""
-    logger.info(f"SystemMonitor: Ending analysis {analysis_id} with status {status}")
-    if analysis_id in self._analyses:
-        self._analyses[analysis_id]["end_time"] = datetime.now()
-        self._analyses[analysis_id]["status"] = status
-    else:
-        logger.warning(f"SystemMonitor Warning: end_analysis called for unknown id {analysis_id}")
+    # Correct indentation for the following methods
+    def end_analysis(self, analysis_id: str, status: str):
+        """Record the end time and final status for an analysis."""
+        logger.info(f"SystemMonitor: Ending analysis {analysis_id} with status {status}")
+        if analysis_id in self._analyses:
+            self._analyses[analysis_id]["end_time"] = datetime.now()
+            self._analyses[analysis_id]["status"] = status
+        else:
+            logger.warning(f"SystemMonitor Warning: end_analysis called for unknown id {analysis_id}")
 
-async def get_health_metrics(self) -> Dict:
-    """Provide system health metrics including CPU and memory."""
-    logger.debug("SystemMonitor: Getting health metrics")
-    cpu = None
-    memory = None
-    try:
-        cpu = psutil.cpu_percent()
-        memory = psutil.virtual_memory().percent
-    except Exception as e:
-        logger.error(f"Failed to get system metrics: {e}")
+    async def get_health_metrics(self) -> Dict:
+        """Provide system health metrics including CPU and memory."""
+        logger.debug("SystemMonitor: Getting health metrics")
+        cpu = None
+        memory = None
+        try:
+            cpu = psutil.cpu_percent()
+            memory = psutil.virtual_memory().percent
+        except Exception as e:
+            logger.error(f"Failed to get system metrics: {e}")
 
-    # Return nested structure as expected by tests/orchestrator
-    return {
-        "system": {
-             "cpu_usage": cpu,
-             "memory_usage": memory  # Changed 'memory' to 'memory_usage' to match test expectations
-        },
-        "components": self.components
-    }
+        # Return nested structure as expected by tests/orchestrator
+        return {
+            "system": {
+                 "cpu_usage": cpu,
+                 "memory_usage": memory  # Changed 'memory' to 'memory_usage' to match test expectations
+            },
+            "components": self.components
+        }
 
     def _initialize_metrics(self):
         self.metrics = {

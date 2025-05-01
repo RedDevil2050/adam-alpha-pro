@@ -8,7 +8,7 @@ class MarketContext:
     _instance = None
 
     def __init__(self):
-        self.cache = get_redis_client()
+        self.cache = None
         self.state = {}
         self.update_interval = 300  # 5 minutes
         self._lock = asyncio.Lock()
@@ -22,6 +22,7 @@ class MarketContext:
 
     async def initialize(self):
         """Initialize market context"""
+        self.cache = await get_redis_client()
         self.state = await self._load_state()
         asyncio.create_task(self._auto_update())
 

@@ -14,7 +14,7 @@ async def refresh_system():
     
     try:
         # Clear Redis cache
-        redis_client = get_redis_client()
+        redis_client = await get_redis_client()
         await redis_client.flushall()
         logger.info("Cache cleared")
         

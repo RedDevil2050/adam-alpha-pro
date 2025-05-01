@@ -1,35 +1,60 @@
 import sys, os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-
 import pytest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 # Corrected import path
 from backend.agents.management.management_track_record_agent import run as mgt_run
 
+agent_name = "management_track_record_agent"
+
 @pytest.mark.asyncio
-async def test_management_track_record_agent(monkeypatch):
-    # Mock the fetch_transcript function which the agent now uses
+# Patch dependencies using decorators (innermost first)
+@patch('backend.agents.technical.utils.tracker.update') # Correct path based on agent import
+@patch('backend.agents.management.management_track_record_agent.get_redis_client')
+@patch('backend.agents.management.management_track_record_agent.fetch_transcript')
+# Optionally patch the analyzer for full control, but mocking transcript is often sufficient
+# @patch('backend.agents.management.management_track_record_agent.SentimentIntensityAnalyzer')
+async def test_management_track_record_agent(
+    mock_fetch_transcript, 
+    mock_get_redis, 
+    mock_tracker_update
+    # mock_analyzer # Add if patching analyzer
+):
+    # --- Mock Configuration ---
+    # 1. Mock fetch_transcript
     mock_transcript = "Management expressed strong confidence about future growth."
-    monkeypatch.setattr('backend.utils.data_provider.fetch_transcript', AsyncMock(return_value=mock_transcript))
+    mock_fetch_transcript.return_value = mock_transcript
     
-    # Mock redis get/set as the agent uses caching
+    # 2. Mock Redis
     mock_redis_instance = AsyncMock()
     mock_redis_instance.get.return_value = None # Simulate cache miss
-    mock_redis_instance.set.return_value = None
-    monkeypatch.setattr('backend.utils.cache_utils.get_redis_client', AsyncMock(return_value=mock_redis_instance))
+    mock_redis_instance.set = AsyncMock()
+    mock_get_redis.return_value = mock_redis_instance
 
-    # Call run with only the symbol argument
+    # 3. Mock Tracker (already patched)
+    mock_tracker_update.return_value = None # Simple mock
+
+    # --- Run Agent ---
     res = await mgt_run('ABC')
     
-    # Assert based on the agent's sentiment analysis logic
+    # --- Assertions ---
+    # Assert based on the agent's sentiment analysis logic and the positive mock transcript
+    assert res['symbol'] == 'ABC'
+    assert res['agent_name'] == agent_name
     assert 'verdict' in res
-    # Based on the mock transcript and VADER score > 0.2
+    # VADER score for the mock transcript is likely > 0.2
     assert res['verdict'] == 'POSITIVE_CONFIDENCE' 
-    assert 'value' in res
+    assert 'value' in res # Raw compound score
     assert isinstance(res['value'], float)
-    assert res['value'] > 0.2 # Check the compound score
+    assert res['value'] > 0.2 # Check the compound score threshold
+    assert 'confidence' in res # Absolute value of compound score
+    assert res['confidence'] == pytest.approx(abs(res['value']))
+    assert res.get('error') is None
     
-    # Verify cache was checked and set
+    # --- Verify Mocks ---
+    mock_fetch_transcript.assert_awaited_once_with('ABC')
+    mock_get_redis.assert_awaited_once()
     mock_redis_instance.get.assert_awaited_once()
-    mock_redis_instance.set.assert_awaited_once()
+    mock_redis_instance.set.assert_awaited_once() # Should cache on success
+    mock_tracker_update.assert_called_once_with("management", agent_name, "implemented")

@@ -9,7 +9,8 @@ agent_name = "news_volume_spike_agent"
 async def run(symbol: str, window_hours: int = 24) -> dict:
     cache_key = f"{agent_name}:{symbol}:{window_hours}"
     # Cache check
-    cached = await get_redis_client().get(cache_key)
+    redis_client = await get_redis_client()
+    cached = await redis_client.get(cache_key)
     if cached:
         return cached
 
@@ -46,6 +47,7 @@ async def run(symbol: str, window_hours: int = 24) -> dict:
     }
 
     # Cache & track
-    await get_redis_client().set(cache_key, result, ex=3600)
+    redis_client = await get_redis_client()
+    await redis_client.set(cache_key, result, ex=3600)
     tracker.update("sentiment", agent_name, "implemented")
     return result

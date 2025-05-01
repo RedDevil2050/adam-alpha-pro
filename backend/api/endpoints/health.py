@@ -36,7 +36,7 @@ async def health_check(
     # Check Redis Connection
     redis_check_start = time.monotonic()
     try:
-        redis_client = get_redis_client()
+        redis_client = await get_redis_client()
         # Try to set and get a test value
         test_key = "health_check_test"
         test_value = "ok"

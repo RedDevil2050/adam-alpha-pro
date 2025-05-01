@@ -1,4 +1,4 @@
-from backend.agents.intelligence.base import IntelligenceAgentBase
+from backend.agents.base.category_bases import IntelligenceAgentBase
 import numpy as np
 from loguru import logger
 

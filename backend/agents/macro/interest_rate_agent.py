@@ -6,7 +6,7 @@ agent_name = "interest_rate_agent"
 
 
 async def run(symbol: str, country: str = "IND") -> dict:
-    redis_client = get_redis_client()
+    redis_client = await get_redis_client()
     cache_key = f"{agent_name}:{country}"
     cached = await redis_client.get(cache_key)
     if cached:

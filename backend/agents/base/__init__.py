@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List
 import logging
 from datetime import datetime
 from backend.utils.cache_utils import get_redis_client
@@ -10,13 +10,17 @@ import json
 class AgentBase(ABC):
     def __init__(self):
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.cache = get_redis_client()
+        self.cache = None
         self.ttl = settings.agent_cache_ttl
         self.context = {}
         self.metrics = {"calls": 0, "errors": 0, "avg_latency": 0}
-
+        
     async def execute(self, symbol: str, agent_outputs: Dict = {}) -> Dict[str, Any]:
         """Template method for agent execution with metrics"""
+        # Initialize if not already done
+        if self.cache is None:
+            await self.initialize()
+            
         start_time = datetime.now()
         self.metrics["calls"] += 1
 
@@ -79,13 +83,17 @@ class AgentBase(ABC):
         calls = self.metrics["calls"]
         self.metrics["avg_latency"] = (old_avg * (calls - 1) + new_latency) / calls
 
-    def get_dependencies(self) -> List[str]:
-        """Return list of dependent agent names"""
-        return []
+    async def pre_execute(self, symbol: str, context: Dict) -> None:
+        """Hook called before execution"""
+        # Symbol and context parameters are required for method signature
+        # but not used in base implementation
+        pass
 
-    def get_weight(self) -> float:
-        """Return agent weight for scoring"""
-        return 1.0
+    async def post_execute(self, result: Dict, context: Dict) -> None:
+        """Hook called after execution"""
+        # Result and context parameters are required for method signature
+        # but not used in base implementation
+        pass
 
     async def pre_execute(self, symbol: str, context: Dict) -> None:
         """Hook called before execution"""

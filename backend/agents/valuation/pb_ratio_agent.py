@@ -119,7 +119,7 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
                  try:
                      temp_series.index = pd.to_datetime(temp_series.index)
                  except (TypeError, ValueError):
-                     logger.warning(f"[{agent_name}] Could not convert index to datetime for {symbol, using default index.")
+                     logger.warning(f"[{agent_name}] Could not convert index to datetime for {symbol}, using default index.")
                  historical_prices = temp_series
 
             # Check if conversion resulted in an empty series
@@ -304,3 +304,5 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         "agent_name": agent_name,
     }
     return result
+
+stats = {}

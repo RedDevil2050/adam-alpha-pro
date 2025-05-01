@@ -1,12 +1,101 @@
+import sys, os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import pytest
-import asyncio
-from backend.agents.technical.macd_agent import run
+import pandas as pd
+import numpy as np
+from unittest.mock import AsyncMock, patch, MagicMock
+from backend.agents.technical.macd_agent import run as macd_run, MACDAgent # Import run and the class
+
+agent_name = "macd_agent"
+
+@pytest.mark.asyncio
+# Patch dependencies (innermost first)
+# Patch the get_market_context method directly on the class prototype
+@patch.object(MACDAgent, 'get_market_context') 
+# Patch the data fetching function used by the agent
+@patch('backend.agents.technical.macd_agent.fetch_ohlcv_series')
+# Patch the pandas EWM calculation
+@patch('pandas.core.window.ewm.ExponentialMovingWindow.mean')
+async def test_macd_agent_buy_signal(
+    mock_ewm_mean, 
+    mock_fetch_ohlcv, 
+    mock_get_market_context
+):
+    # --- Mock Configuration ---
+    symbol = "TEST_SYMBOL"
+    market_regime = "BULL"
+
+    # 1. Mock fetch_ohlcv_series
+    # Create a dummy DataFrame with a 'close' column
+    data_df = pd.DataFrame({'close': np.linspace(100, 110, 35)}) # Need enough data for EWM
+    mock_fetch_ohlcv.return_value = data_df
+
+    # 2. Mock EWM calculations to produce BUY signal
+    # We need macd > signal and histogram > 0
+    # Let macd = 1.5, signal = 1.0 => histogram = 0.5
+    # Let exp1.iloc[-1] = 11.5
+    # Let exp2.iloc[-1] = 10.0 => macd = 1.5
+    # Let signal.iloc[-1] = 1.0 => hist = 0.5
+    
+    # Create mock Series for the final values returned by .mean()
+    mock_exp1_mean_series = MagicMock(spec=pd.Series); mock_exp1_mean_series.iloc.__getitem__.return_value = 11.5
+    mock_exp2_mean_series = MagicMock(spec=pd.Series); mock_exp2_mean_series.iloc.__getitem__.return_value = 10.0
+    mock_signal_mean_series = MagicMock(spec=pd.Series); mock_signal_mean_series.iloc.__getitem__.return_value = 1.0
+
+    # The order matters: exp1, exp2, signal
+    mock_ewm_mean.side_effect = [mock_exp1_mean_series, mock_exp2_mean_series, mock_signal_mean_series]
+
+    # 3. Mock get_market_context
+    mock_get_market_context.return_value = {"regime": market_regime}
+
+    # --- Expected Calculations ---
+    # Based on mocked means: macd = 11.5 - 10.0 = 1.5, signal = 1.0, hist = 0.5
+    # Since macd > signal and hist > 0 => verdict = BUY
+    # Base confidence = 0.8
+    # Confidence adjusted for BULL regime (assuming adjust_for_market_regime increases it)
+    # We will assert confidence > 0.5 without mocking the adjustment function itself.
+    expected_verdict = "BUY"
+    expected_macd_value = 1.5
+    expected_signal_value = 1.0
+    expected_hist_value = 0.5
+
+    # --- Run Agent ---
+    # The run function creates an instance, so patching the class method works.
+    result = await macd_run(symbol)
+
+    # --- Assertions ---
+    assert result['symbol'] == symbol
+    assert result['agent_name'] == agent_name
+    assert result['verdict'] == expected_verdict
+    # Check confidence was adjusted (likely > base 0.5 for HOLD)
+    assert result['confidence'] > 0.5 
+    assert result['value'] == pytest.approx(expected_macd_value) # Value is current_macd
+    assert result.get('error') is None
+
+    # Check details
+    assert 'details' in result
+    details = result['details']
+    assert details['macd'] == pytest.approx(expected_macd_value)
+    assert details['signal'] == pytest.approx(expected_signal_value)
+    assert details['histogram'] == pytest.approx(expected_hist_value)
+    assert details['market_regime'] == market_regime
+
+    # --- Verify Mocks ---
+    mock_fetch_ohlcv.assert_awaited_once_with(symbol)
+    # Check ewm().mean() calls
+    assert mock_ewm_mean.call_count == 3
+    # Verify the iloc calls on the mock series returned by mean()
+    mock_exp1_mean_series.iloc.__getitem__.assert_called_with(-1)
+    mock_exp2_mean_series.iloc.__getitem__.assert_called_with(-1)
+    mock_signal_mean_series.iloc.__getitem__.assert_called_with(-1)
+    
+    mock_get_market_context.assert_awaited_once_with(symbol)
 
 @pytest.mark.asyncio
 async def test_macd_agent_schema():
     symbol = "INFY"
-    result = await run(symbol)
+    result = await macd_run(symbol)
 
     assert isinstance(result, dict)
     assert "symbol" in result

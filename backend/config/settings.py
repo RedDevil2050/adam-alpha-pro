@@ -253,6 +253,8 @@ class AgentSettings(BaseSettings):
     correlation: CorrelationAgentSettings = (
         CorrelationAgentSettings()
     )  # Added correlation settings
+    # Add missing market_regime settings for tests/agents
+    market_regime: dict = {"thresholds": {"bull": 0.7, "bear": 0.3}}
 
 
 class Settings(BaseSettings):
@@ -274,6 +276,7 @@ class Settings(BaseSettings):
     agent_settings: AgentSettings = AgentSettings()  # Ensure this line exists
 
     agent_cache_ttl: int = Field(default=3600, description="Default cache TTL for agents in seconds")
+    news_api_key: str = Field(default="test-news-api-key", env="NEWS_API_KEY")
 
     @property
     def is_production(self) -> bool:

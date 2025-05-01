@@ -35,12 +35,11 @@
       "insider_trade_agent": "implemented"
     },
     "automation": {
-      "alert_engine_agent": "implemented",
-      "ask_alpha_agent": "implemented"
+      "alert_engine_agent": "implemented"
     },
     "forecast": {
       "price_forecast_agent": "implemented"
     }
   },
-  "last_updated": "2025-05-01T14:22:40.833515+00:00Z"
+  "last_updated": "2025-05-01T13:08:36.244719+00:00Z"
 }
