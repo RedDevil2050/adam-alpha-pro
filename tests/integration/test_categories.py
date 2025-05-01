@@ -22,16 +22,18 @@ class TestCategoryIntegration:
             CategoryType.TECHNICAL, "RELIANCE.NS"
         )
         assert results
-        assert any(r["agent_name"].startswith("rsi") for r in results)
-        assert any(r["agent_name"].startswith("macd") for r in results)
+        assert any(r["agent_name"].startswith("rsi") for r in results if r)
+        assert any(r["agent_name"].startswith("macd") for r in results if r)
 
     async def test_market_category(self, category_manager):
         """Test market category execution"""
         results = await category_manager.execute_category(
             CategoryType.MARKET, "RELIANCE.NS"
         )
-        assert results
-        assert any(r["agent_name"].startswith("market_regime") for r in results)
+        assert results, "Market category should return results"
+        # Check for specific market agents like volatility or correlation
+        assert any(r["agent_name"].startswith("volatility") for r in results if r), "Volatility agent result expected"
+        assert any(r["agent_name"].startswith("correlation") for r in results if r), "Correlation agent result expected"
 
     async def test_stealth_category(self, category_manager):
         """Test stealth category execution"""

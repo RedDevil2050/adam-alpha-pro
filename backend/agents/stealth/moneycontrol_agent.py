@@ -204,8 +204,31 @@ class MoneyControlAgent(StealthAgentBase):
         return {}
 
     def _extract_ml_features(self, data: dict) -> np.array:
-        # Placeholder for extracting features for ML
-        return np.array([])
+        logger.warning(f"[_extract_ml_features for {self.__class__.__name__}] Placeholder implementation.")
+        # Placeholder: Extract features like price change, volume change, etc.
+        prices = np.array(data.get("price_data", []))
+        volumes = np.array(data.get("volume_data", []))
+        if len(prices) < 2 or len(volumes) < 2:
+            return np.empty((0, 2)) # Return empty 2D array if not enough data
+        
+        price_change = np.diff(prices) / prices[:-1]
+        volume_change = np.diff(volumes) / volumes[:-1]
+        
+        # Ensure features are 2D for IsolationForest
+        # Use the shorter length if price/volume differ
+        min_len = min(len(price_change), len(volume_change))
+        features = np.vstack((price_change[:min_len], volume_change[:min_len])).T
+        return features if features.ndim == 2 and features.shape[0] > 0 else np.empty((0, 2))
+
+    # Add placeholder for _analyze_sentiment_impact
+    def _analyze_sentiment_impact(self, data: dict) -> float:
+        logger.warning(f"[_analyze_sentiment_impact for {self.__class__.__name__}] Placeholder implementation.")
+        sentiment = data.get("sentiment", "neutral")
+        if sentiment == "positive":
+            return 0.1
+        elif sentiment == "negative":
+            return -0.1
+        return 0.0
 
     async def execute(self, symbol: str, agent_outputs: dict = {}) -> dict:
         """Public method to execute the agent's logic."""

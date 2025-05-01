@@ -82,18 +82,71 @@ class TradingViewAgent(StealthAgentBase):
             opens = np.array(data.get("opens", []))
             closes = np.array(data.get("closes", []))
 
+            # Correct pandas_ta function names
             patterns = {
-                "doji": ta.cdl_doji(opens, highs, lows, closes),
-                "engulfing": ta.cdl_engulfing(opens, highs, lows, closes),
-                "morning_star": ta.cdl_morningstar(opens, highs, lows, closes),
-                "evening_star": ta.cdl_eveningstar(opens, highs, lows, closes),
-                "hammer": ta.cdl_hammer(opens, highs, lows, closes),
+                "doji": ta.cdl_doji(opens, highs, lows, closes).iloc[-1] if len(opens) > 0 else 0,
+                "engulfing": ta.cdl_engulfing(opens, highs, lows, closes).iloc[-1] if len(opens) > 0 else 0,
+                "morning_star": ta.cdl_morningstar(opens, highs, lows, closes).iloc[-1] if len(opens) > 0 else 0,
+                "evening_star": ta.cdl_eveningstar(opens, highs, lows, closes).iloc[-1] if len(opens) > 0 else 0,
+                "hammer": ta.cdl_hammer(opens, highs, lows, closes).iloc[-1] if len(opens) > 0 else 0,
             }
 
-            return {k: bool(v[-1]) for k, v in patterns.items()}
+            # Return boolean indicating if the latest value is non-zero
+            return {k: bool(v != 0) for k, v in patterns.items()}
         except Exception as e:
             logger.error(f"Pattern analysis error: {e}")
             return {}
+
+    # --- Add Placeholder Implementations for Missing Methods ---
+    def _calculate_fibonacci_levels(self, data: dict) -> dict:
+        logger.warning(f"[_calculate_fibonacci_levels for {self.__class__.__name__}] Placeholder implementation.")
+        # Placeholder: Calculate based on recent high/low
+        high = max(data.get("highs", [0]))
+        low = min(data.get("lows", [0]))
+        diff = high - low
+        return {
+            "level_0.236": low + diff * 0.236,
+            "level_0.382": low + diff * 0.382,
+            "level_0.5": low + diff * 0.5,
+            "level_0.618": low + diff * 0.618,
+            "level_0.786": low + diff * 0.786,
+        } if diff > 0 else {}
+
+    def _calculate_pivot_points(self, data: dict) -> dict:
+        logger.warning(f"[_calculate_pivot_points for {self.__class__.__name__}] Placeholder implementation.")
+        # Placeholder: Calculate based on previous period HLC
+        # Assuming data has at least one period
+        if len(data.get("highs", [])) > 0:
+            high = data["highs"][-1]
+            low = data["lows"][-1]
+            close = data["closes"][-1]
+            pivot = (high + low + close) / 3
+            return {
+                "pivot": pivot,
+                "r1": (2 * pivot) - low,
+                "s1": (2 * pivot) - high,
+            }
+        return {}
+
+    def _detect_elliott_waves(self, data: dict) -> str:
+        logger.warning(f"[_detect_elliott_waves for {self.__class__.__name__}] Placeholder implementation.")
+        # Placeholder: Very basic wave detection logic
+        return "Wave 3 (estimated)" # Example placeholder
+
+    def _process_advanced_signals(self, data, candlestick_patterns, fibonacci_levels, pivot_points, elliott_waves) -> dict:
+        logger.warning(f"[_process_advanced_signals for {self.__class__.__name__}] Placeholder implementation.")
+        # Placeholder: Combine signals into a composite score
+        score = 0.5 # Start neutral
+        if candlestick_patterns.get("hammer") or candlestick_patterns.get("morning_star"):
+            score += 0.1
+        if candlestick_patterns.get("engulfing") > 0: # Bullish engulfing
+             score += 0.1
+        # Add more logic based on other signals
+        return {
+            "composite_score": min(max(score, 0), 1), # Clamp score between 0 and 1
+            "indicators": data.get("technicals", {}) # Pass through existing technicals
+        }
+    # --- End Placeholder Implementations ---
 
     def _calculate_weighted_confidence(self, signals: dict) -> float:
         # Placeholder for a more complex confidence calculation

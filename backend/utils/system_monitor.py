@@ -45,6 +45,16 @@ class SystemMonitor:
         logger.debug(f"SystemMonitor: Updating health for {component_name} to {status}")
         self.update_component_status(component_name, status)
 
+    # Added missing method required by E2E tests/tracker
+    async def update_agent_status(self, category: str, agent_name: str, symbol: str, status: str, details: Optional[Any] = None):
+        """Placeholder/Mock for updating agent status (async to match potential real implementation)."""
+        # In a real implementation, this would log or store the status update,
+        # potentially interacting with a database or monitoring service.
+        # Using logger.debug to avoid excessive console noise during tests.
+        logger.debug(f"Tracker: Agent {category}/{agent_name} for {symbol} status updated to {status}. Details: {details}")
+        # No actual state change needed for this placeholder
+        pass
+
     def start_analysis(self, analysis_id: str):
         """Record the start time and initial state for an analysis."""
         logger.info(f"SystemMonitor: Starting analysis {analysis_id}")

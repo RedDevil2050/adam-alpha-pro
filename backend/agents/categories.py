@@ -247,3 +247,8 @@ class CategoryManager:
     def get_registered_agents(cls, category: CategoryType) -> List[str]:
         """Retrieve registered agents for a given category."""
         return cls._agent_registry.get(category, [])
+
+    @classmethod
+    def get_category_weights(cls) -> Dict[str, float]:
+        """Get a dictionary mapping category values to their weights."""
+        return {cat.value: meta.weight for cat, meta in cls.CATEGORY_METADATA.items()}

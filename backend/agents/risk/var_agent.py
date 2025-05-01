@@ -1,5 +1,6 @@
 from backend.utils.data_provider import fetch_price_series
 import numpy as np
+import pandas as pd
 from loguru import logger
 from backend.agents.decorators import standard_agent_execution  # Import decorator
 
@@ -34,7 +35,23 @@ async def run(
         }
 
     # Calculate log returns
-    returns = np.diff(np.log(prices))
+    # Ensure prices are numeric and handle potential issues
+    try:
+        numeric_prices = pd.to_numeric(prices, errors="coerce").dropna()
+        if len(numeric_prices) < 2:
+            raise ValueError("Not enough numeric price points after cleaning.")
+        returns = np.diff(np.log(numeric_prices))
+    except Exception as e:
+        logger.error(f"Error calculating returns for {symbol}: {e}")
+        return {
+            "symbol": symbol,
+            "verdict": "ERROR",
+            "confidence": 0.0,
+            "value": None,
+            "details": {"reason": f"Failed to calculate returns: {str(e)}"},
+            "agent_name": agent_name,
+        }
+
     if len(returns) == 0:
         return {
             "symbol": symbol,

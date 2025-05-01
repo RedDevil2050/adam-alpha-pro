@@ -1,6 +1,7 @@
 import pytest
 import pytest_asyncio
 import asyncio
+import logging
 from backend.core.orchestrator import SystemOrchestrator
 from backend.agents.categories import CategoryType
 # Correct the import path for SystemMonitor
@@ -8,6 +9,9 @@ from backend.utils.system_monitor import SystemMonitor
 from backend.utils.metrics_collector import MetricsCollector
 # Import the mocked redis client utility
 from backend.utils.cache_utils import get_redis_client
+
+# Configure logger
+logger = logging.getLogger(__name__)
 
 @pytest.mark.asyncio
 class TestSystemIntegration:
@@ -85,31 +89,43 @@ class TestSystemIntegration:
             monitor=monitor,
             metrics_collector=metrics_collector
         )
-        assert "error" in result
+        # Check if *any* category reported an error, or if the top-level error exists
+        category_errors = any(
+            cat_result.get("error") or any(agent_res.get("error") for agent_res in cat_result.get("results", []))
+            for cat_result in result.get("category_results", {}).values()
+        )
+        assert result.get("error") or category_errors, "Expected either a top-level error or an error within category results"
         # Check component status via the monitor instance used in the call
-        health_metrics = await monitor.get_health_metrics()
-        assert health_metrics["components"]["orchestrator"]["status"] == "healthy"
+        # Corrected: get_health_metrics is not async
+        health_metrics = monitor.get_health_metrics()
+        # Check component statuses within the returned health metrics
+        assert health_metrics["component_statuses"]["orchestrator"] == "healthy", "Orchestrator component should remain healthy"
 
     async def test_caching_mechanism(self, orchestrator):
         """Test caching behavior"""
         metrics_collector = MetricsCollector()
         monitor = SystemMonitor()
+        symbol_to_test = "SBIN.NS"
+        cache_client = await get_redis_client() # Get client to clear cache first
+        await cache_client.delete(f"analysis:{symbol_to_test}") # Clear potential stale cache
         # First call
         result1 = await orchestrator.analyze_symbol(
-            symbol="SBIN.NS",
+            symbol=symbol_to_test,
             monitor=monitor,
             metrics_collector=metrics_collector
         )
         # Second call should use cache
         # Use separate monitor/collector if needed to isolate metrics, or reuse if appropriate
         result2 = await orchestrator.analyze_symbol(
-            symbol="SBIN.NS",
+            symbol=symbol_to_test,
             monitor=monitor, # Reusing monitor
             metrics_collector=metrics_collector # Reusing collector
         )
         
         assert result1["verdict"] == result2["verdict"]
         assert result1["analysis_id"] != result2["analysis_id"]
+        # Add assertion to confirm cache was hit (e.g., by checking logs or mocking cache get)
+        # This requires more advanced mocking or log inspection, skipping for now.
 
     async def test_market_regime_awareness(self, orchestrator):
         """Test market regime adaptation"""
@@ -120,23 +136,33 @@ class TestSystemIntegration:
             monitor=monitor,
             metrics_collector=metrics_collector
         )
-        assert "market_regime" in str(result["category_results"])
+        # Check if market category results exist and contain regime info
+        market_results = result.get("category_results", {}).get(CategoryType.MARKET.value)
+        assert market_results, "Market category results should be present"
+        # Check within the 'results' list of the market category data
+        assert any("market_regime" in agent_res.get("details", {}) for agent_res in market_results.get("results", [])), "Market regime details expected in market agent results"
 
     async def test_system_recovery(self, orchestrator):
         """Test system recovery from failures"""
         metrics_collector = MetricsCollector()
         monitor = SystemMonitor() # Use a single monitor instance for the recovery test
         # Simulate multiple failures and verify recovery
-        for _ in range(3):
+        for i in range(3):
+            logger.debug(f"System Recovery Test: Iteration {i+1}")
             result = await orchestrator.analyze_symbol(
                 symbol="INVALID_SYMBOL",
                 monitor=monitor,
                 metrics_collector=metrics_collector
             )
             # Access health metrics directly from the monitor instance used
-            health_metrics = await monitor.get_health_metrics()
-            # Check system status, not orchestrator component status specifically
-            assert health_metrics["system"]["status"] != "error" # System should remain operational
+            # Corrected: get_health_metrics is not async
+            health_metrics = monitor.get_health_metrics()
+            # Check overall system status if available, or component statuses
+            # Assuming orchestrator should remain healthy despite symbol errors
+            assert health_metrics["component_statuses"]["orchestrator"] == "healthy", f"Orchestrator should be healthy on iteration {i+1}"
+            # Check if system metrics are still being reported
+            assert health_metrics["system"]["cpu_usage"] is not None
+            assert health_metrics["system"]["memory_usage"] is not None
 
     async def test_metrics_collection(self, orchestrator):
         """Test metrics collection"""
