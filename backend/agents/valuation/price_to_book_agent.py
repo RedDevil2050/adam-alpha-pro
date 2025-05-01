@@ -27,6 +27,7 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         return {
             "symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None,
             "details": {"reason": reason}, "agent_name": agent_name,
+            "error": "Could not fetch required data (company info or price)."
         }
 
     bvps_str = company_info.get("BookValuePerShare") # Key might differ based on provider
@@ -37,6 +38,7 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
          return {
              "symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None,
              "details": {"reason": "Current price not available"}, "agent_name": agent_name,
+             "error": "Current price not available"
          }
 
     bvps = None
@@ -54,6 +56,7 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
             "symbol": symbol, "verdict": "INVALID_DATA", "confidence": 0.1, "value": None,
             "details": {"raw_bvps": bvps_str, "raw_price": current_price, "reason": "Could not parse BVPS or price"},
             "agent_name": agent_name,
+            "error": "Could not parse BVPS or price"
         }
 
     if bvps is None: # Should be caught above, but double-check
@@ -61,6 +64,7 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
          return {
              "symbol": symbol, "verdict": "INVALID_DATA", "confidence": 0.1, "value": None,
              "details": {"reason": "BVPS became None unexpectedly"}, "agent_name": agent_name,
+             "error": "BVPS became None unexpectedly"
          }
 
     if bvps <= 0:
@@ -69,6 +73,7 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
             "symbol": symbol, "verdict": "NEGATIVE_OR_ZERO_BV", "confidence": 0.8, "value": None,
             "details": {"reason": "Book Value Per Share <= 0", "bvps": bvps, "price": current_price},
             "agent_name": agent_name,
+            "error": "Book Value Per Share <= 0"
         }
 
     # Calculate Price-to-Book (P/B) Ratio
@@ -111,6 +116,7 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
             "data_source": "unified_provider", # Adjust as needed
         },
         "agent_name": agent_name,
+        "error": None
     }
 
 

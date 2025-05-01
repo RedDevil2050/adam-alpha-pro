@@ -26,7 +26,15 @@ class ReverseDCFAgent(ValuationAgentBase):
             fcf = await fetch_fcf_per_share(symbol)
 
             if not fcf or fcf <= 0 or not current_price:
-                return self._error_response(symbol, "Missing data")
+                return {
+                    "symbol": symbol,
+                    "verdict": "NO_DATA",
+                    "confidence": 0.0,
+                    "value": None,
+                    "details": {"reason": "Missing required data for reverse DCF."},
+                    "agent_name": "reverse_dcf_agent",
+                    "error": "Missing required data for reverse DCF."
+                }
 
             # Implied growth rate calculation
             discount_rate = 0.10  # 10% discount rate
@@ -82,7 +90,15 @@ class ReverseDCFAgent(ValuationAgentBase):
         except Exception as e:
             logger.error(f"Reverse DCF error for symbol {symbol}: {e}", exc_info=True)
             # Use the helper method for error response
-            return self._error_response(symbol, f"Error during Reverse DCF calculation: {e}")
+            return {
+                "symbol": symbol,
+                "verdict": "ERROR",
+                "confidence": 0.0,
+                "value": None,
+                "details": {"reason": str(e)},
+                "agent_name": "reverse_dcf_agent",
+                "error": str(e)
+            }
 
     def _calculate_dcf(
         self,

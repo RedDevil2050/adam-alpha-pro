@@ -42,6 +42,7 @@ class SystemOrchestrator:
         symbol: str,
         categories: Optional[List[str]] = None,
         force_refresh: bool = False,
+        monitor: SystemMonitor = None,  # Accept monitor for compatibility
     ) -> Dict:
         """Run full analysis with advanced caching and error recovery"""
         analysis_id = f"{symbol}_{datetime.now().timestamp()}"

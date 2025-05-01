@@ -25,6 +25,7 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
             "value": None,
             "details": {"reason": "Could not fetch company info"}, # Updated reason
             "agent_name": agent_name,
+            "error": "Could not fetch required data (price or 52-week high/low)."
         }
 
     # Extract Analyst Target Price
@@ -53,6 +54,7 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
             "value": None,
             "details": {"reason": reason, "raw_value": target_price_str},
             "agent_name": agent_name,
+            "error": None
         }
 
     # Return success result with the analyst target price
@@ -66,6 +68,7 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
             "data_source": "company_info", # Updated source
         },
         "agent_name": agent_name,
+        "error": None
     }
 
 

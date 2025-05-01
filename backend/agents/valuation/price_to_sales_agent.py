@@ -30,6 +30,7 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         return {
             "symbol": symbol, "verdict": "NO_DATA", "confidence": 0.0, "value": None,
             "details": {"reason": reason}, "agent_name": agent_name,
+            "error": "Could not fetch current price."
         }
 
     # Extract Revenue TTM and Shares Outstanding
@@ -105,4 +106,5 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
             "data_source": "company_info + price_point"
         },
         "agent_name": agent_name,
+        "error": None
     }

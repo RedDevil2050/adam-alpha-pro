@@ -38,6 +38,7 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
                 "reason": f"Could not fetch {', '.join(missing_data)} data"
             },
             "agent_name": agent_name,
+            "error": "Could not fetch required data (OCF, CapEx, or price)."
         }
 
     # Extract Market Cap
@@ -148,6 +149,7 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
             "value": None,
             "details": details,
             "agent_name": agent_name,
+            "error": "Could not fetch required data (OCF, CapEx, or price)."
         }
 
     # Determine Verdict based on P/FCF ratio
@@ -177,6 +179,7 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
             "data_source": "company_info + cash_flow_data", # Updated source
         },
         "agent_name": agent_name,
+        "error": None
     }
 
     return result

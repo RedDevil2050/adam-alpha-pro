@@ -99,6 +99,7 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
             "value": None,
             "details": {"reason": f"Failed to fetch required data: {fetch_err}"},
             "agent_name": agent_name,
+            "error": "Could not fetch required data (EPS, price, or sector PE)."
         }
 
     current_price = price_data.get("latestPrice") if price_data else None
@@ -114,6 +115,7 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
             "value": None,
             "details": {"reason": f"Missing or invalid current price: {current_price}"},
             "agent_name": agent_name,
+            "error": "Could not fetch required data (EPS, price, or sector PE)."
         }
     if current_eps is None:
         return {
@@ -123,6 +125,7 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
             "value": None,
             "details": {"reason": "Missing EPS data"},
             "agent_name": agent_name,
+            "error": "Could not fetch required data (EPS, price, or sector PE)."
         }
     if current_eps <= 0:
         return {
@@ -135,6 +138,7 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
                 "reason": "EPS is zero or negative",
             },
             "agent_name": agent_name,
+            "error": "Could not fetch required data (EPS, price, or sector PE)."
         }
 
     # Calculate Current P/E Ratio
