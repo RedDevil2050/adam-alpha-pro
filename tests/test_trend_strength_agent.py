@@ -34,8 +34,8 @@ async def test_trend_strength_agent(mock_get_redis, monkeypatch):
     mock_redis_instance.set = AsyncMock()
     mock_get_redis.return_value = mock_redis_instance
 
-    # Run the agent
-    result = await run('TEST')
+    # Run the agent - pass agent_outputs
+    result = await run('TEST', agent_outputs={}) # Pass agent_outputs
 
     # Verify mocks were called correctly
     mock_fetch.assert_called_once()

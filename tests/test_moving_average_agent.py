@@ -34,9 +34,9 @@ async def test_moving_average_agent(mock_get_redis, monkeypatch):
     mock_tracker_update = AsyncMock()
     monkeypatch.setattr('backend.agents.technical.utils.tracker.update', mock_tracker_update)
 
-    # Run the agent with a specific window
+    # Run the agent with a specific window and agent_outputs
     window = 20
-    res = await ma_run('TCS', window=window)
+    res = await ma_run('TCS', window=window, agent_outputs={}) # Pass agent_outputs
 
     # Verify mocks were called correctly
     mock_fetch.assert_called_once()

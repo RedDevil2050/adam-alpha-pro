@@ -34,8 +34,8 @@ async def test_supertrend_agent(mock_get_redis, monkeypatch):
     mock_redis_instance.set = AsyncMock()
     mock_get_redis.return_value = mock_redis_instance
 
-    # Run the agent
-    res = await st_run('TCS')
+    # Run the agent - pass agent_outputs explicitly
+    res = await st_run('TCS', agent_outputs={}) # Pass agent_outputs
 
     # Verify mocks were called correctly
     mock_fetch.assert_called_once()

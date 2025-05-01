@@ -75,7 +75,7 @@ if (-not $isReady) {
 }
 
 # Define diagnostic function
-function Check-ServiceStatus {
+function Test-ServiceStatus {
     param (
         [string]$Service
     )
@@ -96,7 +96,7 @@ Write-Host "✅ Redis connection successful" -ForegroundColor Green
 
 # Test PostgreSQL
 Write-Host "Testing PostgreSQL connection..." -ForegroundColor Yellow
-$pgResult = docker-compose exec postgres pg_isready -U zion_production
+docker-compose exec postgres pg_isready -U zion_production
 if ($LASTEXITCODE -ne 0) {
     Write-Host "❌ PostgreSQL connection failed" -ForegroundColor Red
     exit 1
@@ -122,7 +122,7 @@ try {
 catch {
     Write-Host "❌ API health check failed" -ForegroundColor Red
     Write-Host "Diagnosing API issues..." -ForegroundColor Yellow
-    Check-ServiceStatus -Service "backend"
+    Test-ServiceStatus -Service "backend"
     Write-Host "Checking network connectivity..." -ForegroundColor Yellow
     docker network ls
     $networkId = docker network ls --filter name=zion -q
@@ -296,8 +296,12 @@ if ($providerFailures -gt 0) {
 # Check for database migrations
 Write-Host "Checking database migrations..." -ForegroundColor Yellow
 try {
-    $migrationCheck = docker-compose exec backend python -c "from backend.database import check_migrations; print(check_migrations())"
-    Write-Host "✅ Database migrations are up to date" -ForegroundColor Green
+    docker-compose exec backend python -c "from backend.database import check_migrations; print(check_migrations())"
+    if ($result -eq "True") {
+        Write-Host "✅ Database migrations are up to date" -ForegroundColor Green
+    } else {
+        Write-Host "⚠️ Warning: Database migrations are not up to date" -ForegroundColor Yellow
+    }
 }
 catch {
     Write-Host "⚠️ Warning: Database migration check failed" -ForegroundColor Yellow
@@ -358,14 +362,15 @@ catch {
     Write-Host "⚠️ Warning: Failed to retrieve latency data" -ForegroundColor Yellow
 }
 
+# Verifying price feeds section
 Write-Host "- Verifying price feeds..." -ForegroundColor Yellow
 foreach ($pair in $pairs) {
     try {
         $priceData = Invoke-RestMethod -Uri "http://localhost:8000/api/market/price/$pair" -Method Get
-        Write-Host "$pair: $($priceData | ConvertTo-Json -Compress)" -ForegroundColor Cyan
+        Write-Host "${pair}: $($priceData | ConvertTo-Json -Compress)" -ForegroundColor Cyan
     }
     catch {
-        Write-Host "⚠️ Warning: Failed to retrieve price data for $pair" -ForegroundColor Yellow
+        Write-Host "⚠️ Warning: Failed to retrieve price data for ${pair}" -ForegroundColor Yellow
     }
 }
 
@@ -384,8 +389,12 @@ catch {
 # Test backup functionality
 Write-Host "Testing backup functionality..." -ForegroundColor Yellow
 try {
-    $backupTest = docker-compose exec backend python -c "from backend.utils.backup import test_backup; test_backup()"
-    Write-Host "✅ Backup functionality verified" -ForegroundColor Green
+    docker-compose exec backend python -c "from backend.utils.backup import test_backup; test_backup()"
+    if ($result -eq "True") {
+        Write-Host "✅ Backup functionality verified" -ForegroundColor Green
+    } else {
+        Write-Host "⚠️ Warning: Backup test returned unexpected result" -ForegroundColor Yellow
+    }
 }
 catch {
     Write-Host "⚠️ Warning: Backup functionality test failed" -ForegroundColor Yellow
@@ -438,12 +447,12 @@ if (Get-Command az -ErrorAction SilentlyContinue) {
     else {
         Write-Host "⚠️ Warning: KEY_VAULT_NAME not set" -ForegroundColor Yellow
     }
-    
+
     # Check Azure connectivity
     Write-Host "Checking Azure connectivity..." -ForegroundColor Yellow
     try {
-        $account = az account show | ConvertFrom-Json
-        Write-Host "✅ Connected to Azure account: $($account.name)" -ForegroundColor Green
+        $azAccount = az account show | ConvertFrom-Json
+        Write-Host "✅ Connected to Azure account: $($azAccount.name)" -ForegroundColor Green
     }
     catch {
         Write-Host "⚠️ Warning: Not logged in to Azure" -ForegroundColor Yellow

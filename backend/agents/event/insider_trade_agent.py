@@ -36,6 +36,7 @@ async def run(symbol: str) -> dict:
             "agent_name": agent_name,
         }
 
+    # Always include the 'insider_trades' key
     if not trades:
         result = {
             "symbol": symbol,
@@ -43,6 +44,7 @@ async def run(symbol: str) -> dict:
             "confidence": 0.0,
             "value": 0,
             "details": {},
+            "insider_trades": [], # Ensure key exists even if empty
             "agent_name": agent_name,
         }
     else:
@@ -58,6 +60,7 @@ async def run(symbol: str) -> dict:
             "confidence": round(score, 4),
             "value": count,
             "details": {"trades_count": count}, # Avoid returning large list of trades
+            "insider_trades": trades, # Include trades if present (consider limiting size if needed)
             "score": score,
             "agent_name": agent_name,
         }

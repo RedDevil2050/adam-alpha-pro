@@ -27,14 +27,9 @@ def test_metrics_endpoint(token):
     assert "brain_category_score" in text
     assert "brain_final_score" in text
 
-def test_orchestrator_generic():
-    loop = None
-    try:
-        import asyncio
-        loop = asyncio.get_event_loop()
-    except:
-        pass
-    result = loop.run_until_complete(run_full_cycle("RELIANCE"))
+@pytest.mark.asyncio
+async def test_orchestrator_generic():
+    result = await run_full_cycle("RELIANCE")
     assert isinstance(result, dict)
     # must contain at least one agent
     assert any(k not in ["brain", "symbol", "status"] for k in result)

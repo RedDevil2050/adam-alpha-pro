@@ -46,8 +46,8 @@ async def test_stochastic_agent(mock_get_redis, monkeypatch):
         except AttributeError:
             continue
 
-    # Call the agent run function - signature is run(symbol, agent_outputs=None)
-    res = await stoch_run('TCS') # Passing only symbol is fine
+    # Call the agent run function - pass agent_outputs
+    res = await stoch_run('TCS', agent_outputs={}) # Pass agent_outputs
 
     # Assertions
     assert 'stoch_k' in res
