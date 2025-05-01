@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from jose import jwt, JWTError
+from jose import jwt, JWTError, ExpiredSignatureError
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from ..config.settings import get_settings
@@ -23,11 +23,6 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
 
 
 async def verify_token(token: str = Depends(oauth2_scheme)) -> dict:
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
     try:
         payload = jwt.decode(
             token,
@@ -35,7 +30,21 @@ async def verify_token(token: str = Depends(oauth2_scheme)) -> dict:
             algorithms=[settings.security.ALGORITHM], 
         )
         if payload.get("sub") is None:
-            raise credentials_exception
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not validate credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         return payload
+    except ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     except JWTError:
-        raise credentials_exception
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )

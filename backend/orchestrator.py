@@ -235,7 +235,7 @@ class Orchestrator:
             healthy = True
             status = "healthy" if healthy else "failed"
 
-            # Update system monitor using the correct method
+            # Update system monitor component status
             self.system_monitor.update_component_status("orchestrator", status)
 
             return healthy

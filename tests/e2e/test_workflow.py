@@ -109,4 +109,17 @@ class TestCompleteWorkflow:
             response = client.get("/api/analyze/GOOGL", headers=headers)
             assert response.status_code == status.HTTP_401_UNAUTHORIZED
             assert "Could not validate credentials" in response.json().get("detail", "")
+            
+    def test_analysis_expired_token(self):
+        """Tests behavior with expired token."""
+        token_data = {"sub": os.environ['API_USER']}
+        # Create token with negative expiry time to ensure it's expired
+        expires_delta = timedelta(minutes=-15)
+        expired_token = create_access_token(data=token_data, expires_delta=expires_delta)
+        
+        with TestClient(app) as client:
+            headers = {"Authorization": f"Bearer {expired_token}"}
+            response = client.get("/api/analyze/AAPL", headers=headers)
+            assert response.status_code == status.HTTP_401_UNAUTHORIZED
+            assert "Token has expired" in response.json().get("detail", "")
 
