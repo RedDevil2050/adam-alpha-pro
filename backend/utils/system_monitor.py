@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 import psutil
 
 # Configure logging
@@ -49,16 +49,34 @@ class SystemMonitor:
             logger.warning(f"SystemMonitor Warning: end_analysis called for unknown id {analysis_id}")
 
     def get_health_metrics(self):
-        """Provide system health metrics (placeholder)."""
+        """Provide system health metrics including CPU and memory."""
         logger.debug("SystemMonitor: Getting health metrics")
+        cpu = None
+        memory = None
         try:
             cpu = psutil.cpu_percent()
             memory = psutil.virtual_memory().percent
         except Exception as e:
             logger.error(f"Failed to get system metrics: {e}")
-            cpu = None
-            memory = None
-        return {"cpu_usage": cpu, "memory_usage_percent": memory, "component_statuses": self.metrics.get("component_status", {})}
+
+        # Return nested structure as expected by tests/orchestrator
+        return {
+            "system": {
+                 "cpu_usage": cpu,
+                 "memory": memory
+            },
+            "component_statuses": self.metrics.get("component_status", {})
+            # Add other top-level keys if needed, like overall_status
+        }
+
+    async def update_agent_status(self, category: str, agent_name: str, symbol: str, status: str, details: Optional[Any] = None):
+        """Placeholder/Mock for updating agent status (async to match potential real implementation)."""
+        # In a real implementation, this would log or store the status update,
+        # potentially interacting with a database or monitoring service.
+        # Using logger.debug to avoid excessive console noise during tests.
+        logger.debug(f"Tracker: Agent {category}/{agent_name} for {symbol} status updated to {status}. Details: {details}")
+        # No actual state change needed for this placeholder
+        pass
 
     def _initialize_metrics(self):
         self.metrics = {

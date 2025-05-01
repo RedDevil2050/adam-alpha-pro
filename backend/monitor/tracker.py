@@ -472,5 +472,24 @@ def get_tracker():
             
         def track_data_provider_call(self, provider_name, endpoint, metadata=None):
             return track_data_provider_call(provider_name, endpoint, metadata)
+
+        # Add the missing update_agent_status method
+        async def update_agent_status(self, category: str, agent_name: str, symbol: str, status: str, details: Optional[Any] = None):
+            """Update agent execution status using Prometheus metrics."""
+            try:
+                # Use Prometheus Counter to track status
+                AGENT_EXECUTION_COUNT.labels(
+                    agent_type=category, # Use category as agent_type
+                    agent_name=agent_name,
+                    status=status
+                ).inc()
+                logger.debug(f"Tracker: Agent {category}/{agent_name} for {symbol} status updated to {status}. Details: {details}")
+            except Exception as e:
+                logger.error(f"Failed to update agent status metrics for {category}/{agent_name}: {e}")
+            # This method is async to match the expected signature, but doesn't need to await anything internally here.
+            await asyncio.sleep(0) # Minimal await to make it a valid coroutine
     
+    # Return an instance of the inner Tracker class
+    # Note: This isn't a true singleton pattern but matches the existing structure.
+    # If a real singleton is needed, the implementation should change.
     return Tracker()

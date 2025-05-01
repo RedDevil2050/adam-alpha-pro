@@ -4,11 +4,17 @@ import numpy as np
 from loguru import logger
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
+from typing import Dict # Import Dict
 
 agent_name = "volume_spike_agent"
 
 
 class VolumeSpikeAgent(TechnicalAgent):
+    # Ensure the main 'run' or calling method correctly uses _execute
+    async def run(self, symbol: str, agent_outputs: dict = None) -> Dict:
+         logger.debug(f"Running VolumeSpikeAgent for {symbol}")
+         return await self._execute(symbol, agent_outputs if agent_outputs else {})
+
     async def _execute(self, symbol: str, agent_outputs: dict) -> dict:
         try:
             # Define date range (e.g., last 60 days)
@@ -68,8 +74,3 @@ class VolumeSpikeAgent(TechnicalAgent):
         except Exception as e:
             logger.error(f"Volume spike calculation error: {e}")
             return self._error_response(symbol, str(e))
-
-
-async def run(symbol: str, window: int = 20, multiplier: float = 2.0, agent_outputs: dict = None) -> dict:
-    agent = VolumeSpikeAgent()
-    return await agent.execute(symbol, agent_outputs)

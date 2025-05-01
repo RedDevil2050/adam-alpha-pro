@@ -9,11 +9,22 @@ from datetime import datetime, date, timedelta # Import date
 from dateutil.relativedelta import relativedelta
 from backend.utils.cache_utils import get_redis_client # Correct import path
 import pandas as pd # Import pandas for type checking
+from typing import Dict # Import Dict
 
 agent_name = "trend_strength_agent"
 
 
 class TrendStrengthAgent(TechnicalAgent):
+    # Ensure the main 'run' or calling method correctly uses _execute
+    async def run(self, symbol: str, agent_outputs: dict = None) -> Dict:
+         # This method now acts as the entry point, calling _execute
+         # The standard_agent_execution decorator should ideally wrap this run method
+         # or the _execute method needs its own error handling/cache logic if called directly.
+         # For now, assuming run is the decorated entry point.
+         logger.debug(f"Running TrendStrengthAgent for {symbol}")
+         # Pass agent_outputs (context) to _execute
+         return await self._execute(symbol, agent_outputs if agent_outputs else {})
+
     async def _execute(self, symbol: str, agent_outputs: dict) -> dict:
         try:
             # Define date range
@@ -107,93 +118,7 @@ class TrendStrengthAgent(TechnicalAgent):
             logger.error(f"Trend strength calculation error: {e}")
             return self._error_response(symbol, str(e))
 
-
-@standard_agent_execution(agent_name=agent_name, category="technical") # Add agent_name
-# Correct signature: agent_outputs is second, period is keyword arg
-async def run(symbol: str, agent_outputs: dict = None, period: int = 14) -> dict:
-    """
-    Calculates the Average Directional Index (ADX) to gauge trend strength.
-    DEPRECATED: This function seems to be an older implementation or potentially
-    confused with ADX. The TrendStrengthAgent class above provides a more robust
-    trend analysis based on SMAs and volume.
-    Keeping for reference but recommend using the class-based approach.
-    """
-    logger.warning("The standalone `run` function in trend_strength_agent.py is potentially deprecated. Consider using TrendStrengthAgent.")
-    cache_key = f"{agent_name}:{symbol}:{period}"
-    redis_client = await get_redis_client() # Await redis client
-    cached_data = await redis_client.get(cache_key)
-    # Define date range (e.g., 7 months for daily data)
-    end_date = date.today() # Use date.today()
-    # Need enough data for ADX calculation (period * 2 + buffer)
-    start_date = end_date - timedelta(days=period * 3 + 90) # Generous buffer
-
-    # Fetch OHLCV data with start_date and end_date
-    ohlcv_data = await fetch_ohlcv_series(
-        symbol=symbol,
-        start_date=start_date,
-        end_date=end_date,
-        interval='1d' # Assuming daily interval is needed
-    )
-
-    # Check if fetched data is a valid DataFrame
-    if not isinstance(ohlcv_data, pd.DataFrame) or ohlcv_data.empty or len(ohlcv_data) < period * 2:
-        logger.warning(f"[{agent_name} standalone] Insufficient or invalid data for {symbol}. Type: {type(ohlcv_data)}")
-        return {
-            "symbol": symbol,
-            "verdict": "NO_DATA",
-            "confidence": 0.0,
-            "value": None,
-            "details": {"reason": f"Insufficient or invalid OHLCV data for ADX. Type: {type(ohlcv_data)}"},
-            "agent_name": agent_name,
-        }
-
-    try:
-        # Placeholder for actual ADX calculation using a library like pandas_ta
-        # Example (requires pandas_ta installed):
-        # import pandas_ta as ta
-        # adx_df = ohlcv_data.ta.adx(length=period)
-        # if adx_df is None or adx_df.empty:
-        #     raise ValueError("ADX calculation failed")
-        # adx_value = adx_df[f'ADX_{period}'].iloc[-1]
-        # dmp_value = adx_df[f'DMP_{period}'].iloc[-1]
-        # dmn_value = adx_df[f'DMN_{period}'].iloc[-1]
-
-        # *** Replace with actual ADX calculation ***
-        adx_value = 25 # Placeholder value
-        dmp_value = 30 # Placeholder value
-        dmn_value = 20 # Placeholder value
-        # *** End Placeholder ***
-
-        if adx_value > 25:
-            if dmp_value > dmn_value:
-                verdict = "STRONG_UPTREND"
-                confidence = min(adx_value / 50, 1.0)
-            else:
-                verdict = "STRONG_DOWNTREND"
-                confidence = min(adx_value / 50, 1.0)
-        else:
-            verdict = "NO_TREND"
-            confidence = 0.5
-
-        return {
-            "symbol": symbol,
-            "verdict": verdict,
-            "confidence": confidence,
-            "value": round(adx_value, 2),
-            "details": {
-                "adx": round(adx_value, 2),
-                "dmp": round(dmp_value, 2),
-                "dmn": round(dmn_value, 2),
-            },
-            "agent_name": agent_name,
-        }
-    except Exception as e:
-        logger.error(f"Error calculating ADX for {symbol}: {e}")
-        return {
-            "symbol": symbol,
-            "verdict": "ERROR",
-            "confidence": 0.0,
-            "value": None,
-            "details": {"reason": f"Calculation error: {e}"},
-            "agent_name": agent_name,
-        }
+# Remove the old standalone run function as the class now handles execution
+# @standard_agent_execution(agent_name=agent_name, category="technical")
+# async def run(symbol: str, agent_outputs: dict = None, period: int = 14) -> dict:
+#    ... (old implementation) ...

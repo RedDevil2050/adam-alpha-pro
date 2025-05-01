@@ -52,27 +52,44 @@ class SystemOrchestrator:
             executed_categories = set()
             categories = categories or self._get_default_categories()
 
-            for category in self._get_execution_order(categories):
-                if category in executed_categories:
+            for category_value in self._get_execution_order(categories): # Use category_value
+                if category_value in executed_categories:
                     continue
 
-                try:
-                    category_result = await self._execute_category_with_retry(
-                        category, symbol, results
-                    )
-                    results[category] = category_result
-                    executed_categories.add(category)
+                category_enum = CategoryType(category_value) # Get Enum member
 
-                    # Collect metrics
+                try:
+                    # Execute category returns a List[Dict] of agent results
+                    agent_results_list = await self._execute_category_with_retry(
+                        category_enum, symbol, results # Pass Enum member
+                    )
+
+                    # Store the list of results directly
+                    # Check if any agent within the list reported an error
+                    category_had_errors = any(res.get("error") for res in agent_results_list)
+                    num_results = len(agent_results_list)
+
+                    # Store results in a standard dictionary format for the category
+                    results[category_value] = {
+                        "results": agent_results_list,
+                        "error": "Category executed with internal agent errors." if category_had_errors else None,
+                        "count": num_results
+                    }
+                    executed_categories.add(category_value)
+
+                    # Collect metrics based on whether any agent failed
                     metrics_collector.record_category_execution(
-                        category,
-                        len(category_result),
-                        bool(category_result.get("error")),
+                        category_value,
+                        num_results,
+                        category_had_errors, # True if any agent had an error
                     )
 
                 except Exception as e:
-                    logger.error(f"Category {category} failed: {e}")
-                    results[category] = {"error": str(e)}
+                    logger.error(f"Category {category_value} failed during execution: {e}", exc_info=True) # Add traceback
+                    # Store a category-level error
+                    results[category_value] = {"error": f"Category execution failed: {str(e)}", "results": []}
+                    executed_categories.add(category_value) # Mark as executed even if failed
+                    metrics_collector.record_category_execution(category_value, 0, True) # Record failure
 
             # Generate final verdict
             final_verdict = self._generate_composite_verdict(results)
@@ -102,18 +119,23 @@ class SystemOrchestrator:
             }
 
     async def _execute_category_with_retry(
-        self, category: str, symbol: str, results: Dict, max_retries: int = 3
-    ) -> Dict:
+        self, category: CategoryType, symbol: str, results: Dict, max_retries: int = 3 # Expect Enum member
+    ) -> List[Dict]: # Return type is List[Dict]
         """Execute category with retry logic"""
         for attempt in range(max_retries):
             try:
+                # Pass Enum member to execute_category
                 return await self.category_manager.execute_category(
                     category, symbol, results
                 )
             except Exception as e:
+                logger.warning(f"Attempt {attempt + 1} failed for category {category.value} on {symbol}: {e}")
                 if attempt == max_retries - 1:
-                    raise
+                    logger.error(f"Category {category.value} failed after {max_retries} attempts for {symbol}.", exc_info=True)
+                    raise # Re-raise the exception to be caught in analyze_symbol
                 await asyncio.sleep(1 * (attempt + 1))
+        # Should not be reached if max_retries > 0
+        return []
 
     def _get_execution_order(self, categories: List[str]) -> List[str]:
         """Get optimized execution order based on dependencies"""
@@ -189,20 +211,41 @@ class SystemOrchestrator:
     def _generate_composite_verdict(self, results: Dict) -> Dict:
         """Generate weighted composite verdict"""
         try:
-            # Calculate weighted scores
             category_weights = self.category_manager.get_category_weights()
             scores = []
             weights = []
+            contributing_categories = {}
 
-            for category, result in results.items():
-                if "error" not in result:
-                    score = result.get("confidence", 0)
-                    weight = category_weights.get(category, 1.0)
-                    scores.append(score)
-                    weights.append(weight)
+            for category_value, category_data in results.items():
+                # Check if the category itself had a top-level execution error
+                if category_data.get("error") and not category_data.get("results"):
+                    logger.warning(f"Skipping category {category_value} in composite verdict due to execution error: {category_data['error']}")
+                    continue
 
-            if not scores:
-                return {"verdict": "INSUFFICIENT_DATA", "confidence": 0}
+                # Process individual agent results within the category
+                agent_results = category_data.get("results", [])
+                category_scores = []
+                for agent_result in agent_results:
+                    # Only include successful agent results with a confidence score
+                    if not agent_result.get("error") and "confidence" in agent_result:
+                        category_scores.append(agent_result["confidence"])
+
+                if category_scores: # Only include category if it had successful agents
+                    # Simple average confidence for the category
+                    category_avg_score = sum(category_scores) / len(category_scores)
+                    weight = category_weights.get(category_value, 0.0) # Default weight 0 if not found
+                    if weight > 0:
+                        scores.append(category_avg_score)
+                        weights.append(weight)
+                        contributing_categories[category_value] = round(category_avg_score, 4)
+                    else:
+                         logger.warning(f"Category {category_value} has zero weight, excluding from composite score.")
+                else:
+                    logger.warning(f"Category {category_value} had no successful agent results with confidence, excluding from composite score.")
+
+            if not scores or sum(weights) == 0:
+                logger.warning("No valid category scores or total weight is zero for composite verdict.")
+                return {"verdict": "INSUFFICIENT_DATA", "confidence": 0, "details": {"reason": "No contributing categories or zero total weight"}}
 
             # Calculate weighted average
             composite_score = sum(s * w for s, w in zip(scores, weights)) / sum(weights)
@@ -220,9 +263,16 @@ class SystemOrchestrator:
             return {
                 "verdict": verdict,
                 "confidence": round(composite_score, 4),
-                "category_weights": category_weights,
+                "details": {
+                    "contributing_categories": contributing_categories,
+                    "category_weights_used": {cat: w for cat, w in category_weights.items() if w > 0 and cat in contributing_categories}
+                }
             }
 
+        except AttributeError as ae:
+             # Catch potential missing 'get_category_weights'
+             logger.error(f"Composite verdict generation failed: Missing method 'get_category_weights' on CategoryManager? Error: {ae}", exc_info=True)
+             return {"verdict": "ERROR", "confidence": 0, "details": {"reason": f"Internal error: {ae}"}}
         except Exception as e:
-            logger.error(f"Composite verdict generation failed: {e}")
-            return {"verdict": "ERROR", "confidence": 0}
+            logger.error(f"Composite verdict generation failed: {e}", exc_info=True)
+            return {"verdict": "ERROR", "confidence": 0, "details": {"reason": f"Internal error: {e}"}}

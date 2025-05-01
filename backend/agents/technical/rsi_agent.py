@@ -1,14 +1,20 @@
 from backend.agents.technical.base import TechnicalAgent
 # Correct the import path
 from backend.utils.data_provider import fetch_ohlcv_series
+import pandas as pd
+import logging
 
+logger = logging.getLogger(__name__)
 
 class RSIAgent(TechnicalAgent):
     async def _execute(self, symbol: str, agent_outputs: dict) -> dict:
         try:
+            # Add await here
             df = await fetch_ohlcv_series(symbol)
-            if df is None or df.empty:
-                return self._error_response(symbol, "No data available")
+            # Add check for DataFrame type and emptiness
+            if not isinstance(df, pd.DataFrame) or df.empty:
+                logger.warning(f"[{self.__class__.__name__}] Insufficient or invalid data for {symbol}. Type: {type(df)}")
+                return self._error_response(symbol, f"Insufficient or invalid OHLCV data received. Type: {type(df)}")
 
             market_context = await self.get_market_context(symbol)
             volatility = market_context.get("volatility", 0.2)
@@ -69,4 +75,5 @@ class RSIAgent(TechnicalAgent):
 # For backwards compatibility
 async def run(symbol: str, agent_outputs: dict = {}) -> dict:
     agent = RSIAgent()
+    # Add await here
     return await agent.execute(symbol, agent_outputs)

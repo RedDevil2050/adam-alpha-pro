@@ -1,6 +1,11 @@
 import asyncio
 import aiohttp
+import logging
 from backend.data.providers.unified_provider import UnifiedDataProvider
+
+# Configure logging
+logging.basicConfig(level=logging.INFO) # Or use logging.DEBUG for more verbose output
+logger = logging.getLogger(__name__)
 
 provider = UnifiedDataProvider()
 
@@ -109,15 +114,29 @@ async def fetch_price_series(symbol: str, source_preference: list = None, period
     if source_preference is None:
         source_preference = ["api"]
 
+    logger.debug(f"Attempting to fetch price series for {symbol} with preference {source_preference}")
     for source in source_preference:
         try:
+            logger.debug(f"Trying source: {source} for {symbol}")
             if source == "api":
-                return await provider.fetch_price_data(symbol, period=period)
+                data = await provider.fetch_price_data(symbol, period=period)
+                if data is not None and not data.empty:
+                    logger.debug(f"Successfully fetched from source: {source} for {symbol}")
+                    return data
+                else:
+                    logger.warning(f"Source {source} returned empty/None data for {symbol}")
             elif source == "scrape":
-                return await provider.scrape_price_data(symbol, period=period)
+                data = await provider.scrape_price_data(symbol, period=period)
+                if data is not None and not data.empty:
+                    logger.debug(f"Successfully fetched from source: {source} for {symbol}")
+                    return data
+                else:
+                    logger.warning(f"Source {source} returned empty/None data for {symbol}")
         except Exception as e:
+            logger.error(f"Failed to fetch from source {source} for {symbol}: {e}", exc_info=True) # Add traceback
             continue
 
+    logger.error(f"Failed to fetch price series for {symbol} from all sources: {source_preference}")
     raise ValueError(f"Failed to fetch price series for {symbol} from all sources.")
 
 async def fetch_book_value(symbol: str):
@@ -468,3 +487,34 @@ async def fetch_price_alpha_vantage(symbol: str):
                 return {"price": float(data["Global Quote"]["05. price"])}
 
             return {"error": "Price data not found in response"}
+
+# --- Added missing fetch functions for ImportErrors ---
+
+async def fetch_volume_series(symbol: str, start_date: str = None, end_date: str = None):
+    """Placeholder: Fetch volume series data."""
+    logger.warning(f"fetch_volume_series not implemented for {symbol}")
+    # In a real implementation, fetch data using provider
+    # Example: return await provider.fetch_price_data(symbol, start_date, end_date, interval='1d')
+    # Returning None or empty DataFrame for now
+    import pandas as pd
+    return pd.DataFrame({'volume': []})
+
+async def fetch_interest_rate(country: str = 'US'):
+    """Placeholder: Fetch interest rate data."""
+    logger.warning(f"fetch_interest_rate not implemented for {country}")
+    # Example: return await provider.fetch_macro_data('interest_rate', country)
+    return None
+
+async def fetch_inflation_rate(country: str = 'US'):
+    """Placeholder: Fetch inflation rate data."""
+    logger.warning(f"fetch_inflation_rate not implemented for {country}")
+    # Example: return await provider.fetch_macro_data('inflation_rate', country)
+    return None
+
+async def fetch_gdp_growth(country: str = 'US'):
+    """Placeholder: Fetch GDP growth data."""
+    logger.warning(f"fetch_gdp_growth not implemented for {country}")
+    # Example: return await provider.fetch_macro_data('gdp_growth', country)
+    return None
+
+# --- End of added placeholder functions ---

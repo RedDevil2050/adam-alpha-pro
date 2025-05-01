@@ -10,9 +10,12 @@ agent_name = "macd_agent"
 class MACDAgent(TechnicalAgent):
     async def _execute(self, symbol: str, agent_outputs: dict) -> dict:
         try:
+            # Add await here
             df = await fetch_ohlcv_series(symbol)
-            if df is None or df.empty:
-                return self._error_response(symbol, "No data available")
+            # Add check for DataFrame type and emptiness
+            if not isinstance(df, pd.DataFrame) or df.empty:
+                logger.warning(f"[{agent_name}] Insufficient or invalid data for {symbol}. Type: {type(df)}")
+                return self._error_response(symbol, f"Insufficient or invalid OHLCV data received. Type: {type(df)}")
 
             # Calculate MACD
             exp1 = df["close"].ewm(span=12, adjust=False).mean()
@@ -63,4 +66,5 @@ class MACDAgent(TechnicalAgent):
 
 async def run(symbol: str, agent_outputs: dict = {}) -> dict:
     agent = MACDAgent()
+    # Add await here
     return await agent.execute(symbol, agent_outputs)

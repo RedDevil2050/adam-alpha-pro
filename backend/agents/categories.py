@@ -122,30 +122,30 @@ class CategoryManager:
             "supertrend_agent",
         ],
         CategoryType.MARKET: [
-            "market_regime_agent",
+            # "market_regime_agent", # Removed - Missing file
             "volatility_agent",
-            "liquidity_agent",
+            # "liquidity_agent", # Removed - Missing fetch_volume_series
             "correlation_agent",
-            "momentum_agent",
+            # "momentum_agent", # Removed - Missing fetch_volume_series
         ],
         CategoryType.SENTIMENT: [
             "news_sentiment_agent",
             "social_sentiment_agent",
-            "nlp_topic_agent",
+            # "nlp_topic_agent", # Removed - Missing file
         ],
         CategoryType.RISK: [
             "beta_agent",
             "var_agent",
-            "risk_core_agent",
-            "portfolio_risk_agent",
+            # "risk_core_agent", # Removed - Missing file (base.py)
+            # "portfolio_risk_agent", # Removed - Missing file
         ],
         CategoryType.MACRO: [
-            "interest_rate_agent",
-            "inflation_agent",
-            "gdp_growth_agent",
+            # "interest_rate_agent", # Removed - Missing fetch_interest_rate
+            # "inflation_agent", # Removed - Missing fetch_inflation_rate
+            # "gdp_growth_agent", # Removed - Missing fetch_gdp_growth
         ],
         CategoryType.EVENT: [
-            "earnings_agent",
+            # "earnings_agent", # Removed - Missing file
             "corporate_actions_agent",
             "share_buyback_agent",
         ],
@@ -153,15 +153,15 @@ class CategoryManager:
             "environmental_agent",
             "social_agent",
             "governance_agent",
-            "composite_esg_agent",
+            # "composite_esg_agent", # Removed - Cache import issue
         ],
         CategoryType.INTELLIGENCE: [
             "composite_valuation_agent",
             "target_price_agent",
             "theme_match_agent",
             "peer_compare_agent",
-            "factor_score_agent",
-            "ask_alpha_agent",
+            # "factor_score_agent", # Removed - Missing file (base.py)
+            # "ask_alpha_agent", # Removed - Missing file
             "ask_adam_agent",
         ],
         CategoryType.STEALTH: [
