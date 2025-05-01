@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from backend.utils.data_provider import fetch_ohlcv_series
 from backend.utils.cache_utils import get_redis_client
 from backend.agents.technical.utils import tracker

@@ -20,9 +20,9 @@ async def test_supertrend_agent(mock_get_redis, monkeypatch):
         'volume': [1000] * 10
     }, index=dates)
 
-    # Mock fetch_ohlcv_series
+    # Mock fetch_ohlcv_series within the agent's module
     mock_fetch = AsyncMock(return_value=prices)
-    monkeypatch.setattr('backend.utils.data_provider.fetch_ohlcv_series', mock_fetch)
+    monkeypatch.setattr('backend.agents.technical.supertrend_agent.fetch_ohlcv_series', mock_fetch)
 
     # Mock get_market_context 
     mock_market_context = AsyncMock(return_value={'volatility': 0.2, 'regime': 'NEUTRAL'})

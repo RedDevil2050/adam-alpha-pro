@@ -13,7 +13,8 @@ agent_name = "liquidity_agent"
 # Patch dependencies (innermost first)
 @patch('backend.agents.decorators.get_tracker') # Decorator dependency
 @patch('backend.agents.decorators.get_redis_client') # Decorator dependency
-@patch('backend.agents.market.liquidity_agent.fetch_volume_series')
+# Correct patch targets to where functions are *used* in the agent module
+@patch('backend.agents.market.liquidity_agent.fetch_volume_series') 
 @patch('backend.agents.market.liquidity_agent.fetch_price_series')
 async def test_liquidity_agent_high_liquidity(
     mock_fetch_prices, 

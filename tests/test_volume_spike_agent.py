@@ -22,9 +22,9 @@ async def test_volume_spike_agent(mock_get_redis, monkeypatch):
         'volume': volumes
     }, index=dates)
 
-    # Mock fetch_ohlcv_series
+    # Mock fetch_ohlcv_series within the agent's module
     mock_fetch = AsyncMock(return_value=data_df)
-    monkeypatch.setattr('backend.utils.data_provider.fetch_ohlcv_series', mock_fetch)
+    monkeypatch.setattr('backend.agents.technical.volume_spike_agent.fetch_ohlcv_series', mock_fetch)
 
     # Mock get_market_context
     mock_market_context = AsyncMock(return_value={'regime': 'NEUTRAL'})

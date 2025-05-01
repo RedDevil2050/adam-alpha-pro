@@ -32,14 +32,14 @@ class TestSystemIntegration:
     async def test_full_analysis_flow(self, orchestrator):
         """Test complete analysis pipeline"""
         # Initialize MetricsCollector - Assuming it doesn't need complex setup for this test
-        metrics_collector = MetricsCollector()
+        # metrics_collector = MetricsCollector() # Collector is internal to orchestrator now
         monitor = SystemMonitor() # Assuming a fresh monitor per test is okay
 
-        # Pass monitor and metrics_collector to analyze_symbol
+        # Pass monitor to analyze_symbol (metrics_collector is internal)
         result = await orchestrator.analyze_symbol(
             symbol="RELIANCE.NS",
-            monitor=monitor,
-            metrics_collector=metrics_collector
+            monitor=monitor
+            # metrics_collector=metrics_collector # Removed
         )
         
         # Verify basic structure
@@ -63,15 +63,15 @@ class TestSystemIntegration:
     async def test_parallel_analysis(self, orchestrator):
         """Test system under parallel load"""
         symbols = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS"]
-        # Initialize MetricsCollector and Monitor - Assuming shared instances are okay for parallel test
-        metrics_collector = MetricsCollector()
+        # Initialize Monitor - Assuming shared instance is okay for parallel test
+        # metrics_collector = MetricsCollector() # Collector is internal
         monitor = SystemMonitor()
 
         tasks = [
             orchestrator.analyze_symbol(
                 symbol=symbol,
-                monitor=monitor,
-                metrics_collector=metrics_collector
+                monitor=monitor
+                # metrics_collector=metrics_collector # Removed
             ) for symbol in symbols
         ]
         results = await asyncio.gather(*tasks)
@@ -82,12 +82,12 @@ class TestSystemIntegration:
 
     async def test_error_handling(self, orchestrator):
         """Test system error handling"""
-        metrics_collector = MetricsCollector()
+        # metrics_collector = MetricsCollector() # Collector is internal
         monitor = SystemMonitor()
         result = await orchestrator.analyze_symbol(
             symbol="INVALID_SYMBOL",
-            monitor=monitor,
-            metrics_collector=metrics_collector
+            monitor=monitor
+            # metrics_collector=metrics_collector # Removed
         )
 
         # Assert that the overall analysis didn't crash and returned a result
@@ -122,7 +122,7 @@ class TestSystemIntegration:
 
     async def test_caching_mechanism(self, orchestrator):
         """Test caching behavior"""
-        metrics_collector = MetricsCollector()
+        # metrics_collector = MetricsCollector() # Collector is internal
         monitor = SystemMonitor()
         symbol_to_test = "SBIN.NS"
         cache_client = await get_redis_client() # Get client to clear cache first
@@ -130,15 +130,15 @@ class TestSystemIntegration:
         # First call
         result1 = await orchestrator.analyze_symbol(
             symbol=symbol_to_test,
-            monitor=monitor,
-            metrics_collector=metrics_collector
+            monitor=monitor
+            # metrics_collector=metrics_collector # Removed
         )
         # Second call should use cache
-        # Use separate monitor/collector if needed to isolate metrics, or reuse if appropriate
+        # Use separate monitor if needed to isolate metrics, or reuse if appropriate
         result2 = await orchestrator.analyze_symbol(
             symbol=symbol_to_test,
-            monitor=monitor, # Reusing monitor
-            metrics_collector=metrics_collector # Reusing collector
+            monitor=monitor # Reusing monitor
+            # metrics_collector=metrics_collector # Removed
         )
         
         assert result1["verdict"] == result2["verdict"]
@@ -148,12 +148,12 @@ class TestSystemIntegration:
 
     async def test_market_regime_awareness(self, orchestrator):
         """Test market regime adaptation"""
-        metrics_collector = MetricsCollector()
+        # metrics_collector = MetricsCollector() # Collector is internal
         monitor = SystemMonitor()
         result = await orchestrator.analyze_symbol(
             symbol="RELIANCE.NS",
-            monitor=monitor,
-            metrics_collector=metrics_collector
+            monitor=monitor
+            # metrics_collector=metrics_collector # Removed
         )
         # Check if market category results exist and contain regime info
         market_results = result.get("category_results", {}).get(CategoryType.MARKET.value)
@@ -163,15 +163,15 @@ class TestSystemIntegration:
 
     async def test_system_recovery(self, orchestrator):
         """Test system recovery from failures"""
-        metrics_collector = MetricsCollector()
+        # metrics_collector = MetricsCollector() # Collector is internal
         monitor = SystemMonitor() # Use a single monitor instance for the recovery test
         # Simulate multiple failures and verify recovery
         for i in range(3):
             logger.debug(f"System Recovery Test: Iteration {i+1}")
             result = await orchestrator.analyze_symbol(
                 symbol="INVALID_SYMBOL",
-                monitor=monitor,
-                metrics_collector=metrics_collector
+                monitor=monitor
+                # metrics_collector=metrics_collector # Removed
             )
             # Access health metrics directly from the monitor instance used
             # Corrected: get_health_metrics is not async
@@ -185,16 +185,17 @@ class TestSystemIntegration:
 
     async def test_metrics_collection(self, orchestrator):
         """Test metrics collection"""
-        metrics_collector = MetricsCollector() # Create collector for this test
+        # metrics_collector = MetricsCollector() # Collector is internal now
         monitor = SystemMonitor()
-        await orchestrator.analyze_symbol(
+        result = await orchestrator.analyze_symbol( # Call analyze_symbol
             symbol="RELIANCE.NS",
-            monitor=monitor,
-            metrics_collector=metrics_collector # Pass the collector
+            monitor=monitor
+            # metrics_collector=metrics_collector # Removed
         )
-        # Get metrics from the collector instance used
-        metrics = metrics_collector.get_metrics()
+        # Get metrics from the result, as collector is internal
+        metrics = result.get("execution_metrics", {}) # Access metrics from result
         
         assert "performance" in metrics
         assert "category_stats" in metrics
-        assert metrics["performance"]["avg_response_time"] > 0
+        # Check if avg_response_time exists and is > 0, handle potential None
+        assert metrics.get("performance", {}).get("avg_response_time", 0) > 0

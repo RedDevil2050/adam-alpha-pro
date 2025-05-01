@@ -304,5 +304,3 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         "agent_name": agent_name,
     }
     return result
-
-stats = {}

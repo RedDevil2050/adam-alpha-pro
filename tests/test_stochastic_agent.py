@@ -23,9 +23,9 @@ async def test_stochastic_agent(mock_get_redis, monkeypatch):
         'volume': [1000 + i * 10 for i in range(21)]
     }, index=dates)
 
-    # Mock fetch_ohlcv_series correctly
+    # Mock fetch_ohlcv_series correctly within the agent's module
     mock_fetch = AsyncMock(return_value=data_df)
-    monkeypatch.setattr('backend.utils.data_provider.fetch_ohlcv_series', mock_fetch)
+    monkeypatch.setattr('backend.agents.technical.stochastic_agent.fetch_ohlcv_series', mock_fetch)
 
     # Set up Redis mock instance and return value correctly
     mock_redis_instance = AsyncMock()
@@ -50,11 +50,17 @@ async def test_stochastic_agent(mock_get_redis, monkeypatch):
     res = await stoch_run('TCS', agent_outputs={}) # Pass agent_outputs
 
     # Assertions
-    assert 'stoch_k' in res
-    assert 'stoch_d' in res
-    assert res['stoch_k'] < 30 # Expecting oversold based on data
-    assert res['stoch_d'] < 30 # Expecting oversold based on data
-    assert res['signal'] == 'OVERSOLD'
+    assert 'details' in res
+    assert 'k' in res['details']
+    assert 'd' in res['details']
+    assert 'value' in res # 'value' holds the latest K
+    assert res['value'] < 30 # Expecting oversold based on data (K < 20 default)
+    assert res['details']['k'] < 30 # Check K in details
+    assert res['details']['d'] < 30 # Check D in details
+    # Assert the verdict based on agent logic (K < 20 -> BUY)
+    assert res['verdict'] == 'BUY' 
+    assert 'confidence' in res
+    assert res.get('error') is None
 
     # Verify mocks were called
     mock_fetch.assert_called_once()

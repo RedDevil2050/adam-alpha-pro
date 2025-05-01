@@ -11,13 +11,15 @@ async def test_news_sentiment_agent(mock_analyzer, mock_async_client, mock_get_r
     mock_response = AsyncMock()
     mock_response.status_code = 200
     # Simulate NewsAPI response with one good headline
-    mock_response.json.return_value = {
+    # Make mock_response.json an AsyncMock that returns the dict when awaited
+    mock_response.json = AsyncMock(return_value={
         "status": "ok",
         "totalResults": 1,
         "articles": [
-            {"title": "Good news headline", "description": "...", "url": "...", "publishedAt": "..."}
+            {"title": "Good news headline", "description": "...", "url": "...", "publishedAt": "..."
+            }
         ]
-    }
+    })
     # Make the client's get method return the mock response
     mock_async_client.return_value.__aenter__.return_value.get = AsyncMock(return_value=mock_response)
 

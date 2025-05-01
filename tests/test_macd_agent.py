@@ -95,7 +95,15 @@ async def test_macd_agent_buy_signal(
 @pytest.mark.asyncio
 async def test_macd_agent_schema():
     symbol = "INFY"
-    result = await macd_run(symbol)
+    # Mock dependencies for schema test to avoid actual calculation/fetching
+    with patch('backend.agents.technical.macd_agent.fetch_ohlcv_series', new_callable=AsyncMock) as mock_fetch, \
+         patch.object(MACDAgent, 'get_market_context', new_callable=AsyncMock) as mock_context:
+        
+        # Provide minimal valid return values for mocks
+        mock_fetch.return_value = pd.DataFrame({'close': [100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126]}) # Ensure enough data
+        mock_context.return_value = {"regime": "NEUTRAL"}
+
+        result = await macd_run(symbol)
 
     assert isinstance(result, dict)
     assert "symbol" in result
@@ -104,7 +112,16 @@ async def test_macd_agent_schema():
     assert "value" in result
     assert "details" in result
     assert "agent_name" in result
-    assert result["verdict"] in {"BULLISH", "BEARISH", "NEUTRAL", "NO_DATA", "ERROR"}
-    assert 0.0 <= result["confidence"] <= 100.0
-    if result["value"] is not None:
+    # Correct possible verdicts based on agent code
+    assert result["verdict"] in {"BUY", "SELL", "HOLD", "NO_DATA", "ERROR"} 
+    # Correct confidence range based on agent code (0.0 to 1.0)
+    assert 0.0 <= result["confidence"] <= 1.0 
+    if result["value"] is not None and result["verdict"] not in {"NO_DATA", "ERROR"}:
         assert isinstance(result["value"], (int, float))
+    # Ensure details is a dict if verdict is not ERROR/NO_DATA
+    if result["verdict"] not in {"NO_DATA", "ERROR"}:
+        assert isinstance(result["details"], dict)
+        assert "macd" in result["details"]
+        assert "signal" in result["details"]
+        assert "histogram" in result["details"]
+        assert "market_regime" in result["details"]

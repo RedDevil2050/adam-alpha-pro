@@ -50,7 +50,8 @@ async def test_market_regime_agent(monkeypatch):
     # 3. Adjust assertions
     assert res['agent_name'] == agent_name
     assert res['symbol'] == 'DUMMY_SYMBOL' # Agent should return the original symbol
-    assert res['verdict'] == 'BULL' # Check the main verdict
+    # Add SMA details to the assertion message for better debugging
+    assert res['verdict'] == 'BULL', f"Expected BULL, got {res['verdict']} with SMAs: short={res['details'].get('short_sma')}, long={res['details'].get('long_sma')}"
     assert 'details' in res
     assert 'market_regime' in res['details']
     assert res['details']['market_regime'] == 'BULL' # Check the specific detail key

@@ -12,7 +12,8 @@ agent_name = "management_track_record_agent"
 # Patch dependencies using decorators (innermost first)
 @patch('backend.agents.technical.utils.tracker.update') # Correct path based on agent import
 @patch('backend.agents.management.management_track_record_agent.get_redis_client')
-@patch('backend.agents.management.management_track_record_agent.fetch_transcript')
+# Correct the patch target to the source module
+@patch('backend.utils.data_provider.fetch_transcript') 
 # Optionally patch the analyzer for full control, but mocking transcript is often sufficient
 # @patch('backend.agents.management.management_track_record_agent.SentimentIntensityAnalyzer')
 async def test_management_track_record_agent(

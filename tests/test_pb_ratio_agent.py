@@ -14,13 +14,14 @@ agent_name = "pb_ratio_agent"
 @pytest.mark.asyncio
 # Patch in reverse order of execution (innermost first)
 @patch('backend.agents.decorators.get_redis_client')
-@patch('backend.agents.valuation.pb_ratio_agent.fetch_historical_price_series')
+# Correct patch targets to where functions are *used* in the agent module
+@patch('backend.agents.valuation.pb_ratio_agent.fetch_historical_price_series') 
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_latest_bvps')
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_price_point')
-# Patch scipy if it's used for percentile calculation
-@patch('backend.agents.valuation.pb_ratio_agent.stats.percentileofscore', create=True) 
+# Correct the patch target to where 'stats' is used in the agent module
+@patch('backend.agents.valuation.pb_ratio_agent.stats', create=True) 
 async def test_pb_ratio_agent_undervalued(
-    mock_percentileofscore, # Mock for scipy.stats.percentileofscore
+    mock_stats, # Mock for the entire stats module
     mock_fetch_price, 
     mock_fetch_bvps, 
     mock_fetch_hist, 
@@ -56,9 +57,9 @@ async def test_pb_ratio_agent_undervalued(
     mock_redis_instance.set = AsyncMock()
     mock_get_redis.return_value = mock_redis_instance
 
-    # 5. Mock percentileofscore to return a low percentile (e.g., 15)
+    # 5. Mock percentileofscore on the mocked stats module
     # This should trigger the UNDERVALUED_REL_HIST verdict
-    mock_percentileofscore.return_value = 15.0 # Assuming PERCENTILE_UNDERVALUED is e.g., 20
+    mock_stats.percentileofscore.return_value = 15.0 # Assuming PERCENTILE_UNDERVALUED is e.g., 20
 
     # --- Run Agent ---
     result = await pb_run('TEST_SYMBOL')
@@ -98,4 +99,4 @@ async def test_pb_ratio_agent_undervalued(
     mock_get_redis.assert_awaited_once()
     mock_redis_instance.get.assert_awaited_once()
     mock_redis_instance.set.assert_awaited_once() # Should cache on success
-    mock_percentileofscore.assert_called_once() # Ensure scipy function was called
+    mock_stats.percentileofscore.assert_called_once() # Ensure scipy function was called

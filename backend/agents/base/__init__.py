@@ -194,3 +194,8 @@ class AgentBase(ABC):
             CategoryType.INTELLIGENCE: 8,
         }
         return priorities.get(self.category, 10)
+
+    async def initialize(self):
+        """Initialize agent resources (e.g., cache). Override in subclasses if needed."""
+        if self.cache is None:
+            self.cache = await get_redis_client()
