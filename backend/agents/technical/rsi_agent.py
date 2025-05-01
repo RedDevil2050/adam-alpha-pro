@@ -16,6 +16,7 @@ class RSIAgent(TechnicalAgent):
                 logger.warning(f"[{self.__class__.__name__}] Insufficient or invalid data for {symbol}. Type: {type(df)}")
                 return self._error_response(symbol, f"Insufficient or invalid OHLCV data received. Type: {type(df)}")
 
+            # Add await here
             market_context = await self.get_market_context(symbol)
             volatility = market_context.get("volatility", 0.2)
             adjustments = self.get_volatility_adjustments(volatility)

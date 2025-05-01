@@ -38,27 +38,40 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
             "agent_name": agent_name,
         }
     else:
-        low_min = df["low"].rolling(settings.STOCHASTIC_K_WINDOW).min()
-        high_max = df["high"].rolling(settings.STOCHASTIC_K_WINDOW).max()
-        k = 100 * ((df["close"] - low_min) / (high_max - low_min))
-        d = k.rolling(settings.STOCHASTIC_D_WINDOW).mean()
+        k_window = getattr(settings, 'STOCHASTIC_K_WINDOW', 14) # Default 14
+        d_window = getattr(settings, 'STOCHASTIC_D_WINDOW', 3)   # Default 3
+        oversold_level = getattr(settings, 'STOCHASTIC_OVERSOLD', 20) # Default 20
+        overbought_level = getattr(settings, 'STOCHASTIC_OVERBOUGHT', 80) # Default 80
+
+        low_min = df["low"].rolling(k_window).min()
+        high_max = df["high"].rolling(k_window).max()
+        # Avoid division by zero
+        high_low_diff = high_max - low_min
+        k = 100 * ((df["close"] - low_min) / high_low_diff.replace(0, np.nan)) # Replace 0 diff with NaN
+        k = k.fillna(50) # Fill potential NaNs if high_low_diff was 0
+
+        d = k.rolling(d_window).mean()
         latest_k = float(k.iloc[-1])
         latest_d = float(d.iloc[-1])
 
-        # Verdict mapping
-        if latest_k <= settings.STOCHASTIC_OVERSOLD:
+        # Verdict mapping using fallback settings
+        if latest_k <= oversold_level:
             verdict = "BUY"
             score = 1.0
-        elif latest_k >= settings.STOCHASTIC_OVERBOUGHT:
+        elif latest_k >= overbought_level:
             verdict = "AVOID"
             score = 0.0
         else:
             verdict = "HOLD"
             # linear score: buffer between oversold/overbought
-            range_span = settings.STOCHASTIC_OVERBOUGHT - settings.STOCHASTIC_OVERSOLD
-            score = max(
-                0.0, min(1.0, (settings.STOCHASTIC_OVERBOUGHT - latest_k) / range_span)
-            )
+            range_span = overbought_level - oversold_level
+            # Avoid division by zero if levels are the same
+            if range_span > 0:
+                score = max(
+                    0.0, min(1.0, (overbought_level - latest_k) / range_span)
+                )
+            else:
+                score = 0.5 # Default score if levels are identical
 
         confidence = round(score, 4)
         result = {

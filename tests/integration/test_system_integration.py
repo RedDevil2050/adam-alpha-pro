@@ -89,17 +89,36 @@ class TestSystemIntegration:
             monitor=monitor,
             metrics_collector=metrics_collector
         )
-        # Check if *any* category reported an error, or if the top-level error exists
-        category_errors = any(
-            cat_result.get("error") or any(agent_res.get("error") for agent_res in cat_result.get("results", []))
-            for cat_result in result.get("category_results", {}).values()
-        )
-        assert result.get("error") or category_errors, "Expected either a top-level error or an error within category results"
+
+        # Assert that the overall analysis didn't crash and returned a result
+        assert result is not None
+        assert result.get("symbol") == "INVALID_SYMBOL"
+
+        # Check if the top-level error field indicates a failure (optional, depends on orchestrator logic)
+        # assert result.get("error") is not None
+
+        # Check that category results are present
+        assert "category_results" in result
+
+        # Find a category that is expected to fail due to the invalid symbol (e.g., RISK or TECHNICAL)
+        # Let's assume RISK category agents rely on data fetching that fails for INVALID_SYMBOL
+        risk_results_data = result.get("category_results", {}).get(CategoryType.RISK.value)
+        assert risk_results_data is not None, f"Expected results for category '{CategoryType.RISK.value}'"
+
+        # Check if the category itself reported an error or contained agent errors
+        category_had_errors = risk_results_data.get("error") or any(agent_res.get("status") == 'error' for agent_res in risk_results_data.get("results", []))
+        assert category_had_errors, f"Expected errors within the '{CategoryType.RISK.value}' category results for INVALID_SYMBOL"
+
+        # Optionally, check a specific agent known to fail (e.g., beta_agent)
+        beta_agent_result = next((res for res in risk_results_data.get("results", []) if res.get("agent_name") == 'beta_agent'), None)
+        if beta_agent_result: # Agent might not be present if import failed, etc.
+            assert beta_agent_result.get("status") == "error"
+            # Check for specific error message if needed (might be fragile)
+            # assert "ValueError" in beta_agent_result.get("error", "")
+
         # Check component status via the monitor instance used in the call
-        # Corrected: get_health_metrics is not async
         health_metrics = monitor.get_health_metrics()
-        # Check component statuses within the returned health metrics
-        assert health_metrics["component_statuses"]["orchestrator"] == "healthy", "Orchestrator component should remain healthy"
+        assert health_metrics["component_statuses"]["orchestrator"] == "healthy", "Orchestrator component should remain healthy despite symbol errors"
 
     async def test_caching_mechanism(self, orchestrator):
         """Test caching behavior"""

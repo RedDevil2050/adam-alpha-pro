@@ -90,15 +90,6 @@ class SystemMonitor:
             # Add other top-level keys if needed, like overall_status
         }
 
-    async def update_agent_status(self, category: str, agent_name: str, symbol: str, status: str, details: Optional[Any] = None):
-        """Placeholder/Mock for updating agent status (async to match potential real implementation)."""
-        # In a real implementation, this would log or store the status update,
-        # potentially interacting with a database or monitoring service.
-        # Using logger.debug to avoid excessive console noise during tests.
-        logger.debug(f"Tracker: Agent {category}/{agent_name} for {symbol} status updated to {status}. Details: {details}")
-        # No actual state change needed for this placeholder
-        pass
-
     def _initialize_metrics(self):
         self.metrics = {
             "cpu_samples": [],

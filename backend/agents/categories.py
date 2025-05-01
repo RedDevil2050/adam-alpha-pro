@@ -122,7 +122,7 @@ class CategoryManager:
             "supertrend_agent",
         ],
         CategoryType.MARKET: [
-            # "market_regime_agent", # Removed - Missing file
+            "market_regime_agent", # Uncommented
             "volatility_agent",
             # "liquidity_agent", # Removed - Missing fetch_volume_series
             "correlation_agent",
@@ -201,14 +201,35 @@ class CategoryManager:
         """Execute all agents in a category, ensuring each agent starts with a clean context."""
         agents = await cls.get_category_agents(category)
         results = []
-        for agent in agents:
+        for agent_func in agents: # Renamed variable for clarity
+            agent_name = agent_func.__name__ if hasattr(agent_func, '__name__') else 'unknown_agent'
             try:
                 # Pass an empty dictionary to each agent, ignoring the passed context
-                result = await agent(symbol, {})
+                # Assuming agent signature is async def run(symbol, agent_outputs={})
+                result = await agent_func(symbol, agent_outputs={}) # Pass empty dict for agent_outputs
                 if result:
+                    # Ensure agent_name is included if not already present
+                    if 'agent_name' not in result:
+                        result['agent_name'] = agent_name
                     results.append(result)
+            except ValueError as e:
+                logger.error(f"Agent {agent_name} failed for {symbol} with ValueError: {e}")
+                results.append({
+                    'agent_name': agent_name,
+                    'symbol': symbol,
+                    'status': 'error',
+                    'error': f"ValueError: {e}",
+                    'details': {}
+                })
             except Exception as e:
-                logger.error(f"Agent execution failed: {agent.__name__ if hasattr(agent, '__name__') else 'unknown'} - {e}") # Added agent name logging
+                logger.error(f"Agent {agent_name} failed for {symbol} with unexpected error: {e}", exc_info=True) # Added traceback
+                results.append({
+                    'agent_name': agent_name,
+                    'symbol': symbol,
+                    'status': 'error',
+                    'error': f"Unexpected error: {e}",
+                    'details': {}
+                })
         return results
 
     @classmethod

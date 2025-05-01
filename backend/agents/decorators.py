@@ -109,6 +109,7 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
 
                 except Exception as e:
                     # 5. Standard Error Handling
+                    # Log the specific agent name causing the error
                     logger.exception(f"Error executing agent {agent_name} for symbol {symbol}: {e}")
                     error_result = {
                         "symbol": symbol,
@@ -140,6 +141,7 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
 
             except Exception as e:
                 # 5. Standard Error Handling
+                # Log the specific agent name causing the error
                 logger.exception(f"Error executing agent {agent_name} for symbol {symbol}: {e}")
                 error_result = {
                     "symbol": symbol,

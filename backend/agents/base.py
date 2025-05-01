@@ -5,7 +5,7 @@ from datetime import datetime
 from backend.utils.cache_utils import get_redis_client
 from backend.config.settings import settings
 from backend.agents.categories import CategoryType, CategoryManager
-
+import json
 
 class AgentBase(ABC):
     def __init__(self):
@@ -24,16 +24,35 @@ class AgentBase(ABC):
             cache_key = f"{self.__class__.__name__}:{symbol}"
             cached = await self.cache.get(cache_key)
             if cached:
-                return cached
+                try:
+                    # Decode cached data
+                    decoded_result = json.loads(cached)
+                    self.logger.debug(f"Cache hit for {cache_key}")
+                    return decoded_result
+                except json.JSONDecodeError:
+                    self.logger.warning(f"Failed to decode cached JSON for {cache_key}. Fetching fresh data.")
+                except Exception as e: # Catch other potential decoding errors
+                    self.logger.warning(f"Error processing cached data for {cache_key}: {e}. Fetching fresh data.")
 
             result = await self._execute(symbol, agent_outputs)
-            await self.cache.set(cache_key, result, ex=self.ttl)
+
+            # Cache only valid results
+            if result and result.get("verdict") not in ["ERROR", "NO_DATA", None]:
+                try:
+                    # Encode result before caching
+                    await self.cache.set(cache_key, json.dumps(result), ex=self.ttl)
+                    self.logger.debug(f"Cached result for {cache_key} with TTL {self.ttl}s")
+                except TypeError as json_err:
+                     self.logger.error(f"Failed to serialize result for {cache_key} to JSON: {json_err}. Result not cached.")
+                except Exception as cache_err:
+                     self.logger.error(f"Failed to set cache for {cache_key}: {cache_err}. Result not cached.")
 
             return result
 
         except Exception as e:
             self.metrics["errors"] += 1
-            self.logger.error(f"Agent execution failed: {e}")
+            # Log the specific agent name causing the error
+            self.logger.exception(f"Agent {self.__class__.__name__} execution failed for {symbol}: {e}")
             return self._error_response(symbol, str(e))
         finally:
             latency = (datetime.now() - start_time).total_seconds()

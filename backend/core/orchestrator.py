@@ -18,6 +18,8 @@ class SystemOrchestrator:
         """Initialize orchestrator components and update status."""
         component_name = "orchestrator"
         try:
+            # Register the component first
+            monitor.register_component(component_name)
             self.category_dependencies = self._build_dependency_graph()
             # Add any other orchestrator-specific async setup here
             # await some_orchestrator_setup()
@@ -25,6 +27,8 @@ class SystemOrchestrator:
             monitor.update_component_status(component_name, "healthy")
         except Exception as e:
             logger.error(f"Orchestrator initialization failed: {e}")
+            # Ensure component is registered before updating status to failed
+            monitor.register_component(component_name) 
             monitor.update_component_status(component_name, "failed")
             raise
 
@@ -211,7 +215,8 @@ class SystemOrchestrator:
     def _generate_composite_verdict(self, results: Dict) -> Dict:
         """Generate weighted composite verdict"""
         try:
-            category_weights = self.category_manager.get_category_weights()
+            # Call get_category_weights as a class method
+            category_weights = CategoryManager.get_category_weights()
             scores = []
             weights = []
             contributing_categories = {}

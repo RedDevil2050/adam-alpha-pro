@@ -119,7 +119,7 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
                  try:
                      temp_series.index = pd.to_datetime(temp_series.index)
                  except (TypeError, ValueError):
-                     logger.warning(f"[{agent_name}] Could not convert index to datetime for {symbol}, using default index.")
+                     logger.warning(f"[{agent_name}] Could not convert index to datetime for {symbol, using default index.")
                  historical_prices = temp_series
 
             # Check if conversion resulted in an empty series
@@ -178,39 +178,75 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     data_source = "calculated_fundamental"
 
     # --- Start: Modified Historical Analysis Block ---
-    if historical_prices is not None and not historical_prices.empty: # Check moved earlier is now redundant if conversion handles empty
-        # Calculate historical P/B using historical prices and CURRENT BVPS (simplification!)
-        historical_pb_series = historical_prices / current_bvps
-        historical_pb_series = historical_pb_series.replace([np.inf, -np.inf], np.nan).dropna()
-        data_source = "calculated_fundamental + historical_prices"
-
-        if not historical_pb_series.empty:
-            mean_hist_pb = historical_pb_series.mean()
-            std_hist_pb = historical_pb_series.std()
-
-            # If standard deviation is effectively zero, historical context is not meaningful
-            if std_hist_pb is None or std_hist_pb < 1e-9:
-                logger.warning(f"[{agent_name}] Historical P/B std dev is zero or None for {symbol}. No context.")
-                percentile_rank = None # Force NO_HISTORICAL_CONTEXT verdict
-                data_source = "calculated_fundamental (historical std dev zero)"
+    if historical_prices is not None:
+        # Ensure historical_prices is a pandas Series of closing prices
+        if isinstance(historical_prices, pd.DataFrame):
+            if 'close' in historical_prices.columns:
+                historical_prices = historical_prices['close']
+            elif 'Close' in historical_prices.columns:
+                historical_prices = historical_prices['Close']
             else:
-                # Calculate percentile rank of current P/B relative to history
-                try:
-                    from scipy import stats
-                    percentile_rank = stats.percentileofscore(
-                        historical_pb_series, current_pb, kind="rank"
-                    )
-                except ImportError:
-                    logger.warning("Scipy not installed, using pandas for percentile calculation.")
-                    percentile_rank = (historical_pb_series < current_pb).mean() * 100
+                logger.warning(f"[{agent_name}] Could not find 'close' or 'Close' column in historical DataFrame for {symbol}. Using first numeric column.")
+                # Fallback: try to find the first numeric column
+                numeric_cols = historical_prices.select_dtypes(include=np.number).columns
+                if not numeric_cols.empty:
+                    historical_prices = historical_prices[numeric_cols[0]]
+                else:
+                    historical_prices = None # Cannot proceed
+        elif isinstance(historical_prices, np.ndarray) and historical_prices.ndim > 1:
+            # Assuming close price is the 4th column (index 3) in a numpy array
+            if historical_prices.shape[1] > 3:
+                historical_prices = pd.Series(historical_prices[:, 3])
+            else:
+                 logger.warning(f"[{agent_name}] Historical numpy array for {symbol} has fewer than 4 columns. Cannot assume close price column.")
+                 historical_prices = None # Cannot proceed
+        elif not isinstance(historical_prices, pd.Series):
+             # Attempt conversion if not Series, DataFrame, or handled ndarray
+            try:
+                historical_prices = pd.Series(historical_prices)
+            except Exception as conversion_err:
+                logger.warning(f"[{agent_name}] Could not convert historical_prices to Series for {symbol}: {conversion_err}")
+                historical_prices = None
 
-                # Calculate Z-score (already correctly checks std_hist_pb)
-                z_score = (current_pb - mean_hist_pb) / std_hist_pb
+        # Proceed only if we have a valid Series
+        if isinstance(historical_prices, pd.Series) and not historical_prices.empty:
+            # Calculate historical P/B using historical prices and CURRENT BVPS (simplification!)
+            historical_pb_series = historical_prices / current_bvps
+            historical_pb_series = historical_pb_series.replace([np.inf, -np.inf], np.nan).dropna()
+            data_source = "calculated_fundamental + historical_prices"
+
+            if not historical_pb_series.empty:
+                mean_hist_pb = historical_pb_series.mean()
+                std_hist_pb = historical_pb_series.std()
+
+                # If standard deviation is effectively zero, historical context is not meaningful
+                if std_hist_pb is None or std_hist_pb < 1e-9:
+                    logger.warning(f"[{agent_name}] Historical P/B std dev is zero or None for {symbol}. No context.")
+                    percentile_rank = None # Force NO_HISTORICAL_CONTEXT verdict
+                    data_source = "calculated_fundamental (historical std dev zero)"
+                else:
+                    # Calculate percentile rank of current P/B relative to history
+                    try:
+                        from scipy import stats
+                        percentile_rank = stats.percentileofscore(
+                            historical_pb_series, current_pb, kind="rank"
+                        )
+                    except ImportError:
+                        logger.warning("Scipy not installed, using pandas for percentile calculation.")
+                        percentile_rank = (historical_pb_series < current_pb).mean() * 100
+
+                    # Calculate Z-score (already correctly checks std_hist_pb)
+                    z_score = (current_pb - mean_hist_pb) / std_hist_pb
+            else:
+                logger.warning(
+                    f"[{agent_name}] Historical P/B series empty after calculation/dropna for {symbol}"
+                )
+                data_source = "calculated_fundamental (historical calc resulted in empty)"
         else:
-            logger.warning(
-                f"[{agent_name}] Historical P/B series empty after calculation/dropna for {symbol}"
-            )
-            data_source = "calculated_fundamental (historical calc resulted in empty)"
+             # Handle cases where historical_prices became None or empty after checks/conversion
+             logger.warning(f"[{agent_name}] No valid historical price series available for {symbol} after processing.")
+             data_source = "calculated_fundamental (no valid historical data)"
+             historical_pb_series = None # Ensure it's None if we couldn't process
     # --- End: Modified Historical Analysis Block ---
 
     # Determine Verdict based on Percentile Rank
