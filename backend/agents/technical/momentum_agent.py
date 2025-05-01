@@ -77,22 +77,10 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     max_lookback = max(mom_settings.LOOKBACK_PERIODS)
     required_years = int(max_lookback / 252) + 1
 
-    try:
-        historical_prices = await fetch_historical_price_series(
-            symbol, years=required_years
-        )
-    except Exception as fetch_err:
-        logger.error(
-            f"[{agent_name}] Error fetching historical prices for {symbol}: {fetch_err}"
-        )
-        return {
-            "symbol": symbol,
-            "verdict": "NO_DATA",
-            "confidence": 0.0,
-            "value": None,
-            "details": {"reason": f"Failed to fetch historical prices: {fetch_err}"},
-            "agent_name": agent_name,
-        }
+    # Let the decorator handle fetch exceptions
+    historical_prices = await fetch_historical_price_series(
+        symbol, years=required_years
+    )
 
     # Validate data
     if (

@@ -1,4 +1,5 @@
 import pytest
+import pytest_asyncio
 import asyncio
 import random
 from backend.core.orchestrator import SystemOrchestrator
@@ -7,9 +8,16 @@ import time
 
 @pytest.mark.asyncio
 class TestSystemStress:
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def orchestrator(self):
-        return SystemOrchestrator()
+        """Create and properly initialize a SystemOrchestrator instance."""
+        monitor = SystemMonitor()
+        instance = SystemOrchestrator()
+        # Properly initialize the orchestrator
+        await instance.initialize(monitor)
+        yield instance
+        # Add cleanup if needed
+        # await instance.shutdown() # if a shutdown method exists
 
     async def test_high_concurrency(self, orchestrator):
         """Test system under high concurrency"""
@@ -38,7 +46,9 @@ class TestSystemStress:
 
     async def test_memory_usage(self, orchestrator):
         """Test memory usage under load"""
-        initial_memory = orchestrator.system_monitor.get_health_metrics()["system"]["memory_usage"]
+        # Add await
+        initial_memory_metrics = await orchestrator.system_monitor.get_health_metrics()
+        initial_memory = initial_memory_metrics["system"]["memory_usage"]
         
         # Run multiple analyses
         tasks = [
@@ -47,13 +57,16 @@ class TestSystemStress:
         ]
         await asyncio.gather(*tasks)
         
-        final_memory = orchestrator.system_monitor.get_health_metrics()["system"]["memory_usage"]
+        # Add await
+        final_memory_metrics = await orchestrator.system_monitor.get_health_metrics()
+        final_memory = final_memory_metrics["system"]["memory_usage"]
         assert final_memory < initial_memory * 2  # Should not double memory usage
 
     async def test_system_recovery(self, orchestrator):
         """Test system auto-recovery"""
         monitor = SystemMonitor()
-        initial_health = monitor.get_health_metrics()
+        # Add await
+        initial_health = await monitor.get_health_metrics()
 
         # Simulate heavy load
         symbols = ["RELIANCE.NS", "TCS.NS", "INFY.NS"]
@@ -65,7 +78,8 @@ class TestSystemStress:
         
         # Check system recovery
         await asyncio.sleep(5)  # Allow system to recover
-        final_health = monitor.get_health_metrics()
+        # Add await
+        final_health = await monitor.get_health_metrics()
         
         assert final_health["system"]["cpu_usage"] <= initial_health["system"]["cpu_usage"] * 1.5
         assert final_health["components"]["orchestrator"]["status"] == "healthy"
@@ -73,13 +87,15 @@ class TestSystemStress:
     async def test_cache_effectiveness(self, orchestrator):
         """Test cache hit rates under load"""
         symbol = "RELIANCE.NS"
-        start_metrics = orchestrator.metrics_collector.get_metrics()
+        # Add await
+        start_metrics = await orchestrator.metrics_collector.get_metrics()
         
         # Multiple rapid requests
         tasks = [orchestrator.analyze_symbol(symbol) for _ in range(10)]
         await asyncio.gather(*tasks)
         
-        end_metrics = orchestrator.metrics_collector.get_metrics()
+        # Add await
+        end_metrics = await orchestrator.metrics_collector.get_metrics()
         cache_hit_ratio = end_metrics["performance"]["cache_hit_ratio"]
         assert cache_hit_ratio > 0.7  # Expect >70% cache hits
 

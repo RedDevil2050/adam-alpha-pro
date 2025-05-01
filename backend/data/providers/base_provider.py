@@ -95,8 +95,73 @@ class BaseDataProvider(ABC):
         """
         pass
 
+    # --- Added abstract methods for new data types ---
+    @abstractmethod
+    async def fetch_insider_trades(self, symbol: str) -> List[Dict[str, Any]]:
+        """
+        Fetch insider trading data for a symbol
+        """
+        pass
+
+    @abstractmethod
+    async def fetch_corporate_actions(self, symbol: str) -> List[Dict[str, Any]]:
+        """
+        Fetch corporate actions (dividends, splits) for a symbol
+        """
+        pass
+
+    @abstractmethod
+    async def fetch_earnings_calendar(self, symbol: str) -> Dict[str, Any]:
+        """
+        Fetch earnings calendar data for a symbol
+        """
+        pass
+
+    @abstractmethod
+    async def fetch_management_info(self, symbol: str) -> Dict[str, Any]:
+        """
+        Fetch management/executive information for a symbol
+        """
+        pass
+
+    @abstractmethod
+    async def fetch_market_regime_data(self, symbol: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Fetch market regime data (general or for a symbol)
+        """
+        pass
+
+    @abstractmethod
+    async def fetch_news_sentiment(self, symbol: str) -> Dict[str, Any]:
+        """
+        Fetch news sentiment data for a symbol
+        """
+        pass
+
+    @abstractmethod
+    async def fetch_wacc(self, symbol: str) -> Dict[str, Any]:
+        """
+        Fetch Weighted Average Cost of Capital (WACC) for a symbol
+        """
+        pass
+
+    @abstractmethod
+    async def fetch_cash_flow_data(self, symbol: str) -> Union[pd.DataFrame, Dict[str, Any]]:
+        """
+        Fetch cash flow statement data for a symbol
+        """
+        pass
+
+    @abstractmethod
+    async def fetch_historical_data(self, symbol: str, data_type: str, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None) -> Union[pd.DataFrame, Dict[str, Any]]:
+        """
+        Fetch various types of historical data (e.g., fundamentals like cashflow, EV, EBITDA)
+        """
+        pass
+    # --- End of added abstract methods ---
+
     @classmethod
-    def get_provider(cls, provider_name: str) -> "BaseDataProvider":
+    def get_provider(cls, provider_name: str) -> 'BaseDataProvider':
         """
         Factory method to get an instance of a data provider
 

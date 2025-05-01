@@ -3,6 +3,8 @@ from backend.utils.data_provider import fetch_ohlcv_series
 from backend.utils.cache_utils import get_redis_client
 from backend.agents.technical.utils import tracker
 from backend.config.settings import settings
+import datetime
+from dateutil.relativedelta import relativedelta
 
 agent_name = "stochastic_agent"
 
@@ -15,8 +17,17 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     if cached:
         return cached
 
+    # Define date range (e.g., 7 months for daily data)
+    end_date = datetime.date.today()
+    start_date = end_date - relativedelta(months=7)
+
     # Fetch OHLCV series with fallback
-    df = await fetch_ohlcv_series(symbol, source_preference=["api", "scrape"])
+    df = await fetch_ohlcv_series(
+        symbol=symbol,
+        start_date=start_date,
+        end_date=end_date,
+        interval='1d' # Assuming daily interval is needed
+    )
     if df is None or df.empty:
         result = {
             "symbol": symbol,
@@ -62,5 +73,5 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
 
     # Cache and track
     await redis_client.set(cache_key, result, ex=3600)
-    tracker.update("technical", agent_name, "implemented")
+    await tracker.update("technical", agent_name, "implemented")
     return result

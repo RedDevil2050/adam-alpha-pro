@@ -6,7 +6,19 @@ agent_name = "reverse_dcf_agent"
 
 
 class ReverseDCFAgent(ValuationAgentBase):
-    async def _execute(self, symbol: str, agent_outputs: dict) -> dict:
+    def _error_response(self, symbol: str, message: str) -> dict:
+        """Generates a standardized error response."""
+        return {
+            "symbol": symbol,
+            "verdict": "ERROR",
+            "confidence": 0.0,
+            "value": None,
+            "details": {"reason": message},
+            "error": message,
+            "agent_name": agent_name,
+        }
+
+    async def execute(self, symbol: str, agent_outputs: dict = None) -> dict:
         try:
             price_data = await fetch_price_point(symbol)
             current_price = price_data.get("latestPrice", 0)
@@ -68,6 +80,7 @@ class ReverseDCFAgent(ValuationAgentBase):
 
         except Exception as e:
             logger.error(f"Reverse DCF error for symbol {symbol}: {e}", exc_info=True)
+            # Use the helper method for error response
             return self._error_response(symbol, f"Error during Reverse DCF calculation: {e}")
 
     def _calculate_dcf(

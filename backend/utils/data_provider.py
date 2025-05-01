@@ -180,6 +180,99 @@ async def fetch_fcf_per_share(symbol: str):
     """
     return await provider.fetch_company_info(symbol, "fcf_per_share")
 
+# --- Added missing fetch functions ---
+
+async def fetch_insider_trades(symbol: str):
+    """
+    Fetch insider trading data for a given symbol.
+
+    Args:
+        symbol: Ticker symbol to fetch insider trades for.
+
+    Returns:
+        List of dictionaries with insider trading data.
+    """
+    # Assuming UnifiedDataProvider will have a method like fetch_fundamental_data or similar
+    return await provider.fetch_data_resilient(symbol, "insider_trades")
+
+async def fetch_corporate_actions(symbol: str):
+    """
+    Fetch corporate actions (dividends, splits, etc.) for a given symbol.
+
+    Args:
+        symbol: Ticker symbol to fetch corporate actions for.
+
+    Returns:
+        List of dictionaries with corporate action data.
+    """
+    return await provider.fetch_data_resilient(symbol, "corporate_actions")
+
+async def fetch_earnings_calendar(symbol: str):
+    """
+    Fetch earnings calendar data for a given symbol.
+
+    Args:
+        symbol: Ticker symbol to fetch earnings dates for.
+
+    Returns:
+        Dictionary with upcoming or historical earnings dates.
+    """
+    return await provider.fetch_data_resilient(symbol, "earnings_calendar")
+
+async def fetch_management_info(symbol: str):
+    """
+    Fetch management and executive information for a given symbol.
+
+    Args:
+        symbol: Ticker symbol to fetch management info for.
+
+    Returns:
+        Dictionary with management information.
+    """
+    # This might be part of fetch_company_info or require a specific endpoint
+    return await provider.fetch_data_resilient(symbol, "management_info")
+
+async def fetch_market_regime_data(symbol: str = None):
+    """
+    Fetch market regime data (e.g., volatility, trend).
+    Can be general market or specific to a symbol if supported.
+
+    Args:
+        symbol: Optional ticker symbol. If None, fetches general market regime.
+
+    Returns:
+        Dictionary with market regime indicators.
+    """
+    target = symbol if symbol else "market"
+    return await provider.fetch_data_resilient(target, "market_regime")
+
+async def fetch_news_sentiment(symbol: str):
+    """
+    Fetch news sentiment data for a given symbol.
+
+    Args:
+        symbol: Ticker symbol to fetch news sentiment for.
+
+    Returns:
+        Dictionary or score representing news sentiment.
+    """
+    return await provider.fetch_data_resilient(symbol, "news_sentiment")
+
+async def fetch_wacc(symbol: str):
+    """
+    Fetch or calculate the Weighted Average Cost of Capital (WACC) for a given symbol.
+
+    Args:
+        symbol: Ticker symbol to fetch WACC for.
+
+    Returns:
+        Dictionary or float representing WACC.
+    """
+    # Calculation might be complex, provider might fetch components or pre-calculated value
+    return await provider.fetch_data_resilient(symbol, "wacc")
+
+# --- End of added functions ---
+
 async def fetch_company_info(symbol: str, data_type: str = None):
     """
     Fetch company information (overview) for a given symbol.

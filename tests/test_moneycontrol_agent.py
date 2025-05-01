@@ -8,7 +8,7 @@ from backend.agents.stealth.moneycontrol_agent import run as mc_run
 @pytest.mark.asyncio
 async def test_moneycontrol_agent(monkeypatch):
     monkeypatch.setattr('backend.utils.data_provider.fetch_price_alpha_vantage', lambda s: 150.0)
-    res = await mc_run('ABC', {})
+    res = await mc_run('ABC')
     assert 'symbol' in res
     assert 'verdict' in res
     assert 'confidence' in res

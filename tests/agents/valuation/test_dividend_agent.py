@@ -86,7 +86,8 @@ async def test_no_dividend_none_string():
     assert result["verdict"] == "NO_DIVIDEND"
     assert result["confidence"] == 0.9
     assert result["value"] == 0.0
-    assert result["details"]["dividend_per_share"] is None
+    # Assert that the detail value is 0.0, not None
+    assert result["details"]["dividend_per_share"] == 0.0
     assert result["details"]["ex_dividend_date"] is None
     assert result["details"]["dividend_yield_percent"] is None
     assert result["agent_name"] == "dividend_agent"

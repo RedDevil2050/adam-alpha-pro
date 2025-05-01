@@ -3,7 +3,8 @@ from backend.utils.data_provider import fetch_ohlcv_series
 import pandas as pd
 import numpy as np
 from loguru import logger
-from datetime import datetime, timedelta
+import datetime
+from dateutil.relativedelta import relativedelta
 
 agent_name = "supertrend_agent"
 
@@ -11,13 +12,17 @@ agent_name = "supertrend_agent"
 class SupertrendAgent(TechnicalAgent):
     async def _execute(self, symbol: str, agent_outputs: dict) -> dict:
         try:
-            # Define date range for the past year
-            end_date = datetime(2025, 4, 30)
-            start_date = end_date - timedelta(days=365)
-            end_date_str = end_date.strftime('%Y-%m-%d')
-            start_date_str = start_date.strftime('%Y-%m-%d')
+            # Define date range (e.g., 7 months for daily data)
+            end_date = datetime.date.today() # Use current date
+            start_date = end_date - relativedelta(months=7) # Use relativedelta
 
-            df = await fetch_ohlcv_series(symbol, start_date=start_date_str, end_date=end_date_str)
+            # Fetch OHLCV data with start_date and end_date
+            df = await fetch_ohlcv_series(
+                symbol=symbol,
+                start_date=start_date,
+                end_date=end_date,
+                interval='1d' # Assuming daily interval is needed
+            )
             if df is None or df.empty:
                 return self._error_response(symbol, "No data available")
 
@@ -108,6 +113,6 @@ class SupertrendAgent(TechnicalAgent):
             return self._error_response(symbol, str(e))
 
 
-async def run(symbol: str, agent_outputs: dict = {}) -> dict:
+async def run(symbol: str, period: int = 7, multiplier: float = 3.0, agent_outputs: dict = None) -> dict:
     agent = SupertrendAgent()
     return await agent.execute(symbol, agent_outputs)

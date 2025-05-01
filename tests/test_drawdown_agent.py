@@ -14,6 +14,6 @@ def mock_price_series(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_drawdown_agent():
-    result = await run('TEST', {})
+    result = await run('TEST')
     assert 'max_drawdown_pct' in result and isinstance(result['max_drawdown_pct'], float)
     assert result['verdict'] in ['BUY','HOLD','SELL']

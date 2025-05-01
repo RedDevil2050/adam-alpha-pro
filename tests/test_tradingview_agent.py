@@ -13,7 +13,7 @@ def mock_fetch_price_alpha_vantage(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_tradingview_agent():
-    res = await tv_run('ABC', {})
+    res = await tv_run('ABC')
     assert 'symbol' in res
     assert 'verdict' in res
     assert 'confidence' in res

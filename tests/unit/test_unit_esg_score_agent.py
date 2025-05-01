@@ -31,7 +31,8 @@ async def test_esg_score_agent(mock_fetch_esg_data, mock_get_settings):
     assert result["value"] == 81.67
     assert result["error"] is None
     assert result["agent_name"] == "esg_score_agent"
-    mock_fetch_esg_data.assert_called_once_with(symbol) # Corrected assertion
+    # Assert that the mock was called correctly
+    mock_fetch_esg_data.assert_called_once_with(symbol) # Correct assertion method
 
 @pytest.mark.asyncio
 @patch('backend.agents.esg.esg_score_agent.get_settings')
@@ -57,4 +58,5 @@ async def test_esg_score_agent_no_data(mock_fetch_esg_data, mock_get_settings):
     assert result["error"] is None # NO_DATA is not an error state for the agent logic
     assert "No ESG data available" in result["details"]["reason"]
     assert result["agent_name"] == "esg_score_agent"
-    mock_fetch_esg_data.assert_called_once_with(symbol) # Corrected assertion
+    # Assert that the mock was called correctly
+    mock_fetch_esg_data.assert_called_once_with(symbol) # Correct assertion method

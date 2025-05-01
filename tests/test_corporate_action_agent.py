@@ -1,13 +1,21 @@
-import sys, os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-
 import pytest
+from unittest.mock import AsyncMock, patch
 from backend.agents.event.corporate_action_agent import run as ca_run
 
 @pytest.mark.asyncio
-async def test_corporate_action_agent(monkeypatch):
-    monkeypatch.setattr('backend.utils.data_provider.fetch_corporate_actions', lambda symbol: [])
-    res = await ca_run('ABC', {})
+@patch('backend.agents.decorators.get_redis_client')  # Updated patch target
+async def test_corporate_action_agent(mock_get_redis, monkeypatch):
+    # Set up Redis mock instance and return value correctly
+    mock_redis_instance = AsyncMock()
+    mock_redis_instance.get = AsyncMock(return_value=None) # Simulate cache miss
+    mock_redis_instance.set = AsyncMock()
+    mock_get_redis.return_value = mock_redis_instance
+
+    monkeypatch.setattr('backend.utils.data_provider.fetch_corporate_actions', AsyncMock(return_value=[]))
+    res = await ca_run('ABC')
     assert 'corporate_actions' in res
-    assert isinstance(res['corporate_actions'], list)
+    assert res['corporate_actions'] == []
+    
+    # Verify cache operations were called correctly
+    mock_redis_instance.get.assert_awaited_once()
+    mock_redis_instance.set.assert_awaited_once()

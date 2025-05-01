@@ -14,7 +14,7 @@ def mock_fetch_price_alpha_vantage(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_tickertape_agent():
-    res = await tt_run('ABC', {})
+    res = await tt_run('ABC')
     assert 'symbol' in res
     assert 'verdict' in res
     assert 'confidence' in res

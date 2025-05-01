@@ -2,27 +2,48 @@ import pandas as pd
 from backend.utils.data_provider import fetch_ohlcv_series
 from backend.utils.cache_utils import get_redis_client
 from backend.agents.technical.utils import tracker
-from datetime import datetime, timedelta
+from datetime import datetime, date, timedelta # Import date
+from dateutil.relativedelta import relativedelta
+from backend.agents.decorators import standard_agent_execution # Import decorator
+import json # Import json
+from loguru import logger # Import logger
 
 agent_name = "moving_average_agent"
 
 
+@standard_agent_execution(agent_name=agent_name, category="technical") # Add agent_name
 async def run(symbol: str, window: int = 20, agent_outputs: dict = None) -> dict:
     cache_key = f"{agent_name}:{symbol}:{window}"
-    redis_client = get_redis_client()
+    redis_client = await get_redis_client() # Await redis client
     # 1) Cache check
-    cached = await redis_client.get(cache_key)
-    if cached:
-        return cached
+    cached_data = await redis_client.get(cache_key)
+    if cached_data:
+        try:
+            # Attempt to decode JSON if it's stored as a string
+            cached_result = json.loads(cached_data)
+            return cached_result
+        except (json.JSONDecodeError, TypeError):
+            # Handle cases where cached data is not valid JSON or already a dict
+            # If it's already a dict (or other non-string type), return as is
+            if isinstance(cached_data, dict):
+                return cached_data
+            else:
+                # Log error or handle unexpected cache format
+                logger.warning(f"Invalid cache format for {cache_key}. Re-fetching.")
+                # Proceed to fetch data if cache is invalid
 
-    # Define date range for the past year
-    end_date = datetime(2025, 4, 30)
-    start_date = end_date - timedelta(days=365)
-    end_date_str = end_date.strftime('%Y-%m-%d')
-    start_date_str = start_date.strftime('%Y-%m-%d')
+    # Define date range
+    end_date = date.today() # Use date.today()
+    # Calculate start date based on window size + buffer for calculation
+    start_date = end_date - timedelta(days=window * 2 + 60) # Increased buffer
 
     # 2) Fetch OHLCV data
-    df = await fetch_ohlcv_series(symbol, start_date=start_date_str, end_date=end_date_str)
+    df = await fetch_ohlcv_series(
+        symbol=symbol,
+        start_date=start_date,
+        end_date=end_date,
+        interval='1d' # Ensure interval is passed
+    )
     if df is None or df.empty or len(df) < window + 1:
         result = {
             "symbol": symbol,
@@ -66,8 +87,13 @@ async def run(symbol: str, window: int = 20, agent_outputs: dict = None) -> dict
         }
 
     # 3) Cache result for 1 hour
-    await redis_client.set(cache_key, result, ex=3600)
+    # Ensure result is JSON serializable before caching
+    try:
+        await redis_client.set(cache_key, json.dumps(result), ex=3600)
+    except TypeError as e:
+        logger.error(f"Failed to serialize result for caching {cache_key}: {e}")
+
     # 4) Update progress tracker
-    tracker.update("technical", agent_name, "implemented")
+    # tracker.update("technical", agent_name, "implemented") # Assuming tracker is correctly set up
 
     return result

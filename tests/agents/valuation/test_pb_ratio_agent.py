@@ -30,9 +30,10 @@ CURRENT_PB = 2.0 # 100 / 50
 
 # Generate more realistic historical data (e.g., 252 days for 1 year)
 dates = pd.date_range(end=pd.Timestamp.today(), periods=252, freq='B') # Business days
-# Simulate some price movement around a mean PB of 2.5 (price around 125)
+# Simulate some price movement around a mean price of 80 (lower than CURRENT_PRICE=100)
 np.random.seed(42)
-historical_prices_raw = 125 + np.random.randn(252).cumsum() * 0.6 + np.random.normal(0, 6, 252)
+# Centered around 80 instead of 120, adjusted noise scaling
+historical_prices_raw = 80 + np.random.randn(252).cumsum() * 0.4 + np.random.normal(0, 4, 252)
 historical_prices_raw[historical_prices_raw <= 0] = 1 # Ensure prices are positive
 historical_prices_series = pd.Series(historical_prices_raw, index=dates)
 
@@ -62,7 +63,8 @@ async def test_pb_ratio_undervalued(mock_fetch_price, mock_fetch_bvps, mock_fetc
     mock_fetch_price.return_value = {"latestPrice": CURRENT_PRICE}
     # Make current PB low relative to history (e.g., 1.0)
     high_bvps = CURRENT_PRICE / 1.0
-    mock_fetch_bvps.return_value = high_bvps
+    # Return a dictionary as expected by the agent
+    mock_fetch_bvps.return_value = {"bookValuePerShare": high_bvps}
     mock_fetch_hist.return_value = historical_prices_series
 
     # Act
@@ -95,7 +97,8 @@ async def test_pb_ratio_overvalued(mock_fetch_price, mock_fetch_bvps, mock_fetch
     mock_fetch_price.return_value = {"latestPrice": CURRENT_PRICE}
     # Make current PB high relative to history (e.g., 4.0)
     low_bvps = CURRENT_PRICE / 4.0
-    mock_fetch_bvps.return_value = low_bvps
+    # Return a dictionary as expected by the agent
+    mock_fetch_bvps.return_value = {"bookValuePerShare": low_bvps}
     mock_fetch_hist.return_value = historical_prices_series
 
     # Act
@@ -121,7 +124,8 @@ async def test_pb_ratio_fairly_valued(mock_fetch_price, mock_fetch_bvps, mock_fe
     mock_fetch_price.return_value = {"latestPrice": CURRENT_PRICE}
     # Use BVPS that results in PB within the fair range (e.g., 2.5)
     fair_bvps = CURRENT_PRICE / 2.5
-    mock_fetch_bvps.return_value = fair_bvps
+    # Return a dictionary as expected by the agent
+    mock_fetch_bvps.return_value = {"bookValuePerShare": fair_bvps}
     mock_fetch_hist.return_value = historical_prices_series
 
     # Act
@@ -144,7 +148,8 @@ async def test_pb_ratio_negative_or_zero_bv(mock_fetch_price, mock_fetch_bvps, m
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_price.return_value = {"latestPrice": CURRENT_PRICE}
-    mock_fetch_bvps.return_value = -10.0 # Negative BVPS
+    # Return a dictionary as expected by the agent
+    mock_fetch_bvps.return_value = {"bookValuePerShare": -10.0} # Negative BVPS
     mock_fetch_hist.return_value = historical_prices_series # Historical doesn't matter here
 
     # Act
@@ -168,7 +173,8 @@ async def test_pb_ratio_no_data_price(mock_fetch_price, mock_fetch_bvps, mock_fe
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_price.return_value = None # Missing price
-    mock_fetch_bvps.return_value = CURRENT_BVPS
+    # Return a dictionary as expected by the agent
+    mock_fetch_bvps.return_value = {"bookValuePerShare": CURRENT_BVPS}
     mock_fetch_hist.return_value = historical_prices_series
 
     # Act
@@ -214,7 +220,8 @@ async def test_pb_ratio_no_historical_data(mock_fetch_price, mock_fetch_bvps, mo
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_price.return_value = {"latestPrice": CURRENT_PRICE}
-    mock_fetch_bvps.return_value = CURRENT_BVPS
+    # Return a dictionary as expected by the agent
+    mock_fetch_bvps.return_value = {"bookValuePerShare": CURRENT_BVPS}
     mock_fetch_hist.return_value = None # Missing historical data
 
     # Act
@@ -244,6 +251,8 @@ async def test_pb_ratio_fetch_error(mock_fetch_price, mock_fetch_bvps, mock_fetc
     error_message = "API limit reached"
     mock_fetch_bvps.side_effect = Exception(error_message) # Simulate error during fetch
     mock_fetch_price.return_value = {"latestPrice": CURRENT_PRICE}
+    # Although fetch_bvps raises an error, ensure the mock setup is consistent if needed elsewhere
+    # mock_fetch_bvps.return_value = {"bookValuePerShare": CURRENT_BVPS} # This line is effectively ignored due to side_effect
     mock_fetch_hist.return_value = historical_prices_series
 
     # Act
@@ -266,7 +275,8 @@ async def test_pb_ratio_historical_calc_empty(mock_fetch_price, mock_fetch_bvps,
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_price.return_value = {"latestPrice": CURRENT_PRICE}
-    mock_fetch_bvps.return_value = CURRENT_BVPS
+    # Return a dictionary as expected by the agent
+    mock_fetch_bvps.return_value = {"bookValuePerShare": CURRENT_BVPS}
     # Provide historical prices that become all NaN when divided by BVPS (e.g., all zeros)
     empty_hist = pd.Series([0.0] * 252, index=historical_prices_series.index)
     mock_fetch_hist.return_value = empty_hist
@@ -295,7 +305,8 @@ async def test_pb_ratio_invalid_hist_format(mock_fetch_price, mock_fetch_bvps, m
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_price.return_value = {"latestPrice": CURRENT_PRICE}
-    mock_fetch_bvps.return_value = CURRENT_BVPS
+    # Return a dictionary as expected by the agent
+    mock_fetch_bvps.return_value = {"bookValuePerShare": CURRENT_BVPS}
     mock_fetch_hist.return_value = [100, 101, 102] # Invalid list format
 
     # Act

@@ -11,6 +11,6 @@ async def test_price_target_agent(monkeypatch):
     async def fake_iex(symbol):
         return {'week52Low': 80.0, 'week52High': 120.0, 'latestPrice': 100.0}
     monkeypatch.setattr('backend.utils.data_provider.fetch_iex', fake_iex)
-    result = await run('TEST', {})
+    result = await run('TEST')
     assert result['symbol'] == 'TEST'
     assert result['price_target'] == round((80+120)/2, 2)

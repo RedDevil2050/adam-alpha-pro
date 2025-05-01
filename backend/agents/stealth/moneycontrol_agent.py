@@ -118,6 +118,19 @@ class MoneyControlAgent(StealthAgentBase):
         # This is a placeholder for the actual implementation
         return min(score * 0.8, 1.0)
 
+    def _error_response(self, symbol: str, message: str) -> dict:
+        """Generates a standard error response dictionary."""
+        logger.error(f"Agent error for {symbol} in {self.__class__.__name__}: {message}")
+        return {
+            "symbol": symbol,
+            "agent_name": agent_name, # Use agent_name defined in the module
+            "verdict": "ERROR",
+            "confidence": 0.0,
+            "value": None, # Use None for value in case of error
+            "details": {"reason": message},
+            "error": message,
+        }
+
     async def _fetch_stealth_data(self, symbol: str) -> dict:
         url = f"https://www.moneycontrol.com/india/stockpricequote/{symbol}"
         headers = {"User-Agent": "Mozilla/5.0"}
@@ -194,7 +207,12 @@ class MoneyControlAgent(StealthAgentBase):
         # Placeholder for extracting features for ML
         return np.array([])
 
+    async def execute(self, symbol: str, agent_outputs: dict = {}) -> dict:
+        """Public method to execute the agent's logic."""
+        return await self._execute(symbol, agent_outputs)
+
 
 async def run(symbol: str, agent_outputs: dict = {}) -> dict:
     agent = MoneyControlAgent()
-    return await agent.execute(symbol, agent_outputs)
+    # Pass only symbol to execute
+    return await agent.execute(symbol)

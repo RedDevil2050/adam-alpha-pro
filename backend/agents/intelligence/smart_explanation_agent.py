@@ -4,9 +4,9 @@ from backend.config.settings import settings
 
 agent_name = "smart_explanation_agent"
 
-redis_client = get_redis_client()
-
 async def run(symbol: str, agent_outputs: dict) -> dict:
+    # Get Redis client when needed, don't initialize at module level
+    redis_client = await get_redis_client()
     cache_key = f"{agent_name}:{symbol}"
     cached = await redis_client.get(cache_key)
     if cached:

@@ -13,7 +13,7 @@ async def test_rsi_agent_accuracy(monkeypatch):
     # Fixed price series to calculate known RSI value
     prices = pd.Series([45,46,47,48,47,46,45,44,43,42,41,40,41,42,43])
     monkeypatch.setattr('backend.utils.data_provider.fetch_price_series', lambda symbol: prices)
-    res = await rsi_run('ABC', {})
+    res = await rsi_run('ABC')
     # Manually computed RSI ~28.0 for this downtrend
     assert pytest.approx(100.0, rel=1e-2) == res['rsi']
 
@@ -21,7 +21,7 @@ async def test_rsi_agent_accuracy(monkeypatch):
 async def test_macd_agent_accuracy(monkeypatch):
     prices = pd.Series([10,11,12,13,14,15,14,13,12,11,10])
     monkeypatch.setattr('backend.utils.data_provider.fetch_price_series', lambda symbol: prices)
-    res = await macd_run('ABC', {})
+    res = await macd_run('ABC')
     # MACD line - signal line should be small positive since up then down
     assert 'macd' in res and 'signal' in res
     assert res['macd'] > res['signal']

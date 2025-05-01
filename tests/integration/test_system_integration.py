@@ -1,4 +1,5 @@
 import pytest
+import pytest_asyncio
 import asyncio
 from backend.core.orchestrator import SystemOrchestrator
 from backend.agents.categories import CategoryType
@@ -7,9 +8,16 @@ from backend.utils.metrics_collector import MetricsCollector
 
 @pytest.mark.asyncio
 class TestSystemIntegration:
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def orchestrator(self):
-        return SystemOrchestrator()
+        """Create and properly initialize a SystemOrchestrator instance."""
+        monitor = SystemMonitor()
+        instance = SystemOrchestrator()
+        # Properly initialize the orchestrator
+        await instance.initialize(monitor)
+        yield instance
+        # Add cleanup if needed
+        # await instance.shutdown() # if a shutdown method exists
 
     async def test_full_analysis_flow(self, orchestrator):
         """Test complete analysis pipeline"""
@@ -69,7 +77,8 @@ class TestSystemIntegration:
         # Simulate multiple failures and verify recovery
         for _ in range(3):
             result = await orchestrator.analyze_symbol("INVALID_SYMBOL")
-            assert orchestrator.system_monitor.get_health_metrics()["system"]["status"] != "error"
+            health_metrics = await orchestrator.system_monitor.get_health_metrics()
+            assert health_metrics["system"]["status"] != "error"
 
     async def test_metrics_collection(self, orchestrator):
         """Test metrics collection"""

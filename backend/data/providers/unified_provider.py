@@ -1,5 +1,5 @@
 import time
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Union
 import aiohttp
 import asyncio
 from bs4 import BeautifulSoup
@@ -499,6 +499,97 @@ class UnifiedDataProvider(BaseDataProvider):
 
     async def fetch_company_info(self, symbol: str) -> Dict[str, Any]:
         """
-        Fetch company information for a given symbol.
+        Fetch company information (overview) for a given symbol.
+        Uses resilient fetching.
         """
-        return await self._fetch_from_provider("yahoo_finance", symbol, "company_info")
+        # This method might already exist or need adjustment
+        # For now, assume it uses fetch_data_resilient
+        result = await self.fetch_data_resilient(symbol, "company_info")
+        return result.get("data", {})
+
+    # --- Implementations for new abstract methods ---
+    async def fetch_insider_trades(self, symbol: str) -> List[Dict[str, Any]]:
+        """
+        Fetch insider trading data for a symbol using resilient fetching.
+        """
+        # Assumes fetch_data_resilient can handle 'insider_trades'
+        # Actual implementation might need specific API calls within _fetch_from_provider
+        result = await self.fetch_data_resilient(symbol, "insider_trades")
+        # Ensure the return type matches the abstract method signature
+        data = result.get("data", [])
+        return data if isinstance(data, list) else []
+
+    async def fetch_corporate_actions(self, symbol: str) -> List[Dict[str, Any]]:
+        """
+        Fetch corporate actions for a symbol using resilient fetching.
+        """
+        result = await self.fetch_data_resilient(symbol, "corporate_actions")
+        data = result.get("data", [])
+        return data if isinstance(data, list) else []
+
+    async def fetch_earnings_calendar(self, symbol: str) -> Dict[str, Any]:
+        """
+        Fetch earnings calendar data for a symbol using resilient fetching.
+        """
+        result = await self.fetch_data_resilient(symbol, "earnings_calendar")
+        data = result.get("data", {})
+        return data if isinstance(data, dict) else {}
+
+    async def fetch_management_info(self, symbol: str) -> Dict[str, Any]:
+        """
+        Fetch management info for a symbol using resilient fetching.
+        """
+        result = await self.fetch_data_resilient(symbol, "management_info")
+        data = result.get("data", {})
+        return data if isinstance(data, dict) else {}
+
+    async def fetch_market_regime_data(self, symbol: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Fetch market regime data using resilient fetching.
+        """
+        target = symbol if symbol else "market" # Use a generic target if no symbol
+        result = await self.fetch_data_resilient(target, "market_regime")
+        data = result.get("data", {})
+        return data if isinstance(data, dict) else {}
+
+    async def fetch_news_sentiment(self, symbol: str) -> Dict[str, Any]:
+        """
+        Fetch news sentiment data for a symbol using resilient fetching.
+        """
+        result = await self.fetch_data_resilient(symbol, "news_sentiment")
+        data = result.get("data", {})
+        return data if isinstance(data, dict) else {} # Or adjust based on expected sentiment format
+
+    async def fetch_wacc(self, symbol: str) -> Dict[str, Any]:
+        """
+        Fetch WACC data for a symbol using resilient fetching.
+        """
+        # WACC might require calculation based on other fetched data or a specific API endpoint
+        result = await self.fetch_data_resilient(symbol, "wacc")
+        data = result.get("data", {})
+        # WACC is often a single value, but return dict for consistency for now
+        return data if isinstance(data, dict) else {}
+
+    async def fetch_cash_flow_data(self, symbol: str) -> Union[pd.DataFrame, Dict[str, Any]]:
+        """
+        Fetch cash flow data for a symbol using resilient fetching.
+        """
+        # This might fetch from Alpha Vantage 'CASH_FLOW' function or similar
+        result = await self.fetch_data_resilient(symbol, "cash_flow")
+        # Need to determine if result['data'] is DataFrame or Dict based on provider
+        return result.get("data", {}) # Return empty dict as default
+
+    async def fetch_historical_data(self, symbol: str, data_type: str, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None) -> Union[pd.DataFrame, Dict[str, Any]]:
+        """
+        Fetch generic historical data using resilient fetching.
+        This acts as a wrapper; specific types might have dedicated methods.
+        """
+        # This might need more parameters passed to fetch_data_resilient or _fetch_from_provider
+        # For now, it just calls fetch_data_resilient with the data_type
+        logger.warning(f"Using generic fetch_historical_data for {data_type}. Consider specific methods if available.")
+        # Pass additional parameters if fetch_data_resilient supports them
+        # Example: result = await self.fetch_data_resilient(symbol, data_type, start_date=start_date, end_date=end_date)
+        result = await self.fetch_data_resilient(symbol, data_type)
+        return result.get("data", {}) # Return empty dict as default
+
+    # --- End of implementations for new abstract methods ---

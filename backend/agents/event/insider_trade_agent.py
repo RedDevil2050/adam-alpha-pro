@@ -1,6 +1,8 @@
 import httpx
 from backend.utils.cache_utils import get_redis_client
 from backend.agents.event.utils import tracker
+# Import the specific data provider function
+from backend.utils.data_provider import fetch_insider_trades
 
 agent_name = "insider_trade_agent"
 
@@ -12,22 +14,25 @@ async def run(symbol: str) -> dict:
     if cached:
         return cached
 
-    # Fetch insider trade data from an API
+    # Fetch insider trade data using the data_provider function
     trades = []
+    error_message = None
     try:
-        url = f"https://api.example.com/insider-trades/{symbol}"
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(url)
-        if resp.status_code == 200:
-            trades = resp.json().get("trades", [])
+        # Use the imported fetch function
+        # Assuming fetch_insider_trades returns a list of trade dicts or None/empty list
+        trades_data = await fetch_insider_trades(symbol)
+        trades = trades_data if isinstance(trades_data, list) else []
+
     except Exception as e:
+        error_message = str(e)
+        # Return error structure if fetch fails
         return {
             "symbol": symbol,
             "verdict": "ERROR",
             "confidence": 0.0,
             "value": None,
-            "details": {},
-            "error": str(e),
+            "details": {"error": error_message},
+            "error": error_message, # Keep top-level error for consistency
             "agent_name": agent_name,
         }
 
@@ -52,7 +57,7 @@ async def run(symbol: str) -> dict:
             "verdict": verdict,
             "confidence": round(score, 4),
             "value": count,
-            "details": {"trades": trades},
+            "details": {"trades_count": count}, # Avoid returning large list of trades
             "score": score,
             "agent_name": agent_name,
         }

@@ -29,17 +29,7 @@
       "stochastic_oscillator_agent": "implemented",
       "bollinger_agent": "implemented",
       "ma_crossover_agent": "implemented"
-    },
-    "event": {
-      "earnings_calendar_agent": "implemented",
-      "insider_trade_agent": "implemented"
-    },
-    "automation": {
-      "alert_engine_agent": "implemented"
-    },
-    "forecast": {
-      "price_forecast_agent": "implemented"
     }
   },
-  "last_updated": "2025-04-30T18:34:11.104367+00:00Z"
+  "last_updated": "2025-04-26T06:01:25.220557Z"
 }

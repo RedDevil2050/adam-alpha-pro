@@ -2,32 +2,55 @@ import sys, os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import pytest
-import asyncio
+import pandas as pd
+from unittest.mock import AsyncMock, patch
 from backend.agents.technical.trend_strength_agent import run
-from backend.utils.data_provider import fetch_alpha_vantage
-
-@pytest.fixture(autouse=True)
-def mock_data(monkeypatch):
-    async def fake_alpha(endpoint, params):
-        # Create 60 days of dummy OHLCV
-        import pandas as pd
-        data = {}
-        for i in range(1, 61):
-            date = f'2025-04-{i:02d}'
-            data[date] = {
-                '1. open': '100', '2. high': '110', '3. low': '90', '4. close': str(100 + i), '5. adjusted close': str(100 + i),
-                '5. volume': '1000'
-            }
-        if params.get('function') == 'ATR':
-            return {'Technical Analysis: ATR': {date: '2.5' for date in data}}
-        if params.get('function') == 'ADX':
-            return {'Technical Analysis: ADX': {date: '30' for date in data}}
-        return {'Time Series (Daily)': data}
+import datetime
 
 @pytest.mark.asyncio
-async def test_trend_strength_agent():
-    result = await run('TEST', {})
-    assert 'adx' in result
+@patch('backend.agents.decorators.get_redis_client')  # Updated patch target
+async def test_trend_strength_agent(mock_get_redis, monkeypatch):
+    # Create realistic OHLCV data with uptrend
+    dates = pd.to_datetime([datetime.date(2025, 4, 30) - datetime.timedelta(days=x) for x in range(60, -1, -1)])
+    data_df = pd.DataFrame({
+        'high': [100 + i * 0.2 for i in range(61)],
+        'low': [98 + i * 0.2 for i in range(61)],
+        'close': [99 + i * 0.2 for i in range(61)],  # Steady uptrend
+        'open': [99 + i * 0.2 for i in range(61)],
+        'volume': [1000 + i * 10 for i in range(61)]
+    }, index=dates)
+
+    # Mock fetch_ohlcv_series
+    mock_fetch = AsyncMock(return_value=data_df)
+    monkeypatch.setattr('backend.utils.data_provider.fetch_ohlcv_series', mock_fetch)
+
+    # Mock get_market_context
+    mock_market_context = AsyncMock(return_value={'regime': 'NEUTRAL'})
+    monkeypatch.setattr('backend.agents.technical.base.TechnicalAgent.get_market_context', mock_market_context)
+
+    # Set up Redis mock instance and return value correctly
+    mock_redis_instance = AsyncMock()
+    mock_redis_instance.get = AsyncMock(return_value=None)  # Simulate cache miss
+    mock_redis_instance.set = AsyncMock()
+    mock_get_redis.return_value = mock_redis_instance
+
+    # Run the agent
+    result = await run('TEST')
+
+    # Verify mocks were called correctly
+    mock_fetch.assert_called_once()
+    mock_market_context.assert_called_once()
+    mock_redis_instance.get.assert_awaited_once()
+    mock_redis_instance.set.assert_awaited_once()
+
+    # Verify results
     assert 'verdict' in result
+    assert result['verdict'] in ['STRONG_UPTREND', 'WEAK_UPTREND']  # Expecting uptrend based on data
     assert 'confidence' in result
     assert isinstance(result['confidence'], float)
+    assert 'value' in result  # Trend strength score * direction
+    assert result['value'] > 0  # Expecting positive score for uptrend
+    assert 'details' in result
+    assert 'strength_score' in result['details']
+    assert 'direction' in result['details']
+    assert result['details']['direction'] == 1  # Expecting uptrend direction

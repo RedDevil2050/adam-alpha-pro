@@ -14,7 +14,7 @@ async def test_ev_ebitda_agent(monkeypatch):
         return {}
     monkeypatch.setattr('backend.utils.data_provider.fetch_alpha_vantage', fake_alpha)
     monkeypatch.setattr('backend.utils.data_provider.fetch_iex', fake_iex)
-    result = await run('TEST', {})
+    result = await run('TEST')
     assert result['symbol'] == 'TEST'
     assert result['ev_ebitda'] == round(2000/100, 2)
     assert result['verdict'] in ['BUY','HOLD','SELL']

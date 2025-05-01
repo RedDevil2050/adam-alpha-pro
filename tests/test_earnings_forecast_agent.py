@@ -1,26 +1,36 @@
-import sys, os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 import pytest
-import asyncio
-import importlib.util
-import os
+from unittest.mock import AsyncMock
+import backend.agents.forecast.earnings_forecast_agent as ef_agent
 
-# Dynamically load agent module
-agent_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../backend/agents/forecast/earnings_forecast_agent.py'))
-spec = importlib.util.spec_from_file_location('ef_agent', agent_path)
-ef_agent = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(ef_agent)
-
-# Stub data provider directly on module
+# Mock data for fetch_iex_earnings
 async def fake_earnings(symbol):
-    return {'earnings': [{'estimate': 2.0, 'actual': 1.5}]}
+    return {'earnings': [{'actualEPS': 1.5, 'consensusEPS': 1.4, 'fiscalPeriod': 'Q1 2023'}]}
 
 @pytest.mark.asyncio
 async def test_earnings_forecast_agent(monkeypatch):
+    # Mock redis client get/set methods
+    mock_redis_get = AsyncMock(return_value=None) # Simulate cache miss
+    mock_redis_set = AsyncMock()
+    mock_redis_instance = AsyncMock()
+    mock_redis_instance.get = mock_redis_get
+    mock_redis_instance.set = mock_redis_set
+    # Need to mock the awaitable get_redis_client
+    async def mock_get_redis():
+        return mock_redis_instance
+    # Patch where get_redis_client is USED (decorators module)
+    monkeypatch.setattr('backend.agents.decorators.get_redis_client', mock_get_redis)
+
     # Patch the fetch_iex_earnings used within the module
-    ef_agent.fetch_iex_earnings = fake_earnings
-    result = await ef_agent.run('TEST', {})
+    monkeypatch.setattr(ef_agent, 'fetch_iex_earnings', fake_earnings)
+
+    # Call run with only the symbol argument
+    result = await ef_agent.run('TEST')
+
     assert result['symbol'] == 'TEST'
-    assert 'estimate' in result and 'actual' in result
-    assert result['verdict'] in ['BUY','HOLD','SELL']
+    assert 'forecast' in result
+    assert len(result['forecast']) > 0
+    assert result['forecast'][0]['actualEPS'] == 1.5
+    # Verify cache set was called
+    mock_redis_set.assert_awaited_once()
+    # Verify cache get was called
+    mock_redis_get.assert_awaited_once()

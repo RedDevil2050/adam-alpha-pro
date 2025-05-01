@@ -15,6 +15,6 @@ def mock_price_series(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_beta_agent():
-    result = await run('TEST', {})
+    result = await run('TEST')
     assert 'beta' in result and isinstance(result['beta'], float)
     assert result['verdict'] in ['BUY','HOLD','SELL']

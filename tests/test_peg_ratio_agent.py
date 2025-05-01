@@ -8,6 +8,7 @@ from backend.agents.valuation.peg_ratio_agent import run
 @pytest.mark.asyncio
 async def test_peg_ratio_agent(monkeypatch):
     agent_outputs = {'TEST': {'pe_ratio_agent': {'pe_ratio': 10.0}}}
+    # Pass agent_outputs as the second argument as expected by the agent's run function
     result = await run('TEST', agent_outputs)
     assert result['symbol'] == 'TEST'
     assert 'peg_ratio' in result
