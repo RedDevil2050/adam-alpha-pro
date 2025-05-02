@@ -62,7 +62,8 @@ async def test_macd_agent_precision(monkeypatch):
     signal_val = res['details']['signal']
     # For a steadily increasing series, MACD should be positive and generally above signal
     assert macd_val > 0
-    assert pytest.approx(macd_val, rel=0.2) >= signal_val # Allow some difference
+    # assert pytest.approx(macd_val, rel=0.2) >= signal_val # Original assertion caused TypeError
+    assert macd_val >= pytest.approx(signal_val, rel=0.2)
 
 @pytest.mark.asyncio
 async def test_beta_and_volatility(monkeypatch):
@@ -99,7 +100,8 @@ async def test_beta_and_volatility(monkeypatch):
     assert 'error' not in res_vol or res_vol['error'] is None, f"Volatility agent returned error: {res_vol.get('error')}"
     # Assert the primary 'value' field for volatility
     assert 'value' in res_vol, "'value' key (containing volatility) missing from vol_run result"
-    # For linear series, returns are constant (except first NaN), std dev should be 0
-    # The agent returns annualized volatility percentage
-    assert pytest.approx(0.0, abs=1e-4) == res_vol['value']
+    # For linear series [1..10], simple returns are [1.0, 0.5, 0.33...], std dev is not 0.
+    # Calculated annualized volatility % is ~426.79
+    # assert pytest.approx(0.0, abs=1e-4) == res_vol['value'] # Original assertion was incorrect
+    assert pytest.approx(426.79, abs=0.1) == res_vol['value']
 

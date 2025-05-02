@@ -198,6 +198,7 @@ class PegRatioAgentSettings(BaseSettings):
 class EvEbitdaAgentSettings(BaseSettings):
     THRESHOLD_LOW_EV_EBITDA: float = 10.0
     THRESHOLD_HIGH_EV_EBITDA: float = 15.0
+    HISTORICAL_YEARS: int = 5  # Added missing attribute
 
 
 class BookToMarketAgentSettings(BaseSettings):
@@ -210,6 +211,11 @@ class DividendYieldAgentSettings(BaseSettings):
     THRESHOLD_HIGH: float = 5.0
     THRESHOLD_ATTRACTIVE: float = 2.5
     THRESHOLD_MODERATE: float = 1.0
+
+
+# Add EarningsSurpriseAgentSettings
+class EarningsSurpriseAgentSettings(BaseSettings):
+    SURPRISE_THRESHOLD_PCT: float = 5.0
 
 
 class EsgScoreAgentSettings(BaseSettings):
@@ -248,6 +254,7 @@ class AgentSettings(BaseSettings):
     ev_ebitda: EvEbitdaAgentSettings = EvEbitdaAgentSettings()
     book_to_market: BookToMarketAgentSettings = BookToMarketAgentSettings()
     dividend_yield: DividendYieldAgentSettings = DividendYieldAgentSettings()
+    earnings_surprise: EarningsSurpriseAgentSettings = EarningsSurpriseAgentSettings()  # Added earnings surprise
     esg_score: EsgScoreAgentSettings = EsgScoreAgentSettings()
     momentum: MomentumAgentSettings = MomentumAgentSettings()  # Added momentum settings
     correlation: CorrelationAgentSettings = (

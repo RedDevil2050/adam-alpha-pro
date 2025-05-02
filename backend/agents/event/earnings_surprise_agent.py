@@ -54,8 +54,9 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         - error (str | None): Error message if an issue occurred.
     """
     settings = get_settings()
-    # Use .get for nested attribute access with fallback
-    surprise_settings = settings.agent_settings.get("earnings_surprise", MagicMock())
+    # Use attribute access for Pydantic settings
+    surprise_settings = settings.agent_settings.earnings_surprise
+    # surprise_settings = settings.agent_settings.get("earnings_surprise", MagicMock()) # Original line causing error
     threshold_pct = getattr(surprise_settings, 'SURPRISE_THRESHOLD_PCT', 5.0) # Default 5%
 
     # Fetch recent earnings data (e.g., last 90 days)

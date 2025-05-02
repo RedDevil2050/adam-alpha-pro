@@ -3,7 +3,7 @@ import pytest_asyncio
 import asyncio
 import random
 from backend.core.orchestrator import SystemOrchestrator
-from backend.utils.monitoring import SystemMonitor
+from backend.utils.system_monitor import SystemMonitor
 from unittest.mock import AsyncMock
 from backend.utils.metrics_collector import MetricsCollector
 import time

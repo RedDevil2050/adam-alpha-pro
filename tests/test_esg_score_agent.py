@@ -10,5 +10,5 @@ async def test_esg_score_agent(monkeypatch):
     # Stub ESG data
     monkeypatch.setattr('backend.utils.data_provider.fetch_esg_data', lambda symbol: {'score': 75})
     res = await esg_run('ABC')
-    assert 'esg_score' in res
-    assert isinstance(res['esg_score'], (int, float))
+    assert 'value' in res # Check for the 'value' key which holds the composite score
+    assert isinstance(res['value'], (int, float)) # Ensure the score is a number

@@ -40,7 +40,8 @@ async def test_market_regime_agent(monkeypatch):
     mock_redis_instance.set = AsyncMock()
     # Patch the get_redis_client function where the decorator imports it
     mock_get_redis = AsyncMock(return_value=mock_redis_instance)
-    monkeypatch.setattr('backend.utils.cache_utils.get_redis_client', mock_get_redis)
+    # monkeypatch.setattr('backend.utils.cache_utils.get_redis_client', mock_get_redis) # Incorrect patch target
+    monkeypatch.setattr('backend.agents.decorators.get_redis_client', mock_get_redis) # Correct patch target
 
     # Mock the tracker update via the decorator's import path
     mock_tracker_instance = AsyncMock()
