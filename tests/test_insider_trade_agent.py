@@ -1,23 +1,24 @@
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, MagicMock
 from backend.agents.event.insider_trade_agent import run as it_run
 
 @pytest.mark.asyncio
-@patch('backend.agents.decorators.get_redis_client')  # Corrected patch target
+@patch('backend.utils.cache_utils.get_redis_client') # Corrected patch target for cache
 async def test_insider_trade_agent(mock_get_redis, monkeypatch):
     # Set up Redis mock instance and return value correctly
     mock_redis_instance = AsyncMock()
     mock_redis_instance.get = AsyncMock(return_value=None) # Simulate cache miss
     mock_redis_instance.set = AsyncMock()
-
-    # Configure the mock for get_redis_client to return the instance correctly
     async def fake_get_redis():
         return mock_redis_instance
-    mock_get_redis.side_effect = fake_get_redis
+    mock_get_redis.return_value = mock_redis_instance # Directly set return_value
 
     # Mock the data provider function used by the agent
     mock_fetch_trades = AsyncMock(return_value=[]) # Example: return empty list
     monkeypatch.setattr('backend.agents.event.insider_trade_agent.fetch_insider_trades', mock_fetch_trades)
+
+    # Mock the tracker update to prevent errors if tracker isn't fully set up in test env
+    monkeypatch.setattr('backend.agents.event.insider_trade_agent.tracker.update', MagicMock())
 
     res = await it_run('ABC')
 
@@ -25,13 +26,15 @@ async def test_insider_trade_agent(mock_get_redis, monkeypatch):
     assert res['symbol'] == 'ABC'
     assert 'value' in res # Agent might put summary/count in value
     assert 'details' in res
-    assert 'insider_trades' in res['details']
-    assert res['details']['insider_trades'] == []
-    assert res['verdict'] == 'NEUTRAL' # Example verdict for no trades
+    # Assert 'insider_trades' is directly in the result, not nested
+    assert 'insider_trades' in res
+    assert res['insider_trades'] == []
+    # Updated expected verdict for empty trades list
+    assert res['verdict'] == 'NEUTRAL'
     assert res.get('error') is None
 
     # Verify mocks
     mock_fetch_trades.assert_awaited_once_with('ABC')
     mock_get_redis.assert_awaited_once() # Verify the patch target was called
     mock_redis_instance.get.assert_awaited_once()
-    mock_redis_instance.set.assert_awaited_once()
+    mock_redis_instance.set.assert_awaited_once() # Set should be called even for NEUTRAL

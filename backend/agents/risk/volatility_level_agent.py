@@ -48,7 +48,8 @@ async def run(symbol: str) -> dict:
     """
     # Fetch price series
     prices = await fetch_price_series(symbol)
-    if not prices or len(prices) < 2:
+    # Use prices.empty for pandas Series check
+    if prices is None or prices.empty or len(prices) < 2:
         return {
             "symbol": symbol,
             "verdict": "NO_DATA",

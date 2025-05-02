@@ -16,7 +16,7 @@ def token():
     return resp.json().get("access_token")
 
 def test_health():
-    resp = client.get("/healthz")
+    resp = client.get("/api/healthz")
     assert resp.status_code == 200
     assert resp.json().get("status") == "ok"
 

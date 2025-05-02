@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
 import numpy as np # Import numpy
-from unittest.mock import AsyncMock, patch # Import patch
+from unittest.mock import AsyncMock, patch, MagicMock # Import patch and MagicMock
 # Corrected import path and alias
 from backend.agents.market.market_regime_agent import run as mr_run
 from backend.config.settings import get_settings # Import settings
@@ -34,13 +34,19 @@ async def test_market_regime_agent(monkeypatch):
     # Change the patch target to where the agent imports the function
     monkeypatch.setattr('backend.agents.market.market_regime_agent.fetch_price_series', mock_fetch_async)
 
-    # Mock redis get/set
+    # Mock redis get/set using the correct patch target for the decorator
     mock_redis_instance = AsyncMock()
     mock_redis_instance.get.return_value = None # Simulate cache miss
-    mock_redis_instance.set = AsyncMock() # Use AsyncMock for set as well
-    # Patch the specific decorator import path if known, otherwise the direct util path
-    # Assuming standard_agent_execution uses get_redis_client from cache_utils
-    monkeypatch.setattr('backend.utils.cache_utils.get_redis_client', AsyncMock(return_value=mock_redis_instance))
+    mock_redis_instance.set = AsyncMock()
+    # Patch the get_redis_client function where the decorator imports it
+    mock_get_redis = AsyncMock(return_value=mock_redis_instance)
+    monkeypatch.setattr('backend.utils.cache_utils.get_redis_client', mock_get_redis)
+
+    # Mock the tracker update via the decorator's import path
+    mock_tracker_instance = AsyncMock()
+    mock_tracker_instance.update_agent_status = AsyncMock()
+    mock_get_tracker = MagicMock(return_value=mock_tracker_instance)
+    monkeypatch.setattr('backend.agents.decorators.get_tracker', mock_get_tracker)
 
     # Mock settings to ensure the correct market index is used if necessary
     # This ensures the test uses the same index the mock expects
@@ -74,8 +80,9 @@ async def test_market_regime_agent(monkeypatch):
     assert res['confidence'] == 0.7 # Check expected confidence for BULL
     assert res.get('error') is None # Ensure no error is reported
 
-    # Verify cache was checked and set
-    mock_redis_instance.get.assert_awaited_once()
+    # Verify mocks
+    mock_get_redis.assert_awaited_once() # Check the factory function was awaited
+    mock_redis_instance.get.assert_awaited_once() # Check get on the instance was awaited
     # Check if set was awaited (it should be if verdict is not ERROR/NO_DATA)
     if res['verdict'] not in ["ERROR", "NO_DATA", None]:
         mock_redis_instance.set.assert_awaited_once()
@@ -87,3 +94,7 @@ async def test_market_regime_agent(monkeypatch):
     # More specific assertion: ensure it was called with the market index symbol
     market_symbol = get_settings().data_provider.MARKET_INDEX_SYMBOL
     mock_fetch_async.assert_any_await(market_symbol)
+
+    # Verify tracker was called via the decorator
+    mock_get_tracker.assert_called_once()
+    mock_tracker_instance.update_agent_status.assert_awaited_once()
