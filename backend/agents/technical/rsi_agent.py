@@ -1,7 +1,7 @@
 from backend.agents.technical.base import TechnicalAgent
 # Correct the import path
 from backend.utils.data_provider import fetch_ohlcv_series
-from backend.utils.decorators import standard_agent_execution  # Import the missing decorator
+from backend.agents.decorators import standard_agent_execution  # Corrected import path
 import pandas as pd
 import logging
 import numpy as np # Import numpy
