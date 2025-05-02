@@ -2,7 +2,7 @@ import sys, os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import pytest
-import pandas as pd
+import pandas as pd # Added missing import
 from unittest.mock import AsyncMock # Import AsyncMock
 from backend.agents.technical.rsi_agent import run as rsi_run
 from backend.agents.technical.macd_agent import run as macd_run

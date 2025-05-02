@@ -243,6 +243,22 @@ class CorrelationAgentSettings(BaseSettings):
 
 
 # --- Task 1.9 & 1.10: Update AgentSettings ---
+# Add DCF Agent Settings
+class ValuationAgentSettings(BaseSettings):
+    DCF_GROWTH_STAGE1: int = 5  # Years of high growth
+    DCF_GROWTH_STAGE2: int = 5  # Years of stable growth
+    DCF_DISCOUNT_RATE: float = 0.10  # WACC or required rate of return
+    DCF_TERMINAL_GROWTH_RATE: float = 0.025  # Perpetual growth rate
+    MARKET_RISK_PREMIUM: float = 0.06 # Added missing field (Example value)
+    DCF_DEFAULT_TERMINAL_PE: float = 15.0 # Added missing field (Example value)
+    DCF_MARGIN_OF_SAFETY_STRONG_BUY: float = 0.30  # 30% MoS for Strong Buy
+    DCF_MARGIN_OF_SAFETY_BUY: float = 0.15  # 15% MoS for Buy
+    DCF_MARGIN_OF_SAFETY_SELL: float = -0.10 # -10% MoS (overvalued) for Sell
+    DCF_MARGIN_OF_SAFETY_STRONG_SELL: float = -0.25 # -25% MoS for Strong Sell
+    DCF_SIMULATION_RUNS: int = 1000 # Number of runs for Monte Carlo
+    DCF_UNCERTAINTY_PENALTY_FACTOR: float = 0.5 # How much relative std dev impacts confidence
+
+
 class AgentSettings(BaseSettings):
     """Container for all agent-specific settings"""
 
@@ -260,6 +276,7 @@ class AgentSettings(BaseSettings):
     correlation: CorrelationAgentSettings = (
         CorrelationAgentSettings()
     )  # Added correlation settings
+    valuation: ValuationAgentSettings = ValuationAgentSettings() # Added valuation settings
     # Add missing market_regime settings for tests/agents
     market_regime: dict = {"thresholds": {"bull": 0.7, "bear": 0.3}}
 

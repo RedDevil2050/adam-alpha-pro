@@ -123,17 +123,18 @@ async def run(
 
     # DCF Parameters (Core Logic)
     growth_stages = [
-        settings.valuation.DCF_GROWTH_STAGE1,  # High growth (1-5 years)
-        settings.valuation.DCF_GROWTH_STAGE2,  # Medium growth (6-10 years)
-        settings.valuation.DCF_GROWTH_STAGE3,  # Terminal growth
+        settings.agent_settings.valuation.DCF_GROWTH_STAGE1,  # High growth (1-5 years) # Corrected path
+        settings.agent_settings.valuation.DCF_GROWTH_STAGE2,  # Medium growth (6-10 years) # Corrected path
+        settings.agent_settings.valuation.DCF_TERMINAL_GROWTH_RATE,  # Terminal growth # Corrected path
     ]
     risk_free_rate = settings.data_provider.RISK_FREE_RATE
-    market_premium = settings.valuation.MARKET_RISK_PREMIUM
+    # Assuming MARKET_RISK_PREMIUM and DCF_DEFAULT_TERMINAL_PE are also in ValuationAgentSettings
+    market_premium = settings.agent_settings.valuation.MARKET_RISK_PREMIUM # Corrected path
     discount_rate = risk_free_rate + beta * market_premium
-    terminal_pe = settings.valuation.DCF_DEFAULT_TERMINAL_PE
+    terminal_pe = settings.agent_settings.valuation.DCF_DEFAULT_TERMINAL_PE # Corrected path
 
     # Monte Carlo Simulation (Core Logic)
-    n_simulations = 1000  # Keep number of simulations reasonable
+    n_simulations = settings.agent_settings.valuation.DCF_SIMULATION_RUNS # Corrected path
     simulation_results = []
 
     for _ in range(n_simulations):
@@ -175,37 +176,42 @@ async def run(
     # Add debug logging for intrinsic value
     logger.debug(f"Calculated intrinsic value for {symbol}: {intrinsic_value}")
     margin_of_safety = (
-        (intrinsic_value - current_price) / current_price * 100
+        (intrinsic_value - current_price) / current_price # Removed * 100, standard MoS is decimal
         if current_price > 0
         else np.inf
     )
 
     # Confidence based on margin of safety and simulation std dev (relative to mean)
     relative_std_dev = std_dev / mean_value if mean_value != 0 else np.inf
-    base_confidence = 0.0
-    if margin_of_safety > 30:
+    base_confidence = 0.5 # Start with neutral confidence
+
+    # Determine Verdict based on Margin of Safety thresholds from settings
+    if margin_of_safety >= settings.agent_settings.valuation.DCF_MARGIN_OF_SAFETY_STRONG_BUY: # Corrected path
         verdict = "STRONG_BUY"
         base_confidence = 0.9
-    elif margin_of_safety > 10:
+    elif margin_of_safety >= settings.agent_settings.valuation.DCF_MARGIN_OF_SAFETY_BUY: # Corrected path
         verdict = "BUY"
         base_confidence = 0.7
-    elif margin_of_safety > -10:
+    elif margin_of_safety <= settings.agent_settings.valuation.DCF_MARGIN_OF_SAFETY_STRONG_SELL: # Corrected path
+         verdict = "STRONG_SELL"
+         base_confidence = 0.9 # High confidence in strong sell too
+    elif margin_of_safety <= settings.agent_settings.valuation.DCF_MARGIN_OF_SAFETY_SELL: # Corrected path
+         verdict = "SELL" # Changed from AVOID
+         base_confidence = 0.7
+    else: # Between BUY and SELL thresholds
         verdict = "HOLD"
         base_confidence = 0.5
-    else:
-        verdict = "AVOID"
-        base_confidence = 0.3
 
-    # Adjust confidence based on simulation uncertainty
+
+    # Adjust confidence based on simulation uncertainty using factor from settings
+    uncertainty_penalty_factor = settings.agent_settings.valuation.DCF_UNCERTAINTY_PENALTY_FACTOR # Corrected path
     uncertainty_penalty = min(
-        1.0, relative_std_dev * 2
-    )  # Higher relative std dev reduces confidence
-    final_confidence = base_confidence * (
-        1 - uncertainty_penalty * 0.5
-    )  # Penalize up to 50%
+        1.0, relative_std_dev * uncertainty_penalty_factor # Use factor from settings
+    )
+    final_confidence = base_confidence * (1 - uncertainty_penalty) # Apply penalty
     final_confidence = round(
-        max(0.1, min(0.9, final_confidence)), 4
-    )  # Clamp confidence
+        max(0.1, min(0.95, final_confidence)), 4 # Clamp confidence 0.1 - 0.95
+    )
 
     # Create success result dictionary (Core Logic)
     result = {
@@ -216,7 +222,7 @@ async def run(
         "details": {
             "current_price": round(current_price, 2),
             "intrinsic_value_mean": round(mean_value, 2),
-            "margin_of_safety_percent": round(margin_of_safety, 2),
+            "margin_of_safety": round(margin_of_safety, 4), # Store MoS as decimal
             "simulation_summary": {
                 "count": len(simulation_results),
                 "std_dev": round(std_dev, 2),

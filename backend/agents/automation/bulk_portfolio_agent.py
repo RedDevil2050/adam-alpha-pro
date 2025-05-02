@@ -49,5 +49,5 @@ async def run(symbols: list) -> dict:
     }
 
     await redis_client.set(cache_key, result, ex=settings.agent_cache_ttl)
-    tracker.update("automation", agent_name, "implemented")
+    await tracker.update("automation", agent_name, "implemented")
     return result
