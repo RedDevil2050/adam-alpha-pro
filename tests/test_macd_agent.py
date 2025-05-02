@@ -36,15 +36,19 @@ async def test_macd_agent_buy_signal(
     # Let macd = 1.5, signal = 1.0 => histogram = 0.5
     # Let exp1.iloc[-1] = 11.5
     # Let exp2.iloc[-1] = 10.0 => macd = 1.5
-    # Let signal.iloc[-1] = 1.0 => hist = 0.5
-    
-    # Create mock Series for the final values returned by .mean()
-    mock_exp1_mean_series = MagicMock(spec=pd.Series); mock_exp1_mean_series.iloc.__getitem__.return_value = 11.5
-    mock_exp2_mean_series = MagicMock(spec=pd.Series); mock_exp2_mean_series.iloc.__getitem__.return_value = 10.0
-    mock_signal_mean_series = MagicMock(spec=pd.Series); mock_signal_mean_series.iloc.__getitem__.return_value = 1.0
+    # Let signal_calc_input = macd (which is exp1 - exp2)
+    # Let signal_calc_output.iloc[-1] = 1.0 => hist = 0.5
+
+    # Return actual pd.Series with the desired final value
+    # The agent code performs subtraction on the Series, then uses iloc[-1]
+    mock_exp1_series = pd.Series([11.5]) # Series with the final value
+    mock_exp2_series = pd.Series([10.0]) # Series with the final value
+    # The signal line calculation takes the macd series as input
+    # Mock the result of the signal line's .mean() call
+    mock_signal_series = pd.Series([1.0]) # Series with the final signal value
 
     # The order matters: exp1, exp2, signal
-    mock_ewm_mean.side_effect = [mock_exp1_mean_series, mock_exp2_mean_series, mock_signal_mean_series]
+    mock_ewm_mean.side_effect = [mock_exp1_series, mock_exp2_series, mock_signal_series]
 
     # 3. Mock get_market_context
     mock_get_market_context.return_value = {"regime": market_regime}
@@ -85,11 +89,8 @@ async def test_macd_agent_buy_signal(
     mock_fetch_ohlcv.assert_awaited_once_with(symbol)
     # Check ewm().mean() calls
     assert mock_ewm_mean.call_count == 3
-    # Verify the iloc calls on the mock series returned by mean()
-    mock_exp1_mean_series.iloc.__getitem__.assert_called_with(-1)
-    mock_exp2_mean_series.iloc.__getitem__.assert_called_with(-1)
-    mock_signal_mean_series.iloc.__getitem__.assert_called_with(-1)
-    
+    # iloc[-1] is called *after* subtraction in the agent code, so we don't verify it on the mocks directly.
+    # Instead, we rely on the assertions on the final 'result' dictionary.
     mock_get_market_context.assert_awaited_once_with(symbol)
 
 @pytest.mark.asyncio

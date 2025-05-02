@@ -26,11 +26,13 @@ async def test_rsi_agent_oversold(
     num_periods = rsi_period + 50 # Need enough data for calculation + stability
 
     # Create price data simulating an oversold condition (strong downward moves)
-    prices = np.linspace(150, 100, num_periods) # General downward trend
+    # Start with a general downward trend
+    prices = np.linspace(150, 110, num_periods)
     # Add noise
-    prices += np.random.normal(0, 1.5, num_periods)
-    # Ensure the last period reflects a low RSI
-    # (More precise data generation might be needed for exact RSI values)
+    prices += np.random.normal(0, 1.0, num_periods)
+    # Make the last few periods drop more sharply to ensure oversold
+    prices[-rsi_period:] -= np.linspace(0, 10, rsi_period) # Steeper drop at the end
+
     # Create DataFrame matching fetch_ohlcv_series output (needs 'close' column)
     price_df = pd.DataFrame({
         'close': prices,

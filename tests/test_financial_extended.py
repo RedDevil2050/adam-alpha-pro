@@ -48,7 +48,13 @@ async def test_beta_and_volatility(monkeypatch):
 
     # Need settings for market index symbol
     from backend.config.settings import get_settings
-    monkeypatch.setattr('backend.utils.data_provider.fetch_price_series', AsyncMock(side_effect=mock_fetch))
+    # Patch fetch_price_series where it's used by beta_agent and vol_run
+    # Assuming both import it directly from data_provider
+    # If they import differently, adjust the target accordingly
+    mock_fetch_async = AsyncMock(side_effect=mock_fetch)
+    monkeypatch.setattr('backend.agents.risk.beta_agent.fetch_price_series', mock_fetch_async)
+    # Also patch for volatility agent if it uses the same function
+    monkeypatch.setattr('backend.agents.risk.volatility_level_agent.fetch_price_series', mock_fetch_async)
 
     # Run agents
     res_beta = await beta_run('TST')

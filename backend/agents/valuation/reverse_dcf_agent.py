@@ -1,6 +1,7 @@
 from backend.agents.valuation.base import ValuationAgentBase
 from backend.utils.data_provider import fetch_price_point, fetch_fcf_per_share
 from loguru import logger
+from backend.agents.decorators import standard_agent_execution
 
 agent_name = "reverse_dcf_agent"
 
@@ -120,6 +121,7 @@ class ReverseDCFAgent(ValuationAgentBase):
 
 
 # For backwards compatibility
+@standard_agent_execution(agent_name=agent_name, category="valuation", cache_ttl=7200) # Added decorator
 async def run(symbol: str, agent_outputs: dict = {}) -> dict:
     agent = ReverseDCFAgent()
     return await agent.execute(symbol, agent_outputs)

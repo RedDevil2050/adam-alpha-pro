@@ -31,7 +31,8 @@ async def test_market_regime_agent(monkeypatch):
         # return pd.DataFrame()
 
     mock_fetch_async = AsyncMock(side_effect=mock_fetch)
-    monkeypatch.setattr('backend.utils.data_provider.fetch_price_series', mock_fetch_async)
+    # Change the patch target to where the agent imports the function
+    monkeypatch.setattr('backend.agents.market.market_regime_agent.fetch_price_series', mock_fetch_async)
 
     # Mock redis get/set
     mock_redis_instance = AsyncMock()

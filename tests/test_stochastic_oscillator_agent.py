@@ -26,32 +26,34 @@ async def test_stochastic_oscillator_overbought(
     symbol = "TEST_STOCH_OB"
     k_window = 14 # Default K window
     d_window = 3  # Default D window
-    # Agent uses Fast Stochastic (%K = raw, %D = SMA(%K, 3))
     num_periods = k_window + d_window + 50 # Ensure enough data
 
-    # Create price data simulating an overbought condition (close near high)
-    prices = np.linspace(100, 150, num_periods) # General upward trend
-    prices += np.random.normal(0, 1.5, num_periods)
-    # Force the last close to be near the high of the recent period
-    highs = prices + np.random.uniform(0, 2, num_periods)
-    lows = prices - np.random.uniform(0, 2, num_periods)
-    closes = highs - np.random.uniform(0, 0.5, num_periods) # Close near high
+    # Create price data simulating K crossing below D in overbought territory
+    # 1. Strong uptrend to get K and D high
+    prices = np.linspace(100, 150, num_periods - 5)
+    # 2. Plateau or slight dip at the end to cause K to cross below D
+    end_prices = np.array([150, 149.5, 149, 148.5, 148])
+    prices = np.concatenate((prices, end_prices))
 
-    # Ensure last close is strictly less than last high for calculation stability
-    highs[-1] = max(highs[-1], closes[-1] + 0.01)
-    # Ensure last low is strictly less than last close
-    lows[-1] = min(lows[-1], closes[-1] - 0.01)
+    # Generate OHLC based on prices, ensuring close is near high initially, then dips
+    highs = prices + np.random.uniform(0.1, 0.5, num_periods) # Highs slightly above price
+    lows = prices - np.random.uniform(0.1, 0.5, num_periods)  # Lows slightly below price
+    closes = prices.copy()
+    # Make final closes slightly lower than highs to simulate downturn
+    closes[-5:] = lows[-5:] + np.random.uniform(0.05, 0.15, 5) # Close near low at the very end
 
+    # Ensure highs >= closes >= lows
+    highs = np.maximum(highs, closes)
+    lows = np.minimum(lows, closes)
 
     # Create DataFrame matching fetch_ohlcv_series output
     ohlcv_df = pd.DataFrame({
         'high': highs,
         'low': lows,
         'close': closes,
-        'open': closes - np.random.uniform(0, 1, num_periods), # Dummy open
+        'open': closes - np.random.uniform(-0.1, 0.1, num_periods), # Dummy open near close
         'volume': np.random.randint(1000, 5000, num_periods) # Dummy volume
     }, index=pd.date_range(end='2025-05-01', periods=num_periods, freq='D'))
-
 
     # 1. Mock fetch_ohlcv_series
     mock_fetch_ohlcv.return_value = ohlcv_df
@@ -68,43 +70,18 @@ async def test_stochastic_oscillator_overbought(
     # Patch the specific tracker instance used in the agent module
     monkeypatch.setattr('backend.agents.technical.stochastic_oscillator_agent.tracker', mock_tracker_instance)
 
-
     # --- Expected Results ---
-    # Agent logic: BUY if K crosses above D, AVOID if K crosses below D, HOLD otherwise.
-    # This test aims for overbought, but the agent logic is crossover-based.
-    # Let's adjust the test to check for a SELL signal (K crossing below D in overbought territory)
-    # Modify data to create a K < D crossover after being high
-    ohlcv_df['k'] = 100 * ((ohlcv_df['close'] - ohlcv_df['low'].rolling(k_window).min()) /
-                           (ohlcv_df['high'].rolling(k_window).max() - ohlcv_df['low'].rolling(k_window).min()))
-    ohlcv_df['d'] = ohlcv_df['k'].rolling(d_window).mean()
-
-    # Force a K < D crossover at the end after being high
-    # Find the last valid index where k and d are calculated
-    valid_idx = ohlcv_df[['k', 'd']].last_valid_index()
-    if valid_idx is not None and valid_idx != ohlcv_df.index[-1]:
-         idx_loc = ohlcv_df.index.get_loc(valid_idx)
-         if idx_loc >= 1: # Need at least two points
-             # Make previous K > D
-             ohlcv_df.loc[ohlcv_df.index[idx_loc-1], 'k'] = 85
-             ohlcv_df.loc[ohlcv_df.index[idx_loc-1], 'd'] = 80
-             # Make current K < D
-             ohlcv_df.loc[valid_idx, 'k'] = 75
-             ohlcv_df.loc[valid_idx, 'd'] = 80
-             # Recalculate D based on forced K for the last point
-             ohlcv_df['d'] = ohlcv_df['k'].rolling(d_window).mean()
-
-
-    expected_verdict = "AVOID" # Expecting K crossing below D
-    # expected_confidence = 0.0 # Agent sets confidence to 0.0 for AVOID
+    # Expecting K crossing below D after being overbought (>80)
+    expected_verdict = "AVOID"
 
     # --- Run Agent ---
     result = await stoch_run(symbol)
 
     # --- Assertions ---
     assert result['symbol'] == symbol
-    assert result['agent_name'] == agent_name
-    assert result['verdict'] == expected_verdict
-    # assert result['confidence'] == expected_confidence # Check confidence for AVOID
+    assert result['agent_name'] == agent_name # Use agent_name variable
+    # Add failure message for easier debugging
+    assert result['verdict'] == expected_verdict, f"Expected {expected_verdict}, got {result['verdict']}. Details: {result.get('details')}"
     assert 'value' in result # K - D difference
     assert 'details' in result
     assert 'k' in result['details']
@@ -116,8 +93,13 @@ async def test_stochastic_oscillator_overbought(
 
     # --- Verify Mocks ---
     mock_fetch_ohlcv.assert_awaited_once()
-    # Check args if needed: mock_fetch_ohlcv.assert_awaited_once_with(symbol, start_date=..., end_date=...)
     mock_get_redis.assert_awaited_once()
     mock_redis_instance.get.assert_awaited_once()
-    mock_redis_instance.set.assert_awaited_once()
-    # mock_tracker_instance.update.assert_called_once() # Verify tracker update
+    # Set should be awaited only if verdict is not ERROR/NO_DATA
+    if result.get('verdict') not in ['ERROR', 'NO_DATA']:
+        mock_redis_instance.set.assert_awaited_once()
+    else:
+        mock_redis_instance.set.assert_not_awaited()
+    # Tracker update is now handled by the decorator, check get_tracker call
+    mock_get_tracker.assert_called_once()
+    # Cannot easily assert await on tracker.update as it's called within decorator
