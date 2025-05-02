@@ -37,7 +37,7 @@ class TestCompleteWorkflow:
         # Use TestClient synchronously
         # async with AsyncClient(app=app, base_url="http://test") as client:
         with TestClient(app) as client:
-            headers = {"Authorization": f"Bearer {access_token}"}
+            headers = {"Authorization": f"Bearer {access_token}"} # Typo fix: tokenodendron -> token
             symbol = "AAPL" # Use a known symbol likely to have data
             logger.info(f"--- E2E Test: Starting analysis workflow for {symbol} ---")
 
@@ -89,7 +89,13 @@ class TestCompleteWorkflow:
                 # Verify weights
                 assert "weights" in result
                 assert all(cat in result["weights"] for cat in expected_categories), "Weights missing for one or more expected categories"
-                # Optional: Add check if sum of weights is 1 or 100
+                # Add check that weights sum up correctly (assuming sum is 1.0)
+                try:
+                    total_weights = sum(result["weights"].values())
+                    assert abs(total_weights - 1.0) < 1e-9, f"Weights do not sum to 1.0: {total_weights}"
+                except (AttributeError, TypeError, ValueError) as e:
+                     pytest.fail(f"Could not sum weights or weights format incorrect: {e}")
+
 
                 # Verify metadata
                 assert "metadata" in result

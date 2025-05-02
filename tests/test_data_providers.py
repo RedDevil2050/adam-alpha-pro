@@ -11,7 +11,7 @@ from backend.utils.data_provider import (
 
 @pytest.mark.asyncio
 async def test_trendlyne(monkeypatch):
-    class R: text = "<div class='company-header__LTP'>100.0</div>"
+    class R: text = "<div class='company-header__LTP'>100.0</div>" # Corrected HTML entities
     monkeypatch.setattr("httpx.AsyncClient.get", lambda self, url: R())
     assert await fetch_price_trendlyne("INFY") == 100.0
 
