@@ -168,14 +168,16 @@ class TestSystemIntegration:
 
         # Check component status using the orchestrator's INTERNAL monitor AFTER the call
         internal_monitor = orchestrator.system_monitor
-        health_metrics_internal = internal_monitor.get_health_metrics() # get_health_metrics is sync
-        assert health_metrics_internal.get("component_statuses", {}).get("orchestrator") == "healthy", \
+        health_metrics_internal = await internal_monitor.get_health_metrics() # Added await
+        # --- Ensure health_metrics_internal is a dict before accessing ---
+        assert isinstance(health_metrics_internal, dict), f"Expected health_metrics_internal to be a dict, but got {type(health_metrics_internal)}"
+        
+        component_statuses = health_metrics_internal.get("component_statuses", {})
+        assert isinstance(component_statuses, dict), f"Expected component_statuses to be a dict, but got {type(component_statuses)}"
+
+        assert component_statuses.get("orchestrator") == "healthy", \
             f"Orchestrator component should remain healthy in internal monitor after handling symbol error. Health was: {health_metrics_internal}"
 
-    async def test_caching_mechanism(self, orchestrator):
-        """Test caching behavior"""
-        # metrics_collector = MetricsCollector() # Collector is internal
-        monitor = SystemMonitor()
         symbol_to_test = "SBIN.NS"
         cache_client = await get_redis_client() # Get client to clear cache first
         await cache_client.delete(f"analysis:{symbol_to_test}") # Clear potential stale cache
@@ -238,14 +240,22 @@ class TestSystemIntegration:
             )
             # Access health metrics from the ORCHESTRATOR's internal monitor
             internal_monitor = orchestrator.system_monitor
-            health_metrics = internal_monitor.get_health_metrics() # get_health_metrics is sync
+            health_metrics = await internal_monitor.get_health_metrics() # Added await
+            # --- Ensure health_metrics is a dict before accessing ---
+            assert isinstance(health_metrics, dict), f"Expected health_metrics to be a dict, but got {type(health_metrics)}"
+            
+            component_statuses = health_metrics.get("component_statuses", {})
+            assert isinstance(component_statuses, dict), f"Expected component_statuses to be a dict, but got {type(component_statuses)}"
+            
             # Check overall system status if available, or component statuses
             # Assuming orchestrator should remain healthy despite symbol errors
-            assert health_metrics.get("component_statuses", {}).get("orchestrator") == "healthy", \
+            assert component_statuses.get("orchestrator") == "healthy", \
                 f"Orchestrator component should remain healthy on iteration {i+1}. Health was: {health_metrics}"
             # Check if system metrics are still being reported
-            assert health_metrics.get("system", {}).get("cpu_usage") is not None, f"CPU usage missing on iteration {i+1}"
-            assert health_metrics.get("system", {}).get("memory_usage") is not None, f"Memory usage missing on iteration {i+1}"
+            system_metrics = health_metrics.get("system", {})
+            assert isinstance(system_metrics, dict), f"Expected system_metrics to be a dict, but got {type(system_metrics)}"
+            assert system_metrics.get("cpu_usage") is not None, f"CPU usage missing on iteration {i+1}"
+            assert system_metrics.get("memory_usage") is not None, f"Memory usage missing on iteration {i+1}"
 
     async def test_metrics_collection(self, orchestrator):
         """Test metrics collection"""
