@@ -62,19 +62,48 @@ async def test_macd_agent_accuracy(monkeypatch):
     macd_val = res['details']['macd']
     signal_val = res['details']['signal']
     # assert pytest.approx(macd_val) >= signal_val - abs(signal_val * 0.1) # Original assertion caused TypeError
-    assert macd_val >= pytest.approx(signal_val - abs(signal_val * 0.1))
+    # Corrected comparison: Use pytest.approx on the right side or compare values directly with tolerance
+    assert pytest.approx(macd_val) >= signal_val - abs(signal_val * 0.1)
 
 @pytest.mark.asyncio
-async def test_pe_ratio_calculation(httpx_mock):
+# Use monkeypatch in addition to httpx_mock
+async def test_pe_ratio_calculation(httpx_mock, monkeypatch):
     # Mock Alpha Vantage price
     httpx_mock.add_response(
         url="https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=TCS&apikey=demo",
-        json={"Global Quote":{"05. price":"120.00"}}
+        json={"Global Quote": {"05. price": "120.00"}},
     )
+    # Mock Alpha Vantage EPS
     httpx_mock.add_response(
         url="https://www.alphavantage.co/query?function=OVERVIEW&symbol=TCS&apikey=demo",
-        json={"EPS":"4.00"}
+        json={"EPS": "4.00"},
     )
-    res = await pe_run('TCS', {})
-    assert res['pe_ratio'] == pytest.approx(30.0, rel=1e-2)
-    assert res['verdict'] == 'hold'
+    
+    # Mock the historical price fetch function within the agent's module
+    # Return None to simulate missing historical data
+    mock_hist_prices = AsyncMock(return_value=None)
+    monkeypatch.setattr(
+        'backend.agents.valuation.pe_ratio_agent.fetch_historical_price_series', 
+        mock_hist_prices
+    )
+
+    # Run the agent
+    res = await pe_run('TCS', {}) # Pass empty dict for agent_outputs
+
+    # --- Assertions ---
+    # 1. Check for errors first
+    assert res.get('error') is None, f"Agent returned an error: {res.get('error')}"
+    assert res.get('verdict') != 'NO_DATA', f"Agent returned NO_DATA: {res.get('details')}"
+    assert res.get('verdict') != 'NEGATIVE_EARNINGS', f"Agent returned NEGATIVE_EARNINGS: {res.get('details')}"
+
+    # 2. Check essential keys exist
+    assert 'value' in res, "Result missing 'value' key (expected P/E ratio)"
+    assert 'verdict' in res, "Result missing 'verdict' key"
+
+    # 3. Assert calculated P/E ratio (using the 'value' key)
+    # Expected P/E = 120.00 / 4.00 = 30.0
+    assert res['value'] == pytest.approx(30.0, rel=1e-2)
+    
+    # 4. Assert the verdict based on mocked historical data (None)
+    # Agent should return NO_HISTORICAL_CONTEXT when historical data is missing
+    assert res['verdict'] == 'NO_HISTORICAL_CONTEXT'

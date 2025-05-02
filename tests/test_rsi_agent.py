@@ -13,7 +13,8 @@ from backend.agents.technical.rsi_agent import run as rsi_run, agent_name # Impo
 @pytest.mark.asyncio
 # Patch dependencies in reverse order
 @patch('backend.agents.decorators.get_tracker')
-@patch('backend.agents.decorators.get_redis_client') # Correct patch target for redis
+# Correct patch target for redis used by the decorator
+@patch('backend.agents.decorators.get_redis_client') 
 @patch('backend.agents.technical.rsi_agent.fetch_ohlcv_series') # Correct patch target for data fetch
 async def test_rsi_agent_oversold(
     mock_fetch_ohlcv, # Renamed mock

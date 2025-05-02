@@ -63,7 +63,8 @@ async def test_macd_agent_precision(monkeypatch):
     # For a steadily increasing series, MACD should be positive and generally above signal
     assert macd_val > 0
     # assert pytest.approx(macd_val, rel=0.2) >= signal_val # Original assertion caused TypeError
-    assert macd_val >= pytest.approx(signal_val, rel=0.2)
+    # Corrected comparison: Use pytest.approx on the right side or compare values directly with tolerance
+    assert pytest.approx(macd_val, rel=0.2) >= signal_val
 
 @pytest.mark.asyncio
 async def test_beta_and_volatility(monkeypatch):

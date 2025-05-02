@@ -17,8 +17,9 @@ async def test_earnings_forecast_agent(monkeypatch):
     # Need to mock the awaitable get_redis_client
     async def mock_get_redis():
         return mock_redis_instance
-    # Patch where get_redis_client is USED (decorators module)
-    monkeypatch.setattr('backend.agents.decorators.get_redis_client', mock_get_redis)
+    # Patch where get_redis_client is USED (agent module or utils module)
+    # Trying agent module first
+    monkeypatch.setattr('backend.agents.forecast.earnings_forecast_agent.get_redis_client', mock_get_redis)
 
     # Patch the fetch_eps_data used within the module
     monkeypatch.setattr(ef_agent, 'fetch_eps_data', AsyncMock(return_value={2022: 1.0, 2023: 1.5})) # Mock fetch_eps_data

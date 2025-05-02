@@ -1,6 +1,7 @@
 from backend.agents.technical.base import TechnicalAgent
 # Correct the import path
 from backend.utils.data_provider import fetch_ohlcv_series
+from backend.utils.decorators import standard_agent_execution  # Import the missing decorator
 import pandas as pd
 import logging
 import numpy as np # Import numpy
@@ -122,7 +123,32 @@ class RSIAgent(TechnicalAgent):
 
 
 # For backwards compatibility
+# Apply the standard decorator
+@standard_agent_execution(agent_name=agent_name, category="technical", cache_ttl=3600)
 async def run(symbol: str, agent_outputs: dict = {}) -> dict:
     agent = RSIAgent()
-    # Add await here
+    # The decorator now handles execution, caching, errors, etc.
+    # We just need the core logic call here.
+    # The decorator passes args/kwargs, so we need to adjust the call slightly
+    # or rely on the decorator passing the symbol correctly.
+    # Assuming the decorator passes symbol as the first arg to the wrapped execute.
+    # Let's simplify: the decorator wraps the agent's execute method directly if possible,
+    # or we adapt the run function. Let's stick to decorating run for now.
+    # The agent instance needs to be created inside the decorated function.
+    # The decorator expects the decorated function to perform the core logic.
+    # Let's refactor slightly: the decorated function will *be* the core logic.
+
+    # Refactored: The decorated function IS the core logic execution
+    # The RSIAgent class logic might need adjustment if it relies on self state
+    # across calls, but typically agents are stateless per call.
+    # Let's assume RSIAgent._execute can be called.
+    # This requires rethinking the structure slightly. How is TechnicalAgent used?
+    # Let's revert to the simpler approach: Decorate the existing run function.
+    # The decorator will call this run function.
+    # The run function then calls agent.execute.
+
+    # Re-applying decorator to the existing run structure:
+    agent = RSIAgent()
+    # The decorator expects func(symbol, *args, **kwargs)
+    # Our run takes (symbol, agent_outputs={}). Let's assume agent_outputs isn't used by decorator.
     return await agent.execute(symbol, agent_outputs)

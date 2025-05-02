@@ -3,7 +3,8 @@ from unittest.mock import AsyncMock, patch, MagicMock
 from backend.agents.event.insider_trade_agent import run as it_run
 
 @pytest.mark.asyncio
-@patch('backend.agents.decorators.get_redis_client') # Correct patch target (where decorator looks it up)
+# Correct patch target: where get_redis_client is IMPORTED/USED in the agent module
+@patch('backend.agents.event.insider_trade_agent.get_redis_client')
 async def test_insider_trade_agent(mock_get_redis, monkeypatch):
     # Set up Redis mock instance and return value correctly
     mock_redis_instance = AsyncMock()

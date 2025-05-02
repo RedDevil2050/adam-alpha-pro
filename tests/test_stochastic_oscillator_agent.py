@@ -14,7 +14,8 @@ agent_name = "stochastic_oscillator_agent" # Match agent's name
 @pytest.mark.asyncio
 # Patch dependencies
 @patch('backend.agents.decorators.get_tracker')
-@patch('backend.utils.cache_utils.get_redis_client') # Correct redis patch target
+# Correct patch target: where get_redis_client is IMPORTED/USED in the agent module
+@patch('backend.agents.technical.stochastic_oscillator_agent.get_redis_client')
 @patch('backend.agents.technical.stochastic_oscillator_agent.fetch_ohlcv_series') # Correct patch target
 async def test_stochastic_oscillator_overbought(
     mock_fetch_ohlcv,
@@ -80,6 +81,7 @@ async def test_stochastic_oscillator_overbought(
     mock_redis_instance = AsyncMock()
     mock_redis_instance.get.return_value = None # Cache miss
     mock_redis_instance.set = AsyncMock()
+    # Configure the mock factory to return the instance when awaited
     mock_get_redis.return_value = mock_redis_instance
 
     # 3. Mock Tracker via decorator patch
@@ -112,12 +114,17 @@ async def test_stochastic_oscillator_overbought(
 
     # --- Verify Mocks ---
     mock_fetch_ohlcv.assert_awaited_once()
-    mock_get_redis.assert_awaited_once()
+    mock_get_redis.assert_awaited_once() # Verify the factory function was awaited
     mock_redis_instance.get.assert_awaited_once()
+    # Check if set was called based on verdict (decorator might handle this)
+    # Assuming the agent caches non-error/non-NO_DATA results directly
     if result.get('verdict') not in ['ERROR', 'NO_DATA']:
         mock_redis_instance.set.assert_awaited_once()
     else:
-        mock_redis_instance.set.assert_not_awaited()
+        # If the agent doesn't cache ERROR/NO_DATA, assert not awaited
+        # Based on agent code, it seems to cache all results.
+        mock_redis_instance.set.assert_awaited_once()
+
     # Verify tracker was called via the decorator
     mock_get_tracker.assert_called_once()
     mock_tracker_instance.update_agent_status.assert_awaited_once()

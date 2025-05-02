@@ -21,9 +21,19 @@ class TestCategoryIntegration:
         results = await category_manager.execute_category(
             CategoryType.TECHNICAL, "RELIANCE.NS"
         )
-        assert results
-        assert any(r["agent_name"].startswith("rsi") for r in results if r)
-        assert any(r["agent_name"].startswith("macd") for r in results if r)
+        assert results is not None, "Category execution should return a list, not None."
+        assert len(results) > 0, "Technical category should execute at least one agent."
+        
+        # Filter out potential None results before checking agent names
+        valid_results = [r for r in results if r is not None and isinstance(r, dict)]
+        assert len(valid_results) > 0, "Expected at least one valid agent result dictionary."
+
+        # Check for specific agent results
+        has_rsi = any(r.get("agent_name", "").startswith("rsi") for r in valid_results)
+        has_macd = any(r.get("agent_name", "").startswith("macd") for r in valid_results)
+        
+        assert has_rsi, "Expected RSI agent result in technical category output."
+        assert has_macd, "Expected MACD agent result in technical category output."
 
     async def test_market_category(self, category_manager):
         """Test market category execution"""

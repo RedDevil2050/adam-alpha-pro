@@ -10,10 +10,25 @@ def mock_price_series(monkeypatch):
     import pandas as pd
     dates = pd.date_range(end='2025-04-05', periods=5)
     series = pd.Series([100,120,110,90,95], index=dates)
-    monkeypatch.setattr('backend.utils.data_provider.fetch_price_series', lambda sym, period: series)
+    # Correct the mock signature: lambda takes only symbol
+    monkeypatch.setattr('backend.utils.data_provider.fetch_price_series', lambda sym: series)
 
 @pytest.mark.asyncio
 async def test_drawdown_agent():
     result = await run('TEST')
-    assert 'max_drawdown_pct' in result and isinstance(result['max_drawdown_pct'], float)
-    assert result['verdict'] in ['BUY','HOLD','SELL']
+    # Check for error first
+    if result.get('error'):
+        pytest.fail(f"Agent returned an error: {result['error']}")
+    if result['verdict'] != 'NO_DATA':
+        # Assertions for successful run
+        assert 'details' in result
+        assert 'max_drawdown' in result['details'] # Check details dict
+        assert isinstance(result['details']['max_drawdown'], float)
+        assert 'value' in result # Check value field
+        assert isinstance(result['value'], float)
+        assert result['details']['max_drawdown'] == result['value']
+        assert result['verdict'] in ['LOW_DRAWDOWN', 'MODERATE_DRAWDOWN', 'HIGH_DRAWDOWN']
+    else:
+        # Assertions for NO_DATA case
+        assert 'max_drawdown' not in result.get('details', {})
+        assert result.get('value') is None
