@@ -65,6 +65,10 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
                         # This part might need adjustment based on actual usage
                         result = func(*args, **kwargs) # Assuming sync functions are possible
 
+                    # Ensure agent_name is in the result before returning/caching
+                    if result and "agent_name" not in result:
+                        result["agent_name"] = agent_name
+
                     # If execution successful, cache the result
                     if result is not None and redis_client:
                         # 3. Cache Result (only on success/valid data)
@@ -105,7 +109,7 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
                         except Exception as tracker_err:
                             logger.warning(f"Failed to update tracker for {agent_name} ({symbol}): {tracker_err}")
 
-                        return result
+                    return result # Return potentially modified result
 
                 except Exception as e:
                     # 5. Standard Error Handling
@@ -120,6 +124,8 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
                         "error": str(e),
                         "agent_name": agent_name,
                     }
+                    # Ensure agent_name is added in error case (already done)
+                    error_result["agent_name"] = agent_name 
 
                     # Try to update tracker even if the main agent logic failed
                     try:
@@ -140,35 +146,27 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
                     return error_result
 
             except Exception as e:
-                # 5. Standard Error Handling
-                # Log the specific agent name causing the error
-                logger.exception(f"Error executing agent {agent_name} for symbol {symbol}: {e}")
+                # Outer exception handling (e.g., Redis connection error)
+                logger.exception(f"Outer error in decorator for agent {agent_name}, symbol {symbol}: {e}")
                 error_result = {
                     "symbol": symbol,
                     "verdict": "ERROR",
                     "confidence": 0.0,
                     "value": None,
                     "details": {},
-                    "error": str(e),
-                    "agent_name": agent_name,
+                    "error": f"Decorator execution error: {e}",
+                    "agent_name": agent_name, # Ensure agent_name is here too
                 }
-
-                # Try to update tracker even if the main agent logic failed
+                # Attempt tracker update even for outer errors
                 try:
                     tracker_instance = get_tracker()
-                    status = "error"
                     if symbol:
                         await tracker_instance.update_agent_status(
-                            category, agent_name, symbol, status, error_result
+                            category, agent_name, symbol, "error", error_result
                         )
-                        logger.debug(f"Tracker updated for {agent_name} ({symbol}): {status} (after main exception)")
-                    else:
-                        logger.warning(f"Skipping tracker update for {agent_name} after exception due to missing symbol.")
-                except (ImportError, AttributeError) as tracker_err:
-                    logger.warning(f"Tracker update failed during error handling: {tracker_err}")
+                        logger.debug(f"Tracker updated for {agent_name} ({symbol}): error (after outer exception)")
                 except Exception as tracker_err:
-                    logger.warning(f"Failed to update tracker during exception handling: {tracker_err}")
-
+                    logger.warning(f"Tracker update failed during outer error handling: {tracker_err}")
                 return error_result
 
         return wrapper

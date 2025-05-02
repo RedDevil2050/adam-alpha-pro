@@ -15,7 +15,8 @@ async def run(symbol: str) -> dict:
 
     # Fetch price series (Core Logic)
     prices = await fetch_price_series(symbol)
-    if not prices or len(prices) < 2:
+    # Use prices.empty for pandas Series check
+    if prices is None or prices.empty or len(prices) < 2:
         # Return the standard NO_DATA format (decorator won't cache this)
         # Decorator will add agent_name if missing
         return {
@@ -28,10 +29,17 @@ async def run(symbol: str) -> dict:
         }
 
     # Calculate drawdown (Core Logic)
-    prices = np.array(prices)
-    peak = np.maximum.accumulate(prices)
-    drawdowns = (prices - peak) / peak
-    max_drawdown = drawdowns.min()
+    # Convert Series to numpy array for calculations
+    prices_arr = prices.to_numpy()
+    peak = np.maximum.accumulate(prices_arr)
+    # Handle potential division by zero if peak is zero
+    # Ensure peak is float to avoid potential integer division issues if prices are int
+    peak = peak.astype(float)
+    # Replace zero peaks with a small number or NaN to avoid division by zero
+    peak[peak == 0] = np.nan 
+    drawdowns = (prices_arr - peak) / peak
+    # Ignore NaNs that might result from zero peaks
+    max_drawdown = np.nanmin(drawdowns)
 
     # Verdict based on drawdown (Core Logic)
     if max_drawdown > -0.1:

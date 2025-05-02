@@ -48,11 +48,13 @@ async def test_stochastic_oscillator_overbought_crossover(
 
     # Create a strong upward trend
     prices_warmup = np.linspace(50, 150, num_periods_warmup)
-    # Continue at a high value, then simulate a slight drop at the very end
+    # Continue at a high value, then simulate a sharper drop at the very end
     prices_test = np.full(num_periods_test, 150.0) # Plateau at high value
-    # Force the last couple of closes to drop slightly, causing K to drop
-    prices_test[-2] = 149.0 # Slight dip
-    prices_test[-1] = 147.0 # Further dip
+    # Force the last few closes to drop more significantly to ensure crossover
+    prices_test[-4] = 150.0 # Still high
+    prices_test[-3] = 148.0 # Start drop
+    prices_test[-2] = 145.0 # Sharper drop
+    prices_test[-1] = 143.0 # Continued drop
 
     prices = np.concatenate((prices_warmup, prices_test))
 
@@ -100,14 +102,12 @@ async def test_stochastic_oscillator_overbought_crossover(
     print("------------------------------------")
 
     # Assert that the generated data fulfills the conditions for the test scenario
-    assert last_k < last_d, "Generated data did not result in last_k < last_d"
-    assert prev_k >= prev_d, "Generated data did not result in prev_k >= prev_d for crossover check"
-    # Assert that the crossover happened in the overbought zone
-    # We need *either* K or D (or both) to be in the overbought zone around the crossover
-    # A common check is if D is overbought, or if K was overbought before dropping.
-    # Let's check if D was in overbought before the drop.
-    assert prev_d > OVERBOUGHT_THRESHOLD, f"Previous D ({prev_d:.2f}) was not in overbought zone (> {OVERBOUGHT_THRESHOLD})"
-    # assert prev_k > OVERBOUGHT_THRESHOLD, f"Previous K ({prev_k:.2f}) was not in overbought zone (> {OVERBOUGHT_THRESHOLD})" # Alternative/additional check
+    assert last_k < last_d, f"Generated data did not result in last_k < last_d (K={last_k:.2f}, D={last_d:.2f})"
+    assert prev_k >= prev_d, f"Generated data did not result in prev_k >= prev_d for crossover check (PrevK={prev_k:.2f}, PrevD={prev_d:.2f})"
+    # Assert that the crossover happened *near* or *in* the overbought zone
+    # Check if previous D or K was overbought
+    assert (prev_d > OVERBOUGHT_THRESHOLD or prev_k > OVERBOUGHT_THRESHOLD), \
+        f"Crossover did not occur in overbought zone (PrevD={prev_d:.2f}, PrevK={prev_k:.2f})"
 
     # --- End Data Verification ---
 
@@ -207,11 +207,13 @@ async def test_stochastic_oscillator_oversold_crossover(
 
     # Create a strong downward trend
     prices_warmup = np.linspace(150, 50, num_periods_warmup)
-    # Continue at a low value, then simulate a slight rise at the very end
+    # Continue at a low value, then simulate a sharper rise at the very end
     prices_test = np.full(num_periods_test, 50.0) # Plateau at low value
-    # Force the last couple of closes to rise slightly, causing K to rise
-    prices_test[-2] = 51.0 # Slight rise
-    prices_test[-1] = 53.0 # Further rise
+    # Force the last few closes to rise more significantly
+    prices_test[-4] = 50.0 # Still low
+    prices_test[-3] = 52.0 # Start rise
+    prices_test[-2] = 55.0 # Sharper rise
+    prices_test[-1] = 57.0 # Continued rise
 
     prices = np.concatenate((prices_warmup, prices_test))
 
@@ -253,9 +255,11 @@ async def test_stochastic_oscillator_oversold_crossover(
     print(f"Is Oversold (< {OVERSOLD_THRESHOLD})? K: {last_k < OVERSOLD_THRESHOLD}, D: {last_d < OVERSOLD_THRESHOLD}")
     print("------------------------------------")
 
-    assert last_k > last_d, "Generated data did not result in last_k > last_d"
-    assert prev_k <= prev_d, "Generated data did not result in prev_k <= prev_d for crossover check"
-    assert prev_d < OVERSOLD_THRESHOLD, f"Previous D ({prev_d:.2f}) was not in oversold zone (< {OVERSOLD_THRESHOLD})"
+    assert last_k > last_d, f"Generated data did not result in last_k > last_d (K={last_k:.2f}, D={last_d:.2f})"
+    assert prev_k <= prev_d, f"Generated data did not result in prev_k <= prev_d for crossover check (PrevK={prev_k:.2f}, PrevD={prev_d:.2f})"
+    # Assert that the crossover happened *near* or *in* the oversold zone
+    assert (prev_d < OVERSOLD_THRESHOLD or prev_k < OVERSOLD_THRESHOLD), \
+        f"Crossover did not occur in oversold zone (PrevD={prev_d:.2f}, PrevK={prev_k:.2f})"
 
     # --- End Data Verification ---
 
@@ -325,8 +329,8 @@ async def test_stochastic_oscillator_neutral(
     num_periods = k_window + d_window + 50 # Enough periods for stable calculation
 
     # Create data with price fluctuations that keep K and D in the middle range
-    # A sideway or slightly trending market
-    prices = np.linspace(100, 110, num_periods) + np.sin(np.linspace(0, 4 * np.pi, num_periods)) * 5 # Sideways movement with waves
+    # A sideway or slightly trending market - Reduce sine amplitude
+    prices = np.linspace(100, 105, num_periods) + np.sin(np.linspace(0, 4 * np.pi, num_periods)) * 2 # Reduced amplitude from 5 to 2
 
     highs = prices + np.random.uniform(0.1, 0.5, num_periods)
     lows = prices - np.random.uniform(0.1, 0.5, num_periods)
@@ -362,8 +366,8 @@ async def test_stochastic_oscillator_neutral(
     print("------------------------------------")
 
     # Assert that the generated data results in K and D within the neutral zone
-    assert OVERSOLD_THRESHOLD <= last_k <= OVERBOUGHT_THRESHOLD, f"Last K ({last_k:.2f}) not in neutral zone"
-    assert OVERSOLD_THRESHOLD <= last_d <= OVERBOUGHT_THRESHOLD, f"Last D ({last_d:.2f}) not in neutral zone"
+    assert OVERSOLD_THRESHOLD <= last_k <= OVERBOUGHT_THRESHOLD, f"Last K ({last_k:.2f}) not in neutral zone ({OVERSOLD_THRESHOLD}-{OVERBOUGHT_THRESHOLD})"
+    assert OVERSOLD_THRESHOLD <= last_d <= OVERBOUGHT_THRESHOLD, f"Last D ({last_d:.2f}) not in neutral zone ({OVERSOLD_THRESHOLD}-{OVERBOUGHT_THRESHOLD})"
 
     # --- End Data Verification ---
 

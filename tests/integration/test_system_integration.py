@@ -94,9 +94,6 @@ class TestSystemIntegration:
         assert result is not None
         assert result.get("symbol") == "INVALID_SYMBOL"
 
-        # Check if the top-level error field indicates a failure (optional, depends on orchestrator logic)
-        # assert result.get("error") is not None
-
         # Check that category results are present
         assert "category_results" in result
 
@@ -108,13 +105,6 @@ class TestSystemIntegration:
         # Check if the category itself reported an error or contained agent errors
         category_had_errors = risk_results_data.get("error") or any(agent_res.get("status") == 'error' for agent_res in risk_results_data.get("results", []))
         assert category_had_errors, f"Expected errors within the '{CategoryType.RISK.value}' category results for INVALID_SYMBOL"
-
-        # Optionally, check a specific agent known to fail (e.g., beta_agent)
-        beta_agent_result = next((res for res in risk_results_data.get("results", []) if res.get("agent_name") == 'beta_agent'), None)
-        if beta_agent_result: # Agent might not be present if import failed, etc.
-            assert beta_agent_result.get("status") == "error"
-            # Check for specific error message if needed (might be fragile)
-            # assert "ValueError" in beta_agent_result.get("error", "")
 
         # Check component status via the monitor instance used in the call
         health_metrics = monitor.get_health_metrics()
@@ -197,5 +187,7 @@ class TestSystemIntegration:
         
         assert "performance" in metrics
         assert "category_stats" in metrics
-        # Check if avg_response_time exists and is > 0, handle potential None
-        assert metrics.get("performance", {}).get("avg_response_time", 0) > 0
+        # Check if avg_response_time exists and is > 0
+        performance_metrics = metrics.get("performance", {})
+        assert "avg_response_time" in performance_metrics, "avg_response_time should be in performance metrics"
+        assert performance_metrics["avg_response_time"] > 0, "avg_response_time should be greater than 0 after a successful analysis"

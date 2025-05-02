@@ -61,9 +61,8 @@ async def test_macd_agent_accuracy(monkeypatch):
     # Let's check they are close or macd is slightly higher.
     macd_val = res['details']['macd']
     signal_val = res['details']['signal']
-    # Corrected comparison: Compare floats directly or use approx on the right side
-    # assert pytest.approx(macd_val) >= signal_val - abs(signal_val * 0.1) # Original assertion caused TypeError
-    assert macd_val >= signal_val - abs(signal_val * 0.1) # Direct float comparison
+    # Corrected comparison: Use pytest.approx on the right side
+    assert macd_val >= pytest.approx(signal_val - abs(signal_val * 0.1))
 
 @pytest.mark.asyncio
 # Use monkeypatch in addition to httpx_mock
