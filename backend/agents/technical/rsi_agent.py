@@ -5,6 +5,7 @@ from backend.agents.decorators import standard_agent_execution  # Corrected impo
 import pandas as pd
 import logging
 import numpy as np # Import numpy
+import datetime # Import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -14,8 +15,12 @@ agent_name = "RSIAgent"
 class RSIAgent(TechnicalAgent):
     async def _execute(self, symbol: str, agent_outputs: dict) -> dict:
         try:
-            # Add await here
-            df = await fetch_ohlcv_series(symbol)
+            # Define date range (e.g., 1 year back from today)
+            end_date = datetime.date.today()
+            start_date = end_date - datetime.timedelta(days=365)
+
+            # Add await here and pass dates
+            df = await fetch_ohlcv_series(symbol, start_date=start_date, end_date=end_date)
             # Add check for DataFrame type and emptiness
             if not isinstance(df, pd.DataFrame) or df.empty:
                 logger.warning(f"[{self.__class__.__name__}] Insufficient or invalid data for {symbol}. Type: {type(df)}")

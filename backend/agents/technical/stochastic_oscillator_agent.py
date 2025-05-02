@@ -7,7 +7,7 @@ from datetime import datetime, timedelta # Added imports
 agent_name = "stochastic_oscillator_agent"
 
 
-async def run(symbol: str) -> dict:
+async def run(symbol: str, agent_outputs: dict = None) -> dict:
     cache_key = f"{agent_name}:{symbol}"
     redis_client = await get_redis_client()
     # Cache check

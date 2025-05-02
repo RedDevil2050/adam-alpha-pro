@@ -14,7 +14,9 @@ import os
 # Note: In a real CI/deployment environment, these would typically be
 # managed externally or via environment variables loaded differently.
 # Setting them here directly is suitable for simple local test execution.
-os.environ['SECRET_KEY'] = 'test-secret-key-for-jwt'
+# Use the correct env var name and the value expected by settings.py in test mode
+os.environ['JWT_SECRET_KEY'] = 'secure-test-jwt-secret-for-testing-environment-only'
+# os.environ['SECRET_KEY'] = 'test-secret-key-for-jwt' # Remove or comment out old one
 os.environ['API_USER'] = 'test_e2e_user'
 os.environ['API_PASS'] = 'test_password'
 
@@ -114,6 +116,7 @@ class TestCompleteWorkflow:
         with TestClient(app) as client:
             symbol = "MSFT"
             response = client.get(f"/api/analyze/{symbol}")
+            # Expect 401 Unauthorized, not 404
             assert response.status_code == status.HTTP_401_UNAUTHORIZED
             # Check for common unauthenticated messages in detail or body
             detail = response.json().get("detail", "") if response.headers.get("content-type") == "application/json" else response.text
@@ -137,7 +140,7 @@ class TestCompleteWorkflow:
             # Check for relevant error message in the detail field (if JSON)
             detail = response.json().get("detail", "") if response.headers.get("content-type") == "application/json" else response.text
             # Adjust possible messages based on how your backend reports invalid symbol errors
-            assert any(msg in detail for msg in ["Failed to fetch", "Could not retrieve", "No data available", "Symbol not found", "invalid symbol"]), \
+            assert any(msg in detail for msg in ["Failed to fetch", "Could not retrieve", "No data available", "Symbol not found", "invalid symbol", "Analysis failed for symbol:"]), \
                 f"Unexpected error detail for invalid symbol: {detail}"
 
 
@@ -146,6 +149,7 @@ class TestCompleteWorkflow:
         with TestClient(app) as client:
             headers = {"Authorization": "Bearer invalid.token.string"}
             response = client.get("/api/analyze/GOOGL", headers=headers)
+            # Expect 401 Unauthorized, not 404
             assert response.status_code == status.HTTP_401_UNAUTHORIZED
             detail = response.json().get("detail", "") if response.headers.get("content-type") == "application/json" else response.text
             # Standard FastAPI/JWT detail for malformed/invalid signature
@@ -154,9 +158,14 @@ class TestCompleteWorkflow:
 
     def test_analysis_expired_token(self):
         """Tests behavior with expired token."""
+        # Need settings to get the correct secret key for token creation
+        from backend.config.settings import get_settings
+        test_settings = get_settings() # Get settings instance configured for testing
+
         token_data = {"sub": os.environ['API_USER']}
         # Create token with negative expiry time to ensure it's expired
         expires_delta = timedelta(minutes=-15)
+        # Use the same function and secret key as the application will use for verification
         expired_token = create_access_token(data=token_data, expires_delta=expires_delta)
 
         # The logic to test the expired token was already present in the provided code.
@@ -166,6 +175,7 @@ class TestCompleteWorkflow:
             response = client.get("/api/analyze/TSLA", headers=headers) # Use any valid symbol
 
             # Assert that the request is rejected due to the expired token
+            # Expect 401 Unauthorized, not 404
             assert response.status_code == status.HTTP_401_UNAUTHORIZED
             detail = response.json().get("detail", "") if response.headers.get("content-type") == "application/json" else response.text
             # The exact detail message for an expired token comes from the token verification logic

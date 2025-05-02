@@ -3,6 +3,7 @@ from backend.utils.data_provider import fetch_ohlcv_series
 import pandas as pd
 import numpy as np
 from loguru import logger
+import datetime # Import datetime
 
 agent_name = "macd_agent"
 
@@ -10,8 +11,12 @@ agent_name = "macd_agent"
 class MACDAgent(TechnicalAgent):
     async def _execute(self, symbol: str, agent_outputs: dict) -> dict:
         try:
-            # Add await here
-            df = await fetch_ohlcv_series(symbol)
+            # Define date range (e.g., 1 year back from today)
+            end_date = datetime.date.today()
+            start_date = end_date - datetime.timedelta(days=365)
+
+            # Add await here and pass dates
+            df = await fetch_ohlcv_series(symbol, start_date=start_date, end_date=end_date)
             # Add check for DataFrame type and emptiness
             if not isinstance(df, pd.DataFrame) or df.empty:
                 logger.warning(f"[{agent_name}] Insufficient or invalid data for {symbol}. Type: {type(df)}")

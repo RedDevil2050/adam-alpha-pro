@@ -6,7 +6,7 @@ from backend.agents.technical.utils import tracker
 agent_name = "bollinger_agent"
 
 
-async def run(symbol: str, window: int = 20, num_std: float = 2.0) -> dict:
+async def run(symbol: str, agent_outputs: dict = None, window: int = 20, num_std: float = 2.0) -> dict:
     cache_key = f"{agent_name}:{symbol}:{window}:{num_std}"
     redis_client = await get_redis_client()
     # 1) Cache check

@@ -6,7 +6,7 @@ from backend.agents.technical.utils import tracker
 agent_name = "ma_crossover_agent"
 
 
-async def run(symbol: str, short_window: int = 50, long_window: int = 200) -> dict:
+async def run(symbol: str, agent_outputs: dict = None, short_window: int = 50, long_window: int = 200) -> dict:
     redis_client = await get_redis_client()
     cache_key = f"{agent_name}:{symbol}:{short_window}:{long_window}"
     # 1) Cache check

@@ -95,5 +95,10 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     # Cache and track - Caching (set) is handled by decorator
     # await redis_client.set(cache_key, result, ex=3600)
     # Tracker update might still be needed here or moved inside decorator if appropriate
-    await tracker.update("technical", agent_name, "implemented")
+    if tracker: # Add check for tracker
+        await tracker.update("technical", agent_name, "implemented")
+    else:
+        # Optionally log a warning if tracker is None
+        # logger.warning(f"[{agent_name}] Tracker object is None, skipping update.")
+        pass # Or handle the case where tracker is None appropriately
     return result

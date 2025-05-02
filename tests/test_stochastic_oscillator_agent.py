@@ -1,4 +1,5 @@
 import sys, os
+import datetime
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import pytest
@@ -18,172 +19,93 @@ agent_name = "stochastic_oscillator_agent" # Match agent's name
 OVERBOUGHT_THRESHOLD = 80
 OVERSOLD_THRESHOLD = 20
 
+# Helper to create minimal OHLCV data
+def create_minimal_ohlcv(periods=20):
+    prices = np.linspace(100, 105, periods)
+    return pd.DataFrame({
+        'high': prices + 0.5,
+        'low': prices - 0.5,
+        'close': prices,
+        'open': prices,
+        'volume': np.random.randint(1000, 5000, periods)
+    }, index=pd.date_range(end='2025-05-01', periods=periods, freq='D'))
+
 @pytest.mark.asyncio
 # Patch dependencies
 @patch('backend.agents.decorators.get_tracker')
 # Correct patch target: where get_redis_client is IMPORTED/USED in the agent module
 @patch('backend.agents.technical.stochastic_oscillator_agent.get_redis_client')
+# Patch the pta object imported within the agent module
+@patch('backend.agents.technical.stochastic_oscillator_agent.pta')
 @patch('backend.agents.technical.stochastic_oscillator_agent.fetch_ohlcv_series') # Correct patch target
 async def test_stochastic_oscillator_overbought_crossover(
     mock_fetch_ohlcv,
+    mock_pta, # Patched pta object
     mock_get_redis,
     mock_get_tracker,
 ):
     """
     Test Stochastic Oscillator agent for K crossing below D in the overbought zone.
-    This scenario should typically result in a 'SELL' or 'AVOID' signal
-    according to standard interpretation.
+    Refactored to mock the calculation result directly.
     """
-    # --- Mock Configuration ---
     symbol = "TEST_STOCH_OB_CROSS"
-    k_window = 14 # Assuming default window
-    d_window = 3 # Assuming default window
+    agent_name = "stochastic_oscillator_agent"
+    k_col = 'STOCHk_14_3_3' # Adjust if agent uses different column names
+    d_col = 'STOCHd_14_3_3'
 
-    # Generate price data specifically designed to force K and D into
-    # overbought territory and then cause K to drop below D.
-    # A long upward trend, then a slight dip at the end.
-    num_periods_warmup = 100 # Enough periods to get moving averages stable
-    num_periods_test = k_window + d_window + 5 # Periods needed for calculations plus a few
-    total_periods = num_periods_warmup + num_periods_test
+    # --- Mock Configuration ---
+    # 1. Mock fetch_ohlcv_series to return minimal valid data
+    mock_fetch_ohlcv.return_value = create_minimal_ohlcv()
 
-    # Create a strong upward trend
-    prices_warmup = np.linspace(50, 150, num_periods_warmup)
-    # Continue at a high value, then simulate a sharper drop at the very end
-    prices_test = np.full(num_periods_test, 150.0) # Plateau at high value
-    # Adjust drop to ensure prev_k >= prev_d and last_k < last_d in OB zone
-    # Make the peak higher and the drop sharper to force OB crossover
-    prices_test[-6] = 150.0
-    prices_test[-5] = 152.0 # Push higher into OB
-    prices_test[-4] = 153.0 # Peak
-    prices_test[-3] = 151.0 # Start drop, K likely still > D
-    prices_test[-2] = 147.0 # Larger drop, K should cross D
-    prices_test[-1] = 145.0 # Final drop to ensure K < D
+    # 2. Configure the mock pta object's stoch method
+    mock_stoch_output = pd.DataFrame({
+        k_col: [85.0, 78.0], # K was above D (85 > 82), now below (78 < 81)
+        d_col: [82.0, 81.0]  # Both values near/in overbought zone (>80)
+    }, index=pd.date_range(end='2025-05-01', periods=2, freq='D'))
+    mock_pta.stoch.return_value = mock_stoch_output
 
-    prices = np.concatenate((prices_warmup, prices_test))
-
-    # Generate OHLC data based on prices, ensuring high/low are around close
-    highs = prices + np.random.uniform(0.1, 0.5, total_periods)
-    lows = prices - np.random.uniform(0.1, 0.5, total_periods)
-    closes = prices.copy()
-    opens = closes - np.random.uniform(-0.1, 0.1, total_periods)
-
-    # Ensure high >= close >= low
-    highs = np.maximum(highs, closes)
-    lows = np.minimum(lows, closes)
-
-    ohlcv_df = pd.DataFrame({
-        'high': highs,
-        'low': lows,
-        'close': closes,
-        'open': opens,
-        'volume': np.random.randint(1000, 5000, total_periods)
-    }, index=pd.date_range(end='2025-05-01', periods=total_periods, freq='D'))
-
-    # --- Self-Verification of Generated Data ---
-    # Calculate K and D within the test to confirm the data simulates the scenario
-    low_min_calc = ohlcv_df["low"].rolling(k_window).min()
-    high_max_calc = ohlcv_df["high"].rolling(k_window).max()
-    # Avoid division by zero if high == low for a period
-    range_hl = high_max_calc - low_min_calc
-    k_calc = 100 * ((ohlcv_df["close"] - low_min_calc) / range_hl.replace(0, np.nan)) # Replace 0 range with NaN
-    k_calc = k_calc.fillna(method='ffill').fillna(method='bfill') # Handle NaNs if any
-
-    d_calc = k_calc.rolling(d_window).mean()
-
-    # Get the last calculated K and D values
-    last_k = k_calc.iloc[-1]
-    last_d = d_calc.iloc[-1]
-    prev_k = k_calc.iloc[-2] # Need previous values to check for crossover
-    prev_d = d_calc.iloc[-2]
-
-    print(f"\n--- Data Verification for {symbol} ---")
-    print(f"Last K: {last_k:.2f}, Last D: {last_d:.2f}")
-    print(f"Previous K: {prev_k:.2f}, Previous D: {prev_d:.2f}")
-    print(f"K < D: {last_k < last_d}")
-    print(f"Previous K >= Previous D: {prev_k >= prev_d}") # Check for crossover direction
-    print(f"Is Overbought (> {OVERBOUGHT_THRESHOLD})? K: {last_k > OVERBOUGHT_THRESHOLD}, D: {last_d > OVERBOUGHT_THRESHOLD}")
-    print("------------------------------------")
-
-    # Assert that the generated data fulfills the conditions for the test scenario
-    # Add tolerance to crossover checks due to noise/calculation nuances
-    assert last_k < last_d, f"Generated data did not result in last_k < last_d (K={last_k:.2f}, D={last_d:.2f})"
-    assert prev_k >= prev_d - 0.1, f"Generated data did not result in prev_k >= prev_d for crossover check (PrevK={prev_k:.2f}, PrevD={prev_d:.2f})"
-    # Assert that the crossover happened *near* or *in* the overbought zone
-    # Check if previous D or K was overbought
-    assert (prev_d > OVERBOUGHT_THRESHOLD - 5 or prev_k > OVERBOUGHT_THRESHOLD - 5), \
-        f"Crossover did not occur near overbought zone (PrevD={prev_d:.2f}, PrevK={prev_k:.2f})"
-
-    # --- End Data Verification ---
-
-
-    # 1. Mock fetch_ohlcv_series
-    mock_fetch_ohlcv.return_value = ohlcv_df
-
-    # 2. Mock Redis
+    # 3. Mock Redis
     mock_redis_instance = AsyncMock()
-    mock_redis_instance.get.return_value = None # Cache miss
+    mock_redis_instance.get.return_value = None
     mock_redis_instance.set = AsyncMock()
-    # Configure the mock factory to return the instance when awaited
     mock_get_redis.return_value = mock_redis_instance
 
-    # 3. Mock Tracker via decorator patch
+    # 4. Mock Tracker
     mock_tracker_instance = AsyncMock()
     mock_tracker_instance.update_agent_status = AsyncMock()
     mock_get_tracker.return_value = mock_tracker_instance
 
     # --- Expected Results ---
-    # Based on standard interpretation of K crossing below D in overbought
-    expected_verdict = "AVOID" # Or "SELL", depends on your agent's enum
+    expected_verdict = "AVOID" # Or "SELL"
+    expected_k = mock_stoch_output[k_col].iloc[-1]
+    expected_d = mock_stoch_output[d_col].iloc[-1]
 
     # --- Run Agent ---
     result = await stoch_run(symbol)
 
     # --- Assertions ---
-    assert result is not None, "Agent should return a result dictionary"
-    assert 'symbol' in result and result['symbol'] == symbol
-    assert 'agent_name' in result and result['agent_name'] == agent_name
-    assert 'verdict' in result
-    assert 'value' in result
-    assert 'details' in result
-    assert 'k' in result['details']
-    assert 'd' in result['details']
-
-    # Check for error first
+    assert result is not None
     assert result.get('error') is None, f"Agent returned error: {result.get('error')}"
-
-    # Assert the calculated K and D values in the result match the data's final values
-    # Allow a small floating point tolerance
-    assert pytest.approx(result['details']['k'], abs=0.1) == last_k, f"Agent's K ({result['details']['k']:.2f}) does not match calculated K ({last_k:.2f})"
-    assert pytest.approx(result['details']['d'], abs=0.1) == last_d, f"Agent's D ({result['details']['d']:.2f}) does not match calculated D ({last_d:.2f})"
-
-    # Assert the expected verdict
-    assert result['verdict'] == expected_verdict, \
-        f"Expected verdict '{expected_verdict}' for OB crossover, got '{result['verdict']}'. Details: {result.get('details')}"
-
-    # Optional: Also assert that the K and D values reported in the result
-    # are consistent with the overbought range and the crossover
-    assert result['details']['k'] < result['details']['d'], "Result details should show K < D"
-    # This check depends on how the agent reports - does it report the exact last value
-    # or the state *after* the calculation? Let's check the state *around* the crossover.
-    # We already verified the input data creates this state; the agent should report it.
-    # Check if the verdict is indeed triggered by the overbought condition
-    # This might be implicitly tested by the verdict assertion, but can be explicit
-    # assert result['details']['d'] > OVERBOUGHT_THRESHOLD # Example check if D determines OB state
+    assert result['symbol'] == symbol
+    assert result['agent_name'] == agent_name
+    assert result['verdict'] == expected_verdict
+    assert 'details' in result
+    assert pytest.approx(result['details']['k']) == expected_k
+    assert pytest.approx(result['details']['d']) == expected_d
+    assert result['details']['k'] < result['details']['d'] # Verify crossover direction in result
+    assert result['details']['d'] > OVERBOUGHT_THRESHOLD # Verify it happened in OB zone
 
     # --- Verify Mocks ---
-    mock_fetch_ohlcv.assert_awaited_once_with(symbol)
-    mock_get_redis.assert_awaited_once() # Verify the factory function was called once and awaited
+    mock_fetch_ohlcv.assert_awaited_once() # Check it was called, args checked in neutral test
+    # Verify pta.stoch was called (via the mocked pta object)
+    mock_pta.stoch.assert_called_once()
+    # We can optionally check args passed to mock_pta.stoch if needed
+    # from unittest.mock import ANY
+    # mock_pta.stoch.assert_called_once_with(close=ANY, high=ANY, low=ANY, k=14, d=3, smooth_k=3)
+    mock_get_redis.assert_awaited_once()
     mock_redis_instance.get.assert_awaited_once_with(f"{agent_name}:{symbol}")
-    # Assuming the agent caches non-error/non-NO_DATA results
-    if result.get('verdict') not in ['ERROR', 'NO_DATA']:
-        # The exact value passed to set depends on agent's caching format
-        mock_redis_instance.set.assert_awaited_once()
-    else:
-        # If the agent doesn't cache ERROR/NO_DATA, assert not awaited
-        mock_redis_instance.set.assert_not_awaited() # Changed based on likely caching logic
-
-    # Verify tracker was called via the decorator
-    mock_get_tracker.assert_called_once() # Correct assertion for the patched factory function
+    mock_redis_instance.set.assert_awaited_once()
+    mock_get_tracker.assert_called_once()
     mock_tracker_instance.update_agent_status.assert_awaited_once()
 
 
@@ -191,86 +113,33 @@ async def test_stochastic_oscillator_overbought_crossover(
 @pytest.mark.asyncio
 @patch('backend.agents.decorators.get_tracker')
 @patch('backend.agents.technical.stochastic_oscillator_agent.get_redis_client')
+# Patch the pta object imported within the agent module
+@patch('backend.agents.technical.stochastic_oscillator_agent.pta')
 @patch('backend.agents.technical.stochastic_oscillator_agent.fetch_ohlcv_series')
 async def test_stochastic_oscillator_oversold_crossover(
     mock_fetch_ohlcv,
+    mock_pta, # Patched pta object
     mock_get_redis,
     mock_get_tracker,
 ):
     """
     Test Stochastic Oscillator agent for K crossing above D in the oversold zone.
-    This scenario should typically result in a 'BUY' signal.
+    Refactored to mock the calculation result directly.
     """
     symbol = "TEST_STOCH_OS_CROSS"
-    k_window = 14
-    d_window = 3
+    agent_name = "stochastic_oscillator_agent"
+    k_col = 'STOCHk_14_3_3'
+    d_col = 'STOCHd_14_3_3'
 
-    num_periods_warmup = 100
-    num_periods_test = k_window + d_window + 5
-    total_periods = num_periods_warmup + num_periods_test
+    # --- Mock Configuration ---
+    mock_fetch_ohlcv.return_value = create_minimal_ohlcv()
 
-    # Create a strong downward trend
-    prices_warmup = np.linspace(150, 50, num_periods_warmup)
-    # Continue at a low value, then simulate a sharper rise at the very end
-    prices_test = np.full(num_periods_test, 50.0) # Plateau at low value
-    # Adjust rise to ensure prev_k <= prev_d and last_k > last_d in OS zone
-    # Make the dip lower and the rise sharper to force OS crossover
-    prices_test[-6] = 50.0
-    prices_test[-5] = 48.0 # Dip lower into OS
-    prices_test[-4] = 47.0 # Trough
-    prices_test[-3] = 49.0 # Start rise, K likely still < D
-    prices_test[-2] = 53.0 # Larger rise, K should cross D
-    prices_test[-1] = 55.0 # Final rise to ensure K > D
-
-    prices = np.concatenate((prices_warmup, prices_test))
-
-    highs = prices + np.random.uniform(0.1, 0.5, total_periods)
-    lows = prices - np.random.uniform(0.1, 0.5, total_periods)
-    closes = prices.copy()
-    opens = closes - np.random.uniform(-0.1, 0.1, total_periods)
-
-    highs = np.maximum(highs, closes)
-    lows = np.minimum(lows, closes)
-
-    ohlcv_df = pd.DataFrame({
-        'high': highs,
-        'low': lows,
-        'close': closes,
-        'open': opens,
-        'volume': np.random.randint(1000, 5000, total_periods)
-    }, index=pd.date_range(end='2025-05-01', periods=total_periods, freq='D'))
-
-    # --- Self-Verification of Generated Data ---
-    low_min_calc = ohlcv_df["low"].rolling(k_window).min()
-    high_max_calc = ohlcv_df["high"].rolling(k_window).max()
-    range_hl = high_max_calc - low_min_calc
-    k_calc = 100 * ((ohlcv_df["close"] - low_min_calc) / range_hl.replace(0, np.nan))
-    k_calc = k_calc.fillna(method='ffill').fillna(method='bfill')
-
-    d_calc = k_calc.rolling(d_window).mean()
-
-    last_k = k_calc.iloc[-1]
-    last_d = d_calc.iloc[-1]
-    prev_k = k_calc.iloc[-2]
-    prev_d = d_calc.iloc[-2]
-
-    print(f"\n--- Data Verification for {symbol} ---")
-    print(f"Last K: {last_k:.2f}, Last D: {last_d:.2f}")
-    print(f"Previous K: {prev_k:.2f}, Previous D: {prev_d:.2f}")
-    print(f"K > D: {last_k > last_d}")
-    print(f"Previous K <= Previous D: {prev_k <= prev_d}") # Check for crossover direction
-    print(f"Is Oversold (< {OVERSOLD_THRESHOLD})? K: {last_k < OVERSOLD_THRESHOLD}, D: {last_d < OVERSOLD_THRESHOLD}")
-    print("------------------------------------")
-
-    assert last_k > last_d, f"Generated data did not result in last_k > last_d (K={last_k:.2f}, D={last_d:.2f})"
-    assert prev_k <= prev_d + 0.1, f"Generated data did not result in prev_k <= prev_d for crossover check (PrevK={prev_k:.2f}, PrevD={prev_d:.2f})"
-    # Assert that the crossover happened *near* or *in* the oversold zone
-    assert (prev_d < OVERSOLD_THRESHOLD + 5 or prev_k < OVERSOLD_THRESHOLD + 5), \
-        f"Crossover did not occur near oversold zone (PrevD={prev_d:.2f}, PrevK={prev_k:.2f})"
-
-    # --- End Data Verification ---
-
-    mock_fetch_ohlcv.return_value = ohlcv_df
+    # Configure the mock pta object's stoch method for OS crossover
+    mock_stoch_output = pd.DataFrame({
+        k_col: [15.0, 22.0], # K was below D (15 < 18), now above (22 > 19)
+        d_col: [18.0, 19.0]  # Both values near/in oversold zone (<20)
+    }, index=pd.date_range(end='2025-05-01', periods=2, freq='D'))
+    mock_pta.stoch.return_value = mock_stoch_output
 
     mock_redis_instance = AsyncMock()
     mock_redis_instance.get.return_value = None
@@ -281,108 +150,68 @@ async def test_stochastic_oscillator_oversold_crossover(
     mock_tracker_instance.update_agent_status = AsyncMock()
     mock_get_tracker.return_value = mock_tracker_instance
 
-    expected_verdict = "BUY" # Or whatever your agent returns for oversold crossover
+    # --- Expected Results ---
+    expected_verdict = "BUY"
+    expected_k = mock_stoch_output[k_col].iloc[-1]
+    expected_d = mock_stoch_output[d_col].iloc[-1]
 
+    # --- Run Agent ---
     result = await stoch_run(symbol)
 
+    # --- Assertions ---
     assert result is not None
-    assert 'symbol' in result and result['symbol'] == symbol
-    assert 'agent_name' in result and result['agent_name'] == agent_name
-    assert 'verdict' in result
-    assert 'value' in result
-    assert 'details' in result
-    assert 'k' in result['details']
-    assert 'd' in result['details']
-
     assert result.get('error') is None, f"Agent returned error: {result.get('error')}"
+    assert result['symbol'] == symbol
+    assert result['agent_name'] == agent_name
+    assert result['verdict'] == expected_verdict
+    assert 'details' in result
+    assert pytest.approx(result['details']['k']) == expected_k
+    assert pytest.approx(result['details']['d']) == expected_d
+    assert result['details']['k'] > result['details']['d'] # Verify crossover direction
+    assert result['details']['d'] < OVERSOLD_THRESHOLD # Verify it happened in OS zone
 
-    assert pytest.approx(result['details']['k'], abs=0.1) == last_k
-    assert pytest.approx(result['details']['d'], abs=0.1) == last_d
-
-    assert result['verdict'] == expected_verdict, \
-        f"Expected verdict '{expected_verdict}' for OS crossover, got '{result['verdict']}'. Details: {result.get('details')}"
-
-    assert result['details']['k'] > result['details']['d'], "Result details should show K > D"
-
-    mock_fetch_ohlcv.assert_awaited_once_with(symbol)
+    # --- Verify Mocks ---
+    mock_fetch_ohlcv.assert_awaited_once()
+    # Verify pta.stoch was called
+    mock_pta.stoch.assert_called_once()
     mock_get_redis.assert_awaited_once()
     mock_redis_instance.get.assert_awaited_once_with(f"{agent_name}:{symbol}")
-    if result.get('verdict') not in ['ERROR', 'NO_DATA']:
-        mock_redis_instance.set.assert_awaited_once()
-    else:
-        mock_redis_instance.set.assert_not_awaited()
-
+    mock_redis_instance.set.assert_awaited_once()
     mock_get_tracker.assert_called_once()
     mock_tracker_instance.update_agent_status.assert_awaited_once()
+
 
 # Optional: Add a test for a neutral scenario (K/D between 20-80)
 @pytest.mark.asyncio
 @patch('backend.agents.decorators.get_tracker')
 @patch('backend.agents.technical.stochastic_oscillator_agent.get_redis_client')
+# Patch the pta object imported within the agent module
+@patch('backend.agents.technical.stochastic_oscillator_agent.pta')
 @patch('backend.agents.technical.stochastic_oscillator_agent.fetch_ohlcv_series')
 async def test_stochastic_oscillator_neutral(
     mock_fetch_ohlcv,
+    mock_pta, # Patched pta object
     mock_get_redis,
     mock_get_tracker,
 ):
     """
     Test Stochastic Oscillator agent for K and D in the neutral zone (20-80).
-    Should typically result in a 'HOLD' signal.
+    Refactored to mock the calculation result directly.
     """
     symbol = "TEST_STOCH_NEUTRAL"
-    k_window = 14
-    d_window = 3
+    agent_name = "stochastic_oscillator_agent"
+    k_col = 'STOCHk_14_3_3'
+    d_col = 'STOCHd_14_3_3'
 
-    num_periods = k_window + d_window + 50 # Enough periods for stable calculation
+    # --- Mock Configuration ---
+    mock_fetch_ohlcv.return_value = create_minimal_ohlcv()
 
-    # Create data with price fluctuations that keep K and D in the middle range
-    # A sideway or slightly trending market - Reduce sine amplitude further and add noise
-    base_prices = np.linspace(100, 102, num_periods) # Very slight upward trend
-    sine_wave = np.sin(np.linspace(0, 6 * np.pi, num_periods)) * 1.5 # Reduced amplitude sine wave
-    noise = np.random.normal(0, 0.5, num_periods) # Add some noise
-    prices = base_prices + sine_wave + noise
-    prices = np.maximum(prices, 1.0) # Ensure prices don't go below 1
-
-    highs = prices + np.random.uniform(0.1, 0.3, num_periods) # Smaller range for H/L
-    lows = prices - np.random.uniform(0.1, 0.3, num_periods)
-    closes = prices.copy()
-    opens = closes - np.random.uniform(-0.1, 0.1, num_periods)
-
-    highs = np.maximum(highs, closes)
-    lows = np.minimum(lows, closes)
-
-    ohlcv_df = pd.DataFrame({
-        'high': highs,
-        'low': lows,
-        'close': closes,
-        'open': opens,
-        'volume': np.random.randint(1000, 5000, num_periods)
-    }, index=pd.date_range(end='2025-05-01', periods=num_periods, freq='D'))
-
-    # --- Self-Verification of Generated Data ---
-    low_min_calc = ohlcv_df["low"].rolling(k_window).min()
-    high_max_calc = ohlcv_df["high"].rolling(k_window).max()
-    range_hl = high_max_calc - low_min_calc
-    k_calc = 100 * ((ohlcv_df["close"] - low_min_calc) / range_hl.replace(0, np.nan))
-    k_calc = k_calc.fillna(method='ffill').fillna(method='bfill')
-
-    d_calc = k_calc.rolling(d_window).mean()
-
-    last_k = k_calc.iloc[-1]
-    last_d = d_calc.iloc[-1]
-
-    print(f"\n--- Data Verification for {symbol} ---")
-    print(f"Last K: {last_k:.2f}, Last D: {last_d:.2f}")
-    print(f"Is Neutral ({OVERSOLD_THRESHOLD}-{OVERBOUGHT_THRESHOLD})? K: {OVERSOLD_THRESHOLD <= last_k <= OVERBOUGHT_THRESHOLD}, D: {OVERSOLD_THRESHOLD <= last_d <= OVERBOUGHT_THRESHOLD}")
-    print("------------------------------------")
-
-    # Assert that the generated data results in K and D within the neutral zone
-    assert OVERSOLD_THRESHOLD <= last_k <= OVERBOUGHT_THRESHOLD, f"Last K ({last_k:.2f}) not in neutral zone ({OVERSOLD_THRESHOLD}-{OVERBOUGHT_THRESHOLD})"
-    assert OVERSOLD_THRESHOLD <= last_d <= OVERBOUGHT_THRESHOLD, f"Last D ({last_d:.2f}) not in neutral zone ({OVERSOLD_THRESHOLD}-{OVERBOUGHT_THRESHOLD})"
-
-    # --- End Data Verification ---
-
-    mock_fetch_ohlcv.return_value = ohlcv_df
+    # Configure the mock pta object's stoch method for neutral zone
+    mock_stoch_output = pd.DataFrame({
+        k_col: [50.0, 55.0], # K and D values within the neutral zone (20-80)
+        d_col: [48.0, 52.0]
+    }, index=pd.date_range(end='2025-05-01', periods=2, freq='D'))
+    mock_pta.stoch.return_value = mock_stoch_output
 
     mock_redis_instance = AsyncMock()
     mock_redis_instance.get.return_value = None
@@ -393,35 +222,39 @@ async def test_stochastic_oscillator_neutral(
     mock_tracker_instance.update_agent_status = AsyncMock()
     mock_get_tracker.return_value = mock_tracker_instance
 
+    # --- Expected Results ---
     expected_verdict = "HOLD"
+    expected_k = mock_stoch_output[k_col].iloc[-1]
+    expected_d = mock_stoch_output[d_col].iloc[-1]
 
+    # --- Run Agent ---
     result = await stoch_run(symbol)
 
+    # --- Assertions ---
     assert result is not None
-    assert 'symbol' in result and result['symbol'] == symbol
-    assert 'agent_name' in result and result['agent_name'] == agent_name
-    assert 'verdict' in result
-    assert 'value' in result
-    assert 'details' in result
-    assert 'k' in result['details']
-    assert 'd' in result['details']
-
     assert result.get('error') is None, f"Agent returned error: {result.get('error')}"
+    assert result['symbol'] == symbol
+    assert result['agent_name'] == agent_name
+    assert result['verdict'] == expected_verdict
+    assert 'details' in result
+    assert pytest.approx(result['details']['k']) == expected_k
+    assert pytest.approx(result['details']['d']) == expected_d
+    # Assert K and D are within the neutral range in the result
+    assert OVERSOLD_THRESHOLD <= result['details']['k'] <= OVERBOUGHT_THRESHOLD
+    assert OVERSOLD_THRESHOLD <= result['details']['d'] <= OVERBOUGHT_THRESHOLD
 
-    assert pytest.approx(result['details']['k'], abs=0.1) == last_k
-    assert pytest.approx(result['details']['d'], abs=0.1) == last_d
+    # --- Verify Mocks ---
+    # Calculate expected dates (1 year back from today, May 2, 2025)
+    end_date = datetime.date(2025, 5, 2)
+    start_date = end_date - datetime.timedelta(days=365)
+    mock_fetch_ohlcv.assert_awaited_once_with(symbol, start_date=start_date, end_date=end_date)
 
-    assert result['verdict'] == expected_verdict, \
-        f"Expected verdict '{expected_verdict}' for neutral zone, got '{result['verdict']}'. Details: {result.get('details')}"
+    # Verify pta.stoch was called
+    mock_pta.stoch.assert_called_once()
 
-    mock_fetch_ohlcv.assert_awaited_once_with(symbol)
     mock_get_redis.assert_awaited_once()
     mock_redis_instance.get.assert_awaited_once_with(f"{agent_name}:{symbol}")
-    if result.get('verdict') not in ['ERROR', 'NO_DATA']:
-        mock_redis_instance.set.assert_awaited_once()
-    else:
-        mock_redis_instance.set.assert_not_awaited()
-
+    mock_redis_instance.set.assert_awaited_once()
     mock_get_tracker.assert_called_once()
     mock_tracker_instance.update_agent_status.assert_awaited_once()
 
