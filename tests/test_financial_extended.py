@@ -19,17 +19,42 @@ from backend.agents.valuation.ev_ebitda_agent import run as ev_run
 async def test_rsi_agent_precision(monkeypatch):
     # Up/Down series for RSI=100 exactly
     prices = pd.Series(list(range(1, 16)) + list(range(15, 0, -1)))
-    monkeypatch.setattr('backend.utils.data_provider.fetch_price_series', lambda symbol: prices)
+    # Patch fetch_ohlcv_series as that's what rsi_agent uses
+    async def mock_fetch_ohlcv(symbol):
+        # Return a DataFrame with a 'close' column
+        return pd.DataFrame({'close': prices})
+    monkeypatch.setattr('backend.agents.technical.rsi_agent.fetch_ohlcv_series', mock_fetch_ohlcv)
+    # Mock get_market_context as it's called by the agent
+    monkeypatch.setattr('backend.agents.technical.rsi_agent.RSIAgent.get_market_context', AsyncMock(return_value={"regime": "NEUTRAL"}))
+    
     res = await rsi_run('TST')
-    assert pytest.approx(100.0, rel=1e-2) == res['rsi']
+    # Assert the primary 'value' field which contains the RSI
+    assert 'value' in res, "'value' key (containing RSI) missing from rsi_agent result"
+    assert pytest.approx(100.0, rel=1e-2) == res['value']
 
 @pytest.mark.asyncio
 async def test_macd_agent_precision(monkeypatch):
     prices = pd.Series([i for i in range(1,30)])
-    monkeypatch.setattr('backend.utils.data_provider.fetch_price_series', lambda symbol: prices)
+    # Patch fetch_ohlcv_series as that's what macd_agent uses
+    async def mock_fetch_ohlcv(symbol):
+        # Return a DataFrame with a 'close' column
+        return pd.DataFrame({'close': prices})
+    monkeypatch.setattr('backend.agents.technical.macd_agent.fetch_ohlcv_series', mock_fetch_ohlcv)
+    # Mock get_market_context as it's called by the agent
+    monkeypatch.setattr('backend.agents.technical.macd_agent.MACDAgent.get_market_context', AsyncMock(return_value={"regime": "NEUTRAL"}))
+
     res = await macd_run('TST')
-    # Compare to expected using last 3 values (approx)
-    assert pytest.approx(res['macd'], rel=0.1) == res['signal'] or res['macd'] > res['signal']
+    # Check for errors first
+    assert 'error' not in res or res['error'] is None, f"MACD agent returned error: {res.get('error')}"
+    # Assert keys exist before accessing
+    assert 'details' in res, "'details' key missing from macd_agent result"
+    assert 'macd' in res['details'], "'macd' key missing from macd_agent details"
+    assert 'signal' in res['details'], "'signal' key missing from macd_agent details"
+    
+    # Compare macd and signal from the details dictionary
+    macd_val = res['details']['macd']
+    signal_val = res['details']['signal']
+    assert pytest.approx(macd_val, rel=0.1) == signal_val or macd_val > signal_val
 
 @pytest.mark.asyncio
 async def test_beta_and_volatility(monkeypatch):
@@ -59,14 +84,17 @@ async def test_beta_and_volatility(monkeypatch):
     # Run agents
     res_beta = await beta_run('TST')
     # Check for error first, or assert key exists
-    assert 'error' not in res_beta, f"Beta agent returned error: {res_beta.get('error')}"
-    assert 'beta' in res_beta, "'beta' key missing from beta_agent result"
-    assert pytest.approx(1.0, rel=1e-2) == res_beta['beta']
+    assert 'error' not in res_beta or res_beta['error'] is None, f"Beta agent returned error: {res_beta.get('error')}"
+    # Assert the primary 'value' field for beta
+    assert 'value' in res_beta, "'value' key (containing beta) missing from beta_agent result"
+    assert pytest.approx(1.0, rel=1e-2) == res_beta['value']
 
     # Volatility agent also uses fetch_price_series, mock is already set
     res_vol = await vol_run('TST')
-    assert 'error' not in res_vol, f"Volatility agent returned error: {res_vol.get('error')}"
-    assert 'volatility' in res_vol, "'volatility' key missing from vol_run result"
+    assert 'error' not in res_vol or res_vol['error'] is None, f"Volatility agent returned error: {res_vol.get('error')}"
+    # Assert the primary 'value' field for volatility
+    assert 'value' in res_vol, "'value' key (containing volatility) missing from vol_run result"
     # For linear series, returns are constant (except first NaN), std dev should be 0
-    assert pytest.approx(0.0, abs=1e-6) == res_vol['volatility']
+    # The agent returns annualized volatility percentage
+    assert pytest.approx(0.0, abs=1e-4) == res_vol['value']
 
