@@ -50,10 +50,11 @@ class TestCategoryIntegration:
         assert len(valid_results) > 0, f"Expected at least one valid agent result dictionary for {CategoryType.TECHNICAL.name} category for {symbol}."
 
         # Check for specific agents expected in this category
-        has_rsi = any(r.get("agent_name", "").startswith("rsi") for r in valid_results)
+        # Corrected check for RSI agent name (case-sensitive)
+        has_rsi = any(r.get("agent_name", "").startswith("RSI") for r in valid_results)
         has_macd = any(r.get("agent_name", "").startswith("macd") for r in valid_results)
 
-        assert has_rsi, f"Expected 'rsi' agent result in {CategoryType.TECHNICAL.name} category output for {symbol}"
+        assert has_rsi, f"Expected 'RSI' agent result in {CategoryType.TECHNICAL.name} category output for {symbol}"
         assert has_macd, f"Expected 'macd' agent result in {CategoryType.TECHNICAL.name} category output for {symbol}"
 
     async def test_market_category(self, category_manager):

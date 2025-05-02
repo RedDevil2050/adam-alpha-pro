@@ -6,6 +6,7 @@ from backend.utils.metrics_collector import MetricsCollector
 from datetime import datetime
 import asyncio
 from loguru import logger
+import time # Ensure time is imported
 
 
 class SystemOrchestrator:
@@ -46,6 +47,7 @@ class SystemOrchestrator:
     ) -> Dict:
         """Run full analysis with advanced caching and error recovery"""
         analysis_id = f"{symbol}_{datetime.now().timestamp()}"
+        start_time = time.time() # Record start time
         try:
             self.system_monitor.start_analysis(analysis_id)
 
@@ -58,9 +60,9 @@ class SystemOrchestrator:
             # Execute categories with dependency resolution
             results = {}
             executed_categories = set()
-            categories = categories or self._get_default_categories()
+            categories_to_run = categories or self._get_default_categories() # Use a different variable name
 
-            for category_value in self._get_execution_order(categories): # Use category_value
+            for category_value in self._get_execution_order(categories_to_run): # Use the correct variable
                 if category_value in executed_categories:
                     continue
 
@@ -101,29 +103,46 @@ class SystemOrchestrator:
 
             # Generate final verdict
             final_verdict = self._generate_composite_verdict(results)
-            system_health = await self.system_monitor.get_health_metrics()
+            system_health = await self.system_monitor.get_health_metrics() # Use internal monitor
 
             # Cache results
             await self._cache_analysis(symbol, final_verdict)
 
-            self.system_monitor.end_analysis(analysis_id, "success")
+            end_time = time.time() # Record end time
+            duration = end_time - start_time
+            self.metrics_collector.record_response_time(duration) # Record response time
+
+            self.system_monitor.end_analysis(analysis_id, "success") # Use internal monitor
             return {
                 "symbol": symbol,
                 "analysis_id": analysis_id,
                 "verdict": final_verdict,
                 "category_results": results,
-                "system_health": system_health,
-                "execution_metrics": self.metrics_collector.get_metrics(),
+                "system_health": system_health, # Use fetched health
+                "execution_metrics": self.metrics_collector.get_metrics(), # Use internal collector
             }
 
         except Exception as e:
-            self.system_monitor.end_analysis(analysis_id, "error")
-            logger.error(f"System analysis failed for {symbol}: {e}")
+            end_time = time.time() # Record end time even on error
+            duration = end_time - start_time
+            self.metrics_collector.record_response_time(duration) # Record response time on error too
+
+            self.system_monitor.end_analysis(analysis_id, "error") # Use internal monitor
+            logger.error(f"System analysis failed for {symbol}: {e}", exc_info=True) # Add traceback
+
+            # Fetch health metrics even on error
+            try:
+                system_health_on_error = await self.system_monitor.get_health_metrics()
+            except Exception as monitor_err:
+                logger.error(f"Failed to get health metrics during error handling: {monitor_err}")
+                system_health_on_error = {"error": "Failed to retrieve health metrics"}
+
             return {
                 "symbol": symbol,
                 "analysis_id": analysis_id,
                 "error": str(e),
-                "system_health": await self.system_monitor.get_health_metrics(),
+                "system_health": system_health_on_error, # Include health on error
+                "execution_metrics": self.metrics_collector.get_metrics(), # Include metrics on error
             }
 
     async def _execute_category_with_retry(

@@ -15,7 +15,8 @@ async def run(symbol: str, agent_outputs: dict = None, short_window: int = 50, l
         return cached
 
     # 2) Fetch OHLCV data
-    df = await fetch_ohlcv_series(symbol, source_preference=["api", "scrape"])
+    # Remove source_preference argument
+    df = await fetch_ohlcv_series(symbol) 
     if df is None or df.empty or len(df) < long_window:
         result = {
             "symbol": symbol,

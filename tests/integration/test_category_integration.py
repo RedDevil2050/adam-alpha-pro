@@ -70,11 +70,12 @@ class TestCategoryIntegration:
 
         # Check for specific agents expected in this category
         # Use r["agent_name"] directly as _validate_agent_results ensures it exists
-        has_rsi = any(r["agent_name"].startswith("rsi") for r in valid_results)
+        # Corrected check for RSI agent name (case-sensitive)
+        has_rsi = any(r["agent_name"].startswith("RSI") for r in valid_results)
         has_macd = any(r["agent_name"].startswith("macd") for r in valid_results)
         # Add assertions for other specific technical agents if expected
 
-        assert has_rsi, f"Expected 'rsi' agent result in {CategoryType.TECHNICAL.name} category output for {symbol}"
+        assert has_rsi, f"Expected 'RSI' agent result in {CategoryType.TECHNICAL.name} category output for {symbol}"
         assert has_macd, f"Expected 'macd' agent result in {CategoryType.TECHNICAL.name} category output for {symbol}"
 
 
