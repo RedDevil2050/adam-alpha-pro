@@ -6,7 +6,7 @@ from backend.agents.valuation.reverse_dcf_agent import run as rdcf_run
 from unittest.mock import AsyncMock, patch
 
 @pytest.mark.asyncio
-@patch('backend.utils.cache_utils.get_redis_client') # Patch redis
+@patch('backend.agents.decorators.get_redis_client') # Corrected patch target
 @patch('backend.agents.valuation.reverse_dcf_agent.fetch_fcf_per_share') # Patch FCF fetch where used
 @patch('backend.agents.valuation.reverse_dcf_agent.fetch_price_point') # Patch price fetch where used
 async def test_reverse_dcf_agent(mock_fetch_price, mock_fetch_fcf, mock_get_redis, monkeypatch):
@@ -19,7 +19,11 @@ async def test_reverse_dcf_agent(mock_fetch_price, mock_fetch_fcf, mock_get_redi
     mock_redis_instance = AsyncMock()
     mock_redis_instance.get.return_value = None # Cache miss
     mock_redis_instance.set = AsyncMock()
-    mock_get_redis.return_value = mock_redis_instance
+
+    # Configure the mock for get_redis_client to return the instance correctly
+    async def fake_get_redis():
+        return mock_redis_instance
+    mock_get_redis.side_effect = fake_get_redis
 
     res = await rdcf_run('ABC') # Call the agent's run function
 
@@ -40,6 +44,7 @@ async def test_reverse_dcf_agent(mock_fetch_price, mock_fetch_fcf, mock_get_redi
     # Verify mocks
     mock_fetch_price.assert_awaited_once_with('ABC')
     mock_fetch_fcf.assert_awaited_once_with('ABC')
+    mock_get_redis.assert_called_once() # Verify the patch target was called
     mock_redis_instance.get.assert_awaited_once()
     # Set should be called only on success
     if res['verdict'] not in ['ERROR', 'NO_DATA']:

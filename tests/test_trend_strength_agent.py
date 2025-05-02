@@ -3,13 +3,14 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 import pytest
 import pandas as pd
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, MagicMock # Added MagicMock
 from backend.agents.technical.trend_strength_agent import run
 import datetime
 
 @pytest.mark.asyncio
-@patch('backend.utils.cache_utils.get_redis_client')  # Corrected patch target
-async def test_trend_strength_agent(mock_get_redis, monkeypatch):
+@patch('backend.agents.decorators.get_redis_client')  # Corrected patch target
+@patch('backend.agents.decorators.get_tracker') # Patch tracker used by decorator
+async def test_trend_strength_agent(mock_get_tracker, mock_get_redis, monkeypatch):
     # Create realistic OHLCV data with uptrend
     dates = pd.to_datetime([datetime.date(2025, 4, 30) - datetime.timedelta(days=x) for x in range(60, -1, -1)])
     data_df = pd.DataFrame({
@@ -32,7 +33,16 @@ async def test_trend_strength_agent(mock_get_redis, monkeypatch):
     mock_redis_instance = AsyncMock()
     mock_redis_instance.get = AsyncMock(return_value=None)  # Simulate cache miss
     mock_redis_instance.set = AsyncMock()
-    mock_get_redis.return_value = mock_redis_instance
+
+    # Configure the mock for get_redis_client to return the instance correctly
+    async def fake_get_redis():
+        return mock_redis_instance
+    mock_get_redis.side_effect = fake_get_redis
+
+    # Mock tracker instance returned by get_tracker
+    mock_tracker_instance = MagicMock()
+    mock_tracker_instance.update_agent_status = AsyncMock()
+    mock_get_tracker.return_value = mock_tracker_instance
 
     # Run the agent - pass agent_outputs
     result = await run('TEST', agent_outputs={}) # Pass agent_outputs
@@ -40,12 +50,18 @@ async def test_trend_strength_agent(mock_get_redis, monkeypatch):
     # Verify mocks were called correctly
     mock_fetch.assert_called_once()
     mock_market_context.assert_called_once()
+    mock_get_redis.assert_awaited_once() # Verify the patch target was called
     mock_redis_instance.get.assert_awaited_once()
     mock_redis_instance.set.assert_awaited_once()
 
+    # Verify tracker update was called
+    mock_get_tracker.assert_called_once()
+    mock_tracker_instance.update_agent_status.assert_awaited_once()
+
     # Verify results
     assert 'verdict' in result
-    assert result['verdict'] in ['STRONG_UPTREND', 'WEAK_UPTREND']  # Expecting uptrend based on data
+    # Based on the strong uptrend data and typical ADX thresholds, expect STRONG_UPTREND
+    assert result['verdict'] == 'STRONG_UPTREND'
     assert 'confidence' in result
     assert isinstance(result['confidence'], float)
     assert 'value' in result  # Trend strength score * direction

@@ -8,10 +8,10 @@ from backend.agents.valuation.price_to_sales_agent import run
 from backend.utils.data_provider import fetch_alpha_vantage, fetch_iex
 
 @pytest.mark.asyncio
-@patch('backend.utils.cache_utils.get_redis_client') # Patch redis
+@patch('backend.agents.decorators.get_redis_client') # Patch where used by decorator
 @patch('backend.agents.valuation.price_to_sales_agent.fetch_company_info') # Patch company info fetch where used
 @patch('backend.agents.valuation.price_to_sales_agent.fetch_price_point') # Patch price fetch where used
-async def test_price_to_sales_agent(mock_fetch_price, mock_fetch_info, mock_get_redis, monkeypatch): # Order matches patches
+async def test_price_to_sales_agent(mock_fetch_price, mock_fetch_info, mock_get_redis, monkeypatch): # Order matches patches (innermost first)
     # Mock fetch_price_point to return a dict with 'price'
     mock_fetch_price.return_value = {'price': 10.0}
     # Mock fetch_company_info to return required fields
@@ -24,7 +24,13 @@ async def test_price_to_sales_agent(mock_fetch_price, mock_fetch_info, mock_get_
     mock_redis_instance = AsyncMock()
     mock_redis_instance.get.return_value = None # Cache miss
     mock_redis_instance.set = AsyncMock()
-    mock_get_redis.return_value = mock_redis_instance
+
+    # Configure the mock for get_redis_client (mock_get_redis)
+    # It needs to return an awaitable that resolves to mock_redis_instance
+    async def fake_get_redis():
+        return mock_redis_instance
+    mock_get_redis.side_effect = fake_get_redis # Use side_effect for async function replacement
+
 
     # Expected calculations:
     # Sales Per Share = RevenueTTM / SharesOutstanding = 1000 / 100 = 10.0
@@ -45,5 +51,7 @@ async def test_price_to_sales_agent(mock_fetch_price, mock_fetch_info, mock_get_
     # Verify mocks
     mock_fetch_price.assert_awaited_once_with('TEST')
     mock_fetch_info.assert_awaited_once_with('TEST')
-    mock_redis_instance.get.assert_awaited_once()
-    mock_redis_instance.set.assert_awaited_once()
+    # Verify the mock returned by the patched decorator's get_redis_client was used
+    mock_get_redis.assert_awaited_once() # Check if the patched get_redis_client was awaited/called
+    mock_redis_instance.get.assert_awaited_once() # Check if get() was awaited on the instance
+    mock_redis_instance.set.assert_awaited_once() # Check if set() was awaited on the instance

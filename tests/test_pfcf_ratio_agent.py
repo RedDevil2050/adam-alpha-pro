@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 from backend.agents.valuation.pfcf_ratio_agent import run as prun
 
 @pytest.mark.asyncio
-@patch('backend.utils.cache_utils.get_redis_client') # Patch redis
+@patch('backend.agents.decorators.get_redis_client') # Corrected patch target
 @patch('backend.agents.valuation.pfcf_ratio_agent.fetch_cash_flow_data') # Patch cash flow fetch
 @patch('backend.agents.valuation.pfcf_ratio_agent.fetch_company_info') # Patch company info fetch
 async def test_pfcf_ratio_agent(mock_fetch_info, mock_fetch_cf, mock_get_redis):
@@ -30,7 +30,11 @@ async def test_pfcf_ratio_agent(mock_fetch_info, mock_fetch_cf, mock_get_redis):
     mock_redis_instance = AsyncMock()
     mock_redis_instance.get.return_value = None # Cache miss
     mock_redis_instance.set = AsyncMock()
-    mock_get_redis.return_value = mock_redis_instance
+
+    # Configure the mock for get_redis_client to return the instance correctly
+    async def fake_get_redis():
+        return mock_redis_instance
+    mock_get_redis.side_effect = fake_get_redis
 
     # Expected calculations:
     # FCF = OCF - abs(CapEx) = 150M - 50M = 100M
@@ -52,5 +56,6 @@ async def test_pfcf_ratio_agent(mock_fetch_info, mock_fetch_cf, mock_get_redis):
     # Verify mocks
     mock_fetch_info.assert_awaited_once_with('ABC')
     mock_fetch_cf.assert_awaited_once_with('ABC')
+    mock_get_redis.assert_awaited_once() # Verify the patch target was called
     mock_redis_instance.get.assert_awaited_once()
     mock_redis_instance.set.assert_awaited_once()

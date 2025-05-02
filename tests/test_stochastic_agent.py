@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch # Add patch to imports
 from backend.agents.technical.stochastic_agent import run as stoch_run
 
 @pytest.mark.asyncio
-@patch('backend.utils.cache_utils.get_redis_client') # Correct patch target
+@patch('backend.agents.decorators.get_redis_client') # Correct patch target
 async def test_stochastic_agent(mock_get_redis, monkeypatch):
     # Create realistic OHLCV data (need enough for window, default K=14, D=3)
     dates = pd.to_datetime([datetime.date(2025, 4, 30) - datetime.timedelta(days=x)
@@ -31,18 +31,29 @@ async def test_stochastic_agent(mock_get_redis, monkeypatch):
     mock_redis_instance = AsyncMock()
     mock_redis_instance.get = AsyncMock(return_value=None) # Simulate cache miss
     mock_redis_instance.set = AsyncMock()
-    mock_get_redis.return_value = mock_redis_instance # Make the mocked function return our mock instance
+
+    # Configure the mock for get_redis_client to return the instance correctly
+    async def fake_get_redis():
+        return mock_redis_instance
+    mock_get_redis.side_effect = fake_get_redis
 
     # Mock tracker (optional)
     mock_tracker_update = AsyncMock()
     # Try both possible tracker import paths
     for tracker_path in [
         'backend.agents.technical.stochastic_agent.tracker.update',
-        'backend.agents.technical.utils.tracker.update'
+        'backend.agents.technical.utils.tracker.update',
+        'backend.monitor.tracker.get_tracker' # Add path to get_tracker used by decorator
     ]:
         try:
-            monkeypatch.setattr(tracker_path, mock_tracker_update)
-            break
+            # If patching get_tracker, make it return a mock tracker instance
+            if tracker_path.endswith('get_tracker'):
+                mock_tracker_instance = MagicMock()
+                mock_tracker_instance.update_agent_status = AsyncMock()
+                monkeypatch.setattr(tracker_path, MagicMock(return_value=mock_tracker_instance))
+            else:
+                monkeypatch.setattr(tracker_path, mock_tracker_update)
+            # Don't break, try patching all known paths where tracker might be used
         except AttributeError:
             continue
 
@@ -54,16 +65,26 @@ async def test_stochastic_agent(mock_get_redis, monkeypatch):
     assert 'k' in res['details']
     assert 'd' in res['details']
     assert 'value' in res # 'value' holds the latest K
-    assert res['value'] < 30 # Expecting oversold based on data (K < 20 default)
-    assert res['details']['k'] < 30 # Check K in details
-    assert res['details']['d'] < 30 # Check D in details
+    # Recalculate expected K based on data to be more precise
+    # K = 100 * (Close - Low_14) / (High_14 - Low_14)
+    low_14 = data_df['low'].rolling(14).min()
+    high_14 = data_df['high'].rolling(14).max()
+    k_series = 100 * (data_df['close'] - low_14) / (high_14 - low_14)
+    d_series = k_series.rolling(3).mean()
+    expected_k = k_series.iloc[-1]
+    expected_d = d_series.iloc[-1]
+
+    assert res['value'] == pytest.approx(expected_k) # Expecting oversold based on data (K < 20 default)
+    assert res['details']['k'] == pytest.approx(expected_k)
+    assert res['details']['d'] == pytest.approx(expected_d)
     # Assert the verdict based on agent logic (K < 20 -> BUY)
-    assert res['verdict'] == 'BUY' 
+    assert res['verdict'] == 'BUY'
     assert 'confidence' in res
     assert res.get('error') is None
 
     # Verify mocks were called
     mock_fetch.assert_called_once()
+    mock_get_redis.assert_awaited_once() # Verify the patch target was called
     # Assert on the instance's methods directly
     mock_redis_instance.get.assert_awaited_once()
     mock_redis_instance.set.assert_awaited_once()

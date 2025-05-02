@@ -13,7 +13,7 @@ agent_name = "sma_agent"
 @pytest.mark.asyncio
 # Patch dependencies (innermost first)
 @patch('backend.agents.decorators.get_tracker') # Decorator dependency
-@patch('backend.utils.cache_utils.get_redis_client') # Corrected redis patch target
+@patch('backend.agents.decorators.get_redis_client') # Decorator dependency
 @patch('backend.agents.technical.sma_agent.fetch_price_series')
 async def test_sma_agent_golden_cross(
     mock_fetch_prices,
@@ -27,15 +27,13 @@ async def test_sma_agent_golden_cross(
     num_periods = long_window + 2 # Need enough for long window + previous point
 
     # --- Create price data GUARANTEEING a golden cross ---
-    # Start with short < long, end with short > long
+    # Start with short <= long, end with short > long
     prices = np.zeros(num_periods)
-    # Initial phase: long > short
-    prices[:long_window-1] = 100 # Flat prices, SMAs will be 100
-    # Transition phase: create the cross
-    # Make prices rise sharply so short SMA overtakes long SMA
-    prices[long_window-1] = 105 # Price jumps slightly before the end
-    prices[long_window] = 115   # Price jumps significantly to pull short SMA up
-    prices[long_window+1] = 120 # Price continues higher
+    # Initial phase: Keep prices high so long SMA starts high
+    prices[:long_window] = 105 # Indices 0 to 199
+    # Transition phase: Drop price slightly, then jump to cause crossover at the end
+    prices[long_window] = 100   # Index 200 (for iloc[-2]) - Causes short SMA to dip below long SMA briefly if needed
+    prices[long_window+1] = 120 # Index 201 (for iloc[-1]) - Sharp increase pulls short SMA above long SMA
 
     # Create pandas Series
     price_series = pd.Series(prices, index=pd.date_range(end='2025-05-01', periods=num_periods, freq='D'))
@@ -100,7 +98,8 @@ async def test_sma_agent_golden_cross(
     assert fetch_args[0] == symbol
     assert fetch_kwargs.get('period') == f"{long_window + 5}d"
 
-    mock_get_redis.assert_awaited_once()
+    # Verify the mock passed to the test was used by the decorator
+    assert mock_get_redis.call_count == 1 
     mock_redis_instance.get.assert_awaited_once()
     mock_redis_instance.set.assert_awaited_once()
     # mock_get_tracker.assert_called_once() # Called by decorator

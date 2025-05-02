@@ -41,7 +41,7 @@ async def test_news_sentiment_agent(mock_analyzer, mock_async_client, mock_get_r
     assert res['verdict'] == 'POSITIVE' # Based on score >= 0.6 (normalized from 0.5 compound)
     assert 'confidence' in res
     # The agent normalizes compound score: (0.5 + 1) / 2 = 0.75
-    assert res['confidence'] == pytest.approx(0.7202) # Adjusted to match observed value
+    assert res['confidence'] == pytest.approx(0.75)
     assert 'value' in res # Raw average compound score
     assert res['value'] == pytest.approx(0.5)
     assert 'details' in res

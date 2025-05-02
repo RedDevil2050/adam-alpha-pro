@@ -3,8 +3,12 @@ from backend.agents.technical.base import TechnicalAgent
 from backend.utils.data_provider import fetch_ohlcv_series
 import pandas as pd
 import logging
+import numpy as np # Import numpy
 
 logger = logging.getLogger(__name__)
+
+# Add agent_name at module level
+agent_name = "RSIAgent"
 
 class RSIAgent(TechnicalAgent):
     async def _execute(self, symbol: str, agent_outputs: dict) -> dict:
@@ -16,27 +20,38 @@ class RSIAgent(TechnicalAgent):
                 logger.warning(f"[{self.__class__.__name__}] Insufficient or invalid data for {symbol}. Type: {type(df)}")
                 return self._error_response(symbol, f"Insufficient or invalid OHLCV data received. Type: {type(df)}")
 
+            # Ensure 'close' column exists
+            if 'close' not in df.columns:
+                 logger.error(f"[{self.__class__.__name__}] 'close' column not found in data for {symbol}.")
+                 return self._error_response(symbol, "'close' column not found in OHLCV data.")
+
             # Add await here
             market_context = await self.get_market_context(symbol)
             volatility = market_context.get("volatility", 0.2)
             adjustments = self.get_volatility_adjustments(volatility)
 
-            rsi = self._calculate_rsi(
+            # Calculate RSI using the new method
+            rsi_value = self._calculate_rsi(
                 df["close"], period=int(14 * adjustments["period_adj"])
             )
 
+            # Check if RSI calculation was successful
+            if rsi_value is None:
+                logger.warning(f"[{self.__class__.__name__}] RSI calculation failed for {symbol}, likely insufficient data.")
+                return self._error_response(symbol, "RSI calculation failed (insufficient data).")
+
             # Adjust signals based on market regime
             signals = self._get_regime_signals(
-                rsi, market_context.get("regime", "NEUTRAL")
+                rsi_value, market_context.get("regime", "NEUTRAL") # Use rsi_value
             )
 
             return {
                 "symbol": symbol,
                 "verdict": signals["verdict"],
                 "confidence": signals["confidence"],
-                "value": round(rsi, 2),
+                "value": round(rsi_value, 2), # Use rsi_value
                 "details": {
-                    "rsi": round(rsi, 2),
+                    "rsi": round(rsi_value, 2), # Use rsi_value
                     "market_regime": market_context.get("regime"),
                 },
                 "error": None,
@@ -44,7 +59,40 @@ class RSIAgent(TechnicalAgent):
             }
 
         except Exception as e:
+            logger.exception(f"[{self.__class__.__name__}] Error executing agent for {symbol}: {e}") # Log exception
             return self._error_response(symbol, str(e))
+
+    # --- Added _calculate_rsi method ---
+    def _calculate_rsi(self, prices: pd.Series, period: int = 14) -> float | None:
+        """Calculates the Relative Strength Index (RSI) for a given price series."""
+        if prices is None or len(prices) < period + 1:
+            return None # Not enough data
+
+        delta = prices.diff()
+
+        # Separate gains (positive changes) and losses (absolute value of negative changes)
+        gain = delta.where(delta > 0, 0.0)
+        loss = -delta.where(delta < 0, 0.0) # Use -delta to make losses positive
+
+        # Calculate the exponential moving average (EMA) of gains and losses
+        # Use adjust=False to match common RSI implementations (like TradingView)
+        avg_gain = gain.ewm(com=period - 1, min_periods=period, adjust=False).mean()
+        avg_loss = loss.ewm(com=period - 1, min_periods=period, adjust=False).mean()
+
+        # Avoid division by zero
+        if avg_loss.iloc[-1] == 0:
+            # If avg loss is 0, RSI is 100 (unless avg gain is also 0)
+            return 100.0 if avg_gain.iloc[-1] > 0 else 50.0 # Or 50 if both are 0
+
+        # Calculate Relative Strength (RS)
+        rs = avg_gain.iloc[-1] / avg_loss.iloc[-1]
+
+        # Calculate RSI
+        rsi = 100.0 - (100.0 / (1.0 + rs))
+
+        # Return the latest RSI value, checking for NaN
+        return rsi if not np.isnan(rsi) else None
+    # --- End Added Method ---
 
     def _get_regime_signals(self, rsi: float, regime: str) -> dict:
         base_oversold = 30

@@ -4,7 +4,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import pytest
 import pandas as pd
 import numpy as np
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, MagicMock # Added MagicMock
 from backend.agents.valuation.pb_ratio_agent import run as pb_run
 from backend.config.settings import get_settings # Import settings
 from datetime import datetime, timedelta
@@ -13,19 +13,21 @@ agent_name = "pb_ratio_agent"
 
 @pytest.mark.asyncio
 # Patch in reverse order of execution (innermost first)
-@patch('backend.agents.decorators.get_redis_client')
+@patch('backend.agents.decorators.get_tracker') # Patch tracker
+@patch('backend.agents.decorators.get_redis_client') # Corrected redis patch target
 # Correct patch targets to where functions are *used* in the agent module
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_historical_price_series') 
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_latest_bvps')
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_price_point')
 # Correct the patch target to where 'stats' is used in the agent module
-@patch('backend.agents.valuation.pb_ratio_agent.stats', create=True) 
+@patch('scipy.stats') # Target the actual library
 async def test_pb_ratio_agent_undervalued(
-    mock_stats, # Mock for the entire stats module
+    mock_stats, # Mock for the imported stats name
     mock_fetch_price, 
     mock_fetch_bvps, 
     mock_fetch_hist, 
     mock_get_redis, 
+    mock_get_tracker, # Added tracker mock
     monkeypatch
 ):
     # --- Mock Configuration ---
@@ -55,11 +57,19 @@ async def test_pb_ratio_agent_undervalued(
     mock_redis_instance = AsyncMock()
     mock_redis_instance.get.return_value = None # Cache miss
     mock_redis_instance.set = AsyncMock()
-    mock_get_redis.return_value = mock_redis_instance
+    # Configure the mock for get_redis_client to return the instance correctly
+    async def fake_get_redis():
+        return mock_redis_instance
+    mock_get_redis.side_effect = fake_get_redis
 
     # 5. Mock percentileofscore on the mocked stats module
     # This should trigger the UNDERVALUED_REL_HIST verdict
     mock_stats.percentileofscore.return_value = 15.0 # Assuming PERCENTILE_UNDERVALUED is e.g., 20
+
+    # 6. Mock Tracker
+    mock_tracker_instance = MagicMock()
+    mock_tracker_instance.update_agent_status = AsyncMock()
+    mock_get_tracker.return_value = mock_tracker_instance
 
     # --- Run Agent ---
     result = await pb_run('TEST_SYMBOL')
@@ -81,7 +91,8 @@ async def test_pb_ratio_agent_undervalued(
     assert details['current_pb_ratio'] == pytest.approx(2.0)
     assert details['current_bvps'] == 50.0
     assert details['current_price'] == 100.0
-    assert details['percentile_rank'] == pytest.approx(0.0)
+    # Assert percentile rank based on the mocked return value
+    assert details['percentile_rank'] == pytest.approx(15.0) # Corrected assertion
     assert details['historical_mean_pb'] == pytest.approx(3.0) # Mean of linspace(2.5, 3.5)
     assert details['z_score'] < 0 # Current P/B is below the mean
     assert details['data_source'] == "calculated_fundamental + historical_prices"
@@ -100,3 +111,7 @@ async def test_pb_ratio_agent_undervalued(
     mock_redis_instance.get.assert_awaited_once()
     mock_redis_instance.set.assert_awaited_once() # Should cache on success
     mock_stats.percentileofscore.assert_called_once() # Ensure scipy function was called
+
+    # Verify tracker update was called
+    mock_get_tracker.assert_called_once()
+    mock_tracker_instance.update_agent_status.assert_awaited_once()

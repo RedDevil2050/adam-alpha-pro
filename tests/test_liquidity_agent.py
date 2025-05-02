@@ -81,7 +81,8 @@ async def test_liquidity_agent_high_liquidity(
     # Use pytest.approx for float comparisons
     assert details['avg_daily_volume_20d'] == pytest.approx(expected_avg_vol)
     assert details['last_volume'] == last_volume
-    assert details['relative_volume_vs_20d_avg'] == pytest.approx(expected_rel_vol)
+    # Agent rounds this value to 2 decimal places
+    assert details['relative_volume_vs_20d_avg'] == pytest.approx(round(expected_rel_vol, 2))
     assert details['last_turnover'] == pytest.approx(expected_turnover)
 
     # --- Verify Mocks ---

@@ -6,14 +6,14 @@ import pandas as pd
 import numpy as np
 from unittest.mock import AsyncMock, patch, MagicMock
 # Import the agent's run function
-from backend.agents.technical.rsi_agent import run as rsi_run
+from backend.agents.technical.rsi_agent import run as rsi_run, agent_name # Import agent_name
 
-agent_name = "rsi_agent"
+# agent_name = "rsi_agent" # Use imported name
 
 @pytest.mark.asyncio
-# Patch dependencies
+# Patch dependencies in reverse order
 @patch('backend.agents.decorators.get_tracker')
-@patch('backend.utils.cache_utils.get_redis_client') # Correct patch target for redis
+@patch('backend.agents.decorators.get_redis_client') # Correct patch target for redis
 @patch('backend.agents.technical.rsi_agent.fetch_ohlcv_series') # Correct patch target for data fetch
 async def test_rsi_agent_oversold(
     mock_fetch_ohlcv, # Renamed mock
@@ -48,13 +48,15 @@ async def test_rsi_agent_oversold(
     mock_redis_instance = AsyncMock()
     mock_redis_instance.get.return_value = None # Cache miss
     mock_redis_instance.set = AsyncMock()
-    mock_get_redis.return_value = mock_redis_instance
+    # Configure the mock for get_redis_client to return the instance correctly
+    async def fake_get_redis():
+        return mock_redis_instance
+    mock_get_redis.side_effect = fake_get_redis
 
     # 3. Mock Tracker
-    mock_tracker_instance = AsyncMock()
-    # Assuming the tracker update method is update_agent_status based on decorator
+    mock_tracker_instance = MagicMock() # Use MagicMock for sync method call
     mock_tracker_instance.update_agent_status = AsyncMock()
-    mock_get_tracker.return_value = mock_tracker_instance
+    mock_get_tracker.return_value = mock_tracker_instance # get_tracker returns the instance
 
     # --- Expected Results ---
     # Based on the agent logic, RSI < 30 (default) triggers BUY (oversold)
@@ -62,12 +64,16 @@ async def test_rsi_agent_oversold(
     expected_confidence_min = 0.7 # Minimum expected confidence for oversold (BUY)
 
     # --- Run Agent ---
+    # Pass symbol only, decorator handles agent_outputs if not provided
     result = await rsi_run(symbol)
 
     # --- Assertions ---
     assert result['symbol'] == symbol
-    # Expect the class name, not the module-level variable
-    assert result['agent_name'] == 'RSIAgent'
+    # Assert agent name using the imported variable
+    assert result['agent_name'] == agent_name
+    # Check for potential errors before asserting verdict
+    if result.get('error'):
+        pytest.fail(f"Agent returned an error: {result['error']}")
     assert result['verdict'] == expected_verdict
     assert 'value' in result # RSI value
     # Check confidence range if verdict is BUY
@@ -80,5 +86,5 @@ async def test_rsi_agent_oversold(
     mock_get_redis.assert_awaited_once()
     mock_redis_instance.get.assert_awaited_once()
     mock_redis_instance.set.assert_awaited_once()
-    # mock_get_tracker.assert_called_once() # Tracker is called within decorator
-    # mock_tracker_instance.update_agent_status.assert_awaited_once() # Check tracker update
+    mock_get_tracker.assert_called_once() # Decorator calls get_tracker
+    mock_tracker_instance.update_agent_status.assert_awaited_once() # Check tracker update
