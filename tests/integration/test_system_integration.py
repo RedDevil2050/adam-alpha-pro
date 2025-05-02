@@ -155,10 +155,20 @@ class TestSystemIntegration:
             # metrics_collector=metrics_collector # Removed
         )
         # Check if market category results exist and contain regime info
-        market_results = result.get("category_results", {}).get(CategoryType.MARKET.value)
-        assert market_results, "Market category results should be present"
-        # Check within the 'results' list of the market category data
-        assert any("market_regime" in agent_res.get("details", {}) for agent_res in market_results.get("results", [])), "Market regime details expected in market agent results"
+        market_results_data = result.get("category_results", {}).get(CategoryType.MARKET.value)
+        assert market_results_data, "Market category results should be present"
+
+        # Find the result specifically from market_regime_agent
+        market_regime_agent_result = None
+        for agent_res in market_results_data.get("results", []):
+            # Ensure agent_res is a dict and has 'agent_name' before checking
+            if isinstance(agent_res, dict) and agent_res.get("agent_name") == "market_regime_agent":
+                 market_regime_agent_result = agent_res
+                 break
+
+        assert market_regime_agent_result is not None, "Result from 'market_regime_agent' not found in MARKET category results"
+        assert "details" in market_regime_agent_result, "Details missing from 'market_regime_agent' result"
+        assert "market_regime" in market_regime_agent_result.get("details", {}), "'market_regime' key missing in details of 'market_regime_agent' result"
 
     async def test_system_recovery(self, orchestrator):
         """Test system recovery from failures"""
