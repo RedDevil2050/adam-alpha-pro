@@ -15,7 +15,8 @@ async def run(symbol: str) -> dict:
 
     # Fetch price series (Core Logic)
     prices = await fetch_price_series(symbol)
-    if not prices or len(prices) < 2:
+    # Corrected check for empty/None pandas Series
+    if prices is None or prices.empty or len(prices) < 2:
         # Return the standard NO_DATA format (decorator won't cache this)
         # Decorator will add agent_name if missing
         return {

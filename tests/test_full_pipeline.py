@@ -23,9 +23,10 @@ def test_health():
     assert resp.status_code in [200, 503]
     # Check if the response is JSON and contains the 'status' key
     try:
-        assert "status" in resp.json()
+        # Assert status is within the detail dictionary
+        assert "status" in resp.json().get("detail", {})
     except Exception as e:
-        pytest.fail(f"Health endpoint did not return valid JSON: {e}\nResponse text: {resp.text}")
+        pytest.fail(f"Health endpoint did not return valid JSON or expected structure: {e}\nResponse text: {resp.text}")
 
 def test_metrics_endpoint(token):
     text = client.get("/metrics").text
