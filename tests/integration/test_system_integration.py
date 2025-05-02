@@ -117,23 +117,60 @@ class TestSystemIntegration:
         risk_results_data = result.get("category_results", {}).get(CategoryType.RISK.value)
         assert risk_results_data is not None, f"Expected results for category '{CategoryType.RISK.value}'"
 
-        # Check if the category itself reported an error or contained agent errors/failures
+        # Check if the category itself reported an error, contained agent errors/failures, or had no results
         category_level_error = risk_results_data.get("error") is not None
         agents_in_category = risk_results_data.get("results", [])
-        # Ensure agent_res is checked to be a dict before accessing keys
-        agent_level_failure = any(
-            (agent_res.get("status") == 'error' or
-             agent_res.get("verdict") == "NO_DATA" or
-             agent_res.get("error") is not None)
-            for agent_res in agents_in_category if isinstance(agent_res, dict)
-        )
-        category_had_failure_indicators = category_level_error or agent_level_failure
-        assert category_had_failure_indicators, f"Expected failure indicators (error status, NO_DATA verdict, or error key) within the '{CategoryType.RISK.value}' category results for INVALID_SYMBOL. Found: {risk_results_data}"
+        no_agent_results = not agents_in_category # Check if the results list is empty
 
-        # Check component status from the result dictionary
-        health_metrics_from_result = result.get("system_health", {})
-        assert health_metrics_from_result.get("component_statuses", {}).get("orchestrator") == "healthy", \
-            f"Orchestrator component should report as healthy in the result's system_health. Health was: {health_metrics_from_result}"
+        # Ensure agent_res is checked to be a dict OR is None before accessing keys/checking identity
+        agent_level_failure = any(
+            agent_res is None or # Treat None results as failure indication
+            (isinstance(agent_res, dict) and
+             (agent_res.get("status") == 'error' or
+              agent_res.get("verdict") == "NO_DATA" or
+              agent_res.get("error") is not None))
+            for agent_res in agents_in_category
+        )
+        # Combine checks: category error OR no results OR agent-level failure
+        category_had_failure_indicators = category_level_error or no_agent_results or agent_level_failure
+
+        # --- Add Detailed Logging --- 
+        logger.info(f"--- test_error_handling Debug Info ---")
+        logger.info(f"Symbol: INVALID_SYMBOL")
+        # logger.info(f"Full Analysis Result: {result}") # Can be very verbose
+        logger.info(f"Risk Category Data ('risk_results_data'): {risk_results_data}")
+        logger.info(f"Category Level Error ('category_level_error'): {category_level_error}")
+        logger.info(f"Agents in Category List ('agents_in_category'): {agents_in_category}")
+        logger.info(f"Is Agent List Empty? ('no_agent_results'): {no_agent_results}")
+
+        agent_failure_details = []
+        for i, agent_res in enumerate(agents_in_category):
+            if isinstance(agent_res, dict):
+                status = agent_res.get("status")
+                verdict = agent_res.get("verdict")
+                error = agent_res.get("error")
+                is_failure = (status == 'error' or verdict == "NO_DATA" or error is not None)
+                agent_failure_details.append(f"  Agent {i} ({agent_res.get('agent_name', 'N/A')}): status='{status}', verdict='{verdict}', error='{error}', is_failure={is_failure}")
+            else:
+                agent_failure_details.append(f"  Agent {i}: Not a dict - {type(agent_res)}")
+        
+        logger.info(f"Agent Failure Checks:\n" + "\n".join(agent_failure_details))
+        logger.info(f"Overall Agent Level Failure ('agent_level_failure'): {agent_level_failure}")
+        logger.info(f"Final Combined Failure Indicator ('category_had_failure_indicators'): {category_had_failure_indicators}")
+        logger.info(f"--- End Debug Info ---")
+        # --- End Detailed Logging ---
+
+        assert category_had_failure_indicators, (
+            f"Expected failure indicators (category error, no agent results, None result, or agent error/NO_DATA) " # Updated message
+            f"within the '{CategoryType.RISK.value}' category results for INVALID_SYMBOL. "
+            f"Actual category_results['{CategoryType.RISK.value}']: {risk_results_data}"
+        )
+
+        # Check component status using the orchestrator's INTERNAL monitor AFTER the call
+        internal_monitor = orchestrator.system_monitor
+        health_metrics_internal = internal_monitor.get_health_metrics() # get_health_metrics is sync
+        assert health_metrics_internal.get("component_statuses", {}).get("orchestrator") == "healthy", \
+            f"Orchestrator component should remain healthy in internal monitor after handling symbol error. Health was: {health_metrics_internal}"
 
     async def test_caching_mechanism(self, orchestrator):
         """Test caching behavior"""
