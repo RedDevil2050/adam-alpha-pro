@@ -4,6 +4,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import pytest
 import pandas as pd
 import numpy as np
+import datetime
 from unittest.mock import AsyncMock, patch, MagicMock
 # Import the agent's run function
 from backend.agents.technical.rsi_agent import run as rsi_run, agent_name # Import agent_name

@@ -4,6 +4,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import pytest
 import pandas as pd
 import numpy as np
+import datetime
 from unittest.mock import AsyncMock, patch, MagicMock
 from backend.agents.technical.macd_agent import run as macd_run, MACDAgent # Import run and the class
 
