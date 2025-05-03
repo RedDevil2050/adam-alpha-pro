@@ -3,14 +3,13 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 import pytest
 from unittest.mock import AsyncMock, patch
-from backend.agents.event.corporate_actions_agent import run as ca_run
+from backend.agents.event.corporate_actions_agent import run as ca_run, agent_name # Import agent_name
 import datetime
-
-agent_name = "corporate_actions_agent"
 
 @pytest.mark.asyncio
 # Patch dependencies (innermost first)
-@patch('backend.agents.event.utils.tracker.update') # Assuming tracker is in event.utils
+# Correct patch target: where tracker is LOOKED UP in the agent module
+@patch('backend.agents.event.corporate_actions_agent.tracker.update') 
 @patch('backend.agents.event.corporate_actions_agent.get_redis_client')
 @patch('backend.agents.event.corporate_actions_agent.fetch_corporate_actions')
 async def test_corporate_actions_agent_active(
@@ -46,7 +45,7 @@ async def test_corporate_actions_agent_active(
     
     # --- Assertions ---
     assert res['symbol'] == 'TEST_SYMBOL'
-    assert res['agent_name'] == agent_name
+    assert res['agent_name'] == agent_name # Use imported name
     assert res['verdict'] == expected_verdict
     assert res['confidence'] == pytest.approx(expected_score)
     assert res['value'] == expected_count # Value is the count of actions

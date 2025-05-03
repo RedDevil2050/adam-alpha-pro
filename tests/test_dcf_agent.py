@@ -80,7 +80,8 @@ async def test_dcf_agent_buy_scenario(
     details = result['details']
     assert details['current_price'] == pytest.approx(current_price)
     assert details['intrinsic_value_mean'] == pytest.approx(expected_value)
-    assert details['margin_of_safety_percent'] == pytest.approx(50.0)
+    # Check the margin of safety (stored as decimal)
+    assert details['margin_of_safety'] == pytest.approx(0.50)
     assert 'simulation_summary' in details
     assert details['simulation_summary']['count'] == n_simulations
     assert details['simulation_summary']['std_dev'] == pytest.approx(0.0)
