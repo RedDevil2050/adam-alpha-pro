@@ -83,7 +83,10 @@ async def test_rsi_agent_oversold(
     assert result.get('error') is None
 
     # --- Verify Mocks ---
-    mock_fetch_ohlcv.assert_awaited_once_with(symbol) # Check symbol arg
+    # Calculate expected dates
+    end_date = datetime.date(2025, 5, 2) # Assuming test runs relative to this date based on previous logs
+    start_date = end_date - datetime.timedelta(days=365)
+    mock_fetch_ohlcv.assert_awaited_once_with(symbol, start_date=start_date, end_date=end_date) # Check symbol and date args
     mock_get_redis.assert_awaited_once() # Verify the factory function was awaited
     mock_redis_instance.get.assert_awaited_once() # Verify get on the instance
     mock_redis_instance.set.assert_awaited_once() # Verify set on the instance

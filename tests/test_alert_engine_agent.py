@@ -3,7 +3,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 
 import pytest
-from unittest.mock import AsyncMock # Import AsyncMock
+import pandas as pd # Add this import
+from unittest.mock import AsyncMock
 from backend.agents.automation.alert_engine_agent import run as alert_run
 
 @pytest.mark.asyncio

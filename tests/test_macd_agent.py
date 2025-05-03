@@ -87,7 +87,10 @@ async def test_macd_agent_buy_signal(
     assert details['market_regime'] == market_regime
 
     # --- Verify Mocks ---
-    mock_fetch_ohlcv.assert_awaited_once_with(symbol)
+    # Calculate expected dates (1 year back from today, May 2, 2025)
+    end_date = datetime.date(2025, 5, 2)
+    start_date = end_date - datetime.timedelta(days=365)
+    mock_fetch_ohlcv.assert_awaited_once_with(symbol, start_date=start_date, end_date=end_date)
     # Check ewm().mean() calls
     assert mock_ewm_mean.call_count == 3
     # iloc[-1] is called *after* subtraction in the agent code, so we don't verify it on the mocks directly.
