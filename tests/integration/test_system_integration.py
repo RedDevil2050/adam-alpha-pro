@@ -178,6 +178,10 @@ class TestSystemIntegration:
         assert component_statuses.get("orchestrator") == "healthy", \
             f"Orchestrator component should remain healthy in internal monitor after handling symbol error. Health was: {health_metrics_internal}"
 
+    async def test_caching(self, orchestrator):
+        """Test caching mechanism"""
+        # metrics_collector = MetricsCollector() # Collector is internal
+        monitor = SystemMonitor() # Correct indentation
         symbol_to_test = "SBIN.NS"
         cache_client = await get_redis_client() # Get client to clear cache first
         await cache_client.delete(f"analysis:{symbol_to_test}") # Clear potential stale cache
