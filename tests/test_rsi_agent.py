@@ -13,6 +13,8 @@ from backend.agents.technical.rsi_agent import run as rsi_run, agent_name # Impo
 
 @pytest.mark.asyncio
 # Patch dependencies in reverse order
+# Patch datetime used by the agent
+@patch('backend.agents.technical.rsi_agent.datetime')
 @patch('backend.agents.decorators.get_tracker')
 # Correct patch target for redis used by the decorator
 @patch('backend.agents.decorators.get_redis_client') 
@@ -20,10 +22,14 @@ from backend.agents.technical.rsi_agent import run as rsi_run, agent_name # Impo
 async def test_rsi_agent_oversold(
     mock_fetch_ohlcv, # Renamed mock
     mock_get_redis,
-    mock_get_tracker
+    mock_get_tracker,
+    mock_datetime # Add mock_datetime to args
 ):
     # --- Mock Configuration ---
     symbol = "TEST_RSI_OS"
+    # Define the date to be used by the agent
+    mock_today = datetime.date(2025, 5, 2)
+    mock_datetime.date.today.return_value = mock_today
     rsi_period = 14 # Default RSI period
     num_periods = rsi_period + 50 # Need enough data for calculation + stability
 
@@ -84,8 +90,8 @@ async def test_rsi_agent_oversold(
     assert result.get('error') is None
 
     # --- Verify Mocks ---
-    # Calculate expected dates
-    end_date = datetime.date(2025, 5, 2) # Assuming test runs relative to this date based on previous logs
+    # Calculate expected dates based on mocked today
+    end_date = mock_today
     start_date = end_date - datetime.timedelta(days=365)
     mock_fetch_ohlcv.assert_awaited_once_with(symbol, start_date=start_date, end_date=end_date) # Check symbol and date args
     mock_get_redis.assert_awaited_once() # Verify the factory function was awaited

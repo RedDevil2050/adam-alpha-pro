@@ -19,6 +19,7 @@ def mock_price_series(monkeypatch):
     market_symbol = settings.data_provider.MARKET_INDEX_SYMBOL
 
     async def mock_fetch(sym, start_date=None, end_date=None): # Match expected signature
+        # Return the series if the symbol is the test symbol OR the market symbol
         if sym == 'TEST' or sym == market_symbol:
             return series
         raise ValueError(f"Unexpected symbol {sym} in mock_fetch_price_series")

@@ -3,6 +3,7 @@ from backend.utils.cache_utils import get_redis_client
 from backend.agents.event.utils import tracker
 # Import the specific data provider function
 from backend.utils.data_provider import fetch_earnings_calendar
+import datetime # Import datetime
 
 agent_name = "earnings_calendar_agent"
 

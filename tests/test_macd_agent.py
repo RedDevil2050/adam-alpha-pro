@@ -12,20 +12,26 @@ agent_name = "macd_agent"
 
 @pytest.mark.asyncio
 # Patch dependencies (innermost first)
+# Patch datetime used by the agent
+@patch('backend.agents.technical.macd_agent.datetime')
 # Patch the get_market_context method directly on the class prototype
-@patch.object(MACDAgent, 'get_market_context') 
+@patch.object(MACDAgent, 'get_market_context')
 # Patch the data fetching function used by the agent
 @patch('backend.agents.technical.macd_agent.fetch_ohlcv_series')
 # Patch the pandas EWM calculation
 @patch('pandas.core.window.ewm.ExponentialMovingWindow.mean')
 async def test_macd_agent_buy_signal(
-    mock_ewm_mean, 
-    mock_fetch_ohlcv, 
-    mock_get_market_context
+    mock_ewm_mean,
+    mock_fetch_ohlcv,
+    mock_get_market_context,
+    mock_datetime # Add mock_datetime to args
 ):
     # --- Mock Configuration ---
     symbol = "TEST_SYMBOL"
     market_regime = "BULL"
+    # Define the date to be used by the agent
+    mock_today = datetime.date(2025, 5, 2)
+    mock_datetime.date.today.return_value = mock_today
 
     # 1. Mock fetch_ohlcv_series
     # Create a dummy DataFrame with a 'close' column
@@ -88,8 +94,8 @@ async def test_macd_agent_buy_signal(
     assert details['market_regime'] == market_regime
 
     # --- Verify Mocks ---
-    # Calculate expected dates (1 year back from today, May 2, 2025)
-    end_date = datetime.date(2025, 5, 2)
+    # Calculate expected dates based on the mocked today's date
+    end_date = mock_today
     start_date = end_date - datetime.timedelta(days=365)
     mock_fetch_ohlcv.assert_awaited_once_with(symbol, start_date=start_date, end_date=end_date)
     # Check ewm().mean() calls

@@ -29,6 +29,8 @@ async def test_trendlyne(monkeypatch):
 
     monkeypatch.setattr("httpx.AsyncClient.get", mock_get)
     result = await fetch_price_trendlyne("INFY")
+
+    # Assert that the result is a float and equals the mocked value
     assert isinstance(result, float)
     assert result == 100.0
 
