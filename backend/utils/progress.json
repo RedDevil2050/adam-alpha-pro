@@ -32,7 +32,9 @@
     },
     "event": {
       "earnings_calendar_agent": "implemented",
-      "insider_trade_agent": "implemented"
+      "insider_trade_agent": "implemented",
+      "corporate_actions_agent": "implemented",
+      "share_buyback_agent": "implemented"
     },
     "automation": {
       "alert_engine_agent": "implemented",
@@ -40,7 +42,21 @@
     },
     "forecast": {
       "price_forecast_agent": "implemented"
+    },
+    "sentiment": {
+      "news_sentiment_agent": "implemented",
+      "social_sentiment_agent": "implemented"
+    },
+    "esg": {
+      "environmental_agent": "implemented",
+      "social_agent": "implemented",
+      "governance_agent": "implemented"
+    },
+    "intelligence": {
+      "theme_match_agent": "implemented",
+      "peer_compare_agent": "implemented",
+      "ask_adam_agent": "implemented"
     }
   },
-  "last_updated": "2025-05-01T14:22:40.833515+00:00Z"
+  "last_updated": "2025-05-06T14:25:08.413367+00:00Z"
 }
