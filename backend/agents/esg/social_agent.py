@@ -6,7 +6,7 @@ agent_name = "social_agent"
 
 async def run(symbol: str) -> dict:
     cache_key = f"{agent_name}:{symbol}"
-    redis_client = get_redis_client()
+    redis_client = await get_redis_client()  # Modified
     # Cache check
     cached = await redis_client.get(cache_key)
     if cached:

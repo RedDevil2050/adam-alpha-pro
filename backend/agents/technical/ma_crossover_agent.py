@@ -2,6 +2,7 @@ import pandas as pd
 from backend.utils.data_provider import fetch_ohlcv_series
 from backend.utils.cache_utils import get_redis_client
 from backend.agents.technical.utils import tracker
+from datetime import datetime, timedelta # Added
 
 agent_name = "ma_crossover_agent"
 
@@ -15,8 +16,9 @@ async def run(symbol: str, agent_outputs: dict = None, short_window: int = 50, l
         return cached
 
     # 2) Fetch OHLCV data
-    # Remove source_preference argument
-    df = await fetch_ohlcv_series(symbol) 
+    end_date = datetime.now().strftime("%Y-%m-%d") # Added
+    start_date = (datetime.now() - timedelta(days=long_window + 50)).strftime("%Y-%m-%d") # Added, ensure enough data for longest window + buffer
+    df = await fetch_ohlcv_series(symbol, start_date, end_date) # Modified
     if df is None or df.empty or len(df) < long_window:
         result = {
             "symbol": symbol,

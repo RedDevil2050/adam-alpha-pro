@@ -302,6 +302,12 @@ async def fetch_news_sentiment(symbol: str):
     """
     return await provider.fetch_data_resilient(symbol, "news_sentiment")
 
+async def fetch_news(symbol: str, limit: int = 10):
+    """Placeholder: Fetch news for a given symbol."""
+    logger.warning(f"fetch_news not implemented for {symbol}, limit {limit}")
+    # Example: return await provider.fetch_data_resilient(symbol, "news", limit=limit)
+    return []
+
 async def fetch_wacc(symbol: str):
     """
     Fetch or calculate the Weighted Average Cost of Capital (WACC) for a given symbol.

@@ -7,7 +7,7 @@ agent_name = "target_price_agent"
 
 
 async def run(symbol: str) -> dict:
-    redis_client = get_redis_client()
+    redis_client = await get_redis_client()  # Modified
     cache_key = f"{agent_name}:{symbol}"
     cached = await redis_client.get(cache_key)
     if cached:

@@ -5,7 +5,7 @@ agent_name = "environmental_agent"
 
 
 async def run(symbol: str) -> dict:
-    redis_client = get_redis_client()
+    redis_client = await get_redis_client()  # Modified
     cache_key = f"{agent_name}:{symbol}"
     # Cache check
     cached = await redis_client.get(cache_key)

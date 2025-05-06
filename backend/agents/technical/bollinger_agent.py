@@ -2,6 +2,7 @@ import pandas as pd
 from backend.utils.data_provider import fetch_ohlcv_series
 from backend.utils.cache_utils import get_redis_client
 from backend.agents.technical.utils import tracker
+from datetime import datetime, timedelta
 
 agent_name = "bollinger_agent"
 
@@ -15,8 +16,9 @@ async def run(symbol: str, agent_outputs: dict = None, window: int = 20, num_std
         return cached
 
     # 2) Fetch OHLCV data
-    # Remove source_preference argument
-    df = await fetch_ohlcv_series(symbol)
+    end_date = datetime.now().strftime("%Y-%m-%d")
+    start_date = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+    df = await fetch_ohlcv_series(symbol, start_date, end_date)
     if df is None or df.empty or len(df) < window:
         result = {
             "symbol": symbol,

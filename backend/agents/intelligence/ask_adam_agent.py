@@ -6,7 +6,7 @@ agent_name = "ask_adam_agent"
 
 
 async def run(symbol: str, question: str = "") -> dict:
-    redis_client = get_redis_client()
+    redis_client = await get_redis_client()  # Modified
     cache_key = f"{agent_name}:{symbol}:{question}"
     cached = await redis_client.get(cache_key)
     if cached:

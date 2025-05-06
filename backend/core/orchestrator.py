@@ -24,18 +24,25 @@ class SystemOrchestrator:
         """Initialize orchestrator components and update status."""
         component_name = "orchestrator"
         try:
-            # Register the component first
+            # Register the component first on the passed-in monitor
             monitor.register_component(component_name)
+            # Also register on the internal monitor
+            self.system_monitor.register_component(component_name)
+
             self.category_dependencies = self._build_dependency_graph()
             # Add any other orchestrator-specific async setup here
             # await some_orchestrator_setup()
             logger.info("System orchestrator initialized")
             monitor.update_component_status(component_name, "healthy")
+            self.system_monitor.update_component_status(component_name, "healthy") # Update internal monitor
         except Exception as e:
             logger.error(f"Orchestrator initialization failed: {e}")
-            # Ensure component is registered before updating status to failed
+            # Ensure component is registered before updating status to failed on passed-in monitor
             monitor.register_component(component_name) 
             monitor.update_component_status(component_name, "failed")
+            # Ensure component is registered and updated on internal monitor in case of failure
+            self.system_monitor.register_component(component_name)
+            self.system_monitor.update_component_status(component_name, "failed")
             raise
 
     async def analyze_symbol(

@@ -18,16 +18,28 @@ class TestSystemIntegration:
     @pytest_asyncio.fixture
     async def orchestrator(self):
         """Create and properly initialize a SystemOrchestrator instance."""
-        monitor = SystemMonitor()
-        # Get the mocked cache client
-        cache_client = await get_redis_client()
-        # Pass the cache_client to the constructor
-        instance = SystemOrchestrator(cache_client=cache_client)
-        # Properly initialize the orchestrator
-        await instance.initialize(monitor)
+        monitor = SystemMonitor() # This is the monitor passed to initialize()
+        instance = None # Initialize instance to handle potential failure before assignment
+        try:
+            cache_client = await get_redis_client()
+            instance = SystemOrchestrator(cache_client=cache_client) # This creates its own internal instance.system_monitor
+            await instance.initialize(monitor) # Initializes using 'monitor' and also instance.system_monitor
+        except Exception as e:
+            # Log the exception to make it visible if fixture setup fails
+            logger.error(f"CRITICAL: Orchestrator fixture initialization failed: {e}", exc_info=True)
+            raise # Re-raise to ensure pytest marks fixture setup as failed
+
+        # Debugging: Check the status of the *internal* system_monitor after initialization
+        internal_monitor_health = await instance.system_monitor.get_health_metrics()
+        logger.info(f"Orchestrator fixture: internal monitor health after init: {internal_monitor_health}")
+        
+        orchestrator_component_details = internal_monitor_health.get("components", {}).get("orchestrator", {})
+        orchestrator_status = orchestrator_component_details.get("status")
+
+        assert orchestrator_status == "healthy", \
+            f"Orchestrator's internal component status is not 'healthy' after initialization. Status: '{orchestrator_status}'. Full components: {internal_monitor_health.get('components')}"
+
         yield instance
-        # Add cleanup if needed
-        # await instance.shutdown() # if a shutdown method exists
 
     async def test_full_analysis_flow(self, orchestrator):
         """Test complete analysis pipeline"""
@@ -103,7 +115,7 @@ class TestSystemIntegration:
              # Access the orchestrator's internal monitor instance
              internal_monitor = orchestrator.system_monitor
              health_metrics = await internal_monitor.get_health_metrics()
-             assert health_metrics["component_statuses"]["orchestrator"] == "healthy", \
+             assert health_metrics.get("components", {}).get("orchestrator", {}).get("status") == "healthy", \
                  "Orchestrator component should remain healthy even after significant analysis error"
              # Skip detailed category checks if the whole process failed early
              logger.warning("Skipping detailed category checks due to top-level error or missing category results.")
@@ -125,10 +137,14 @@ class TestSystemIntegration:
         # Ensure agent_res is checked to be a dict OR is None before accessing keys/checking identity
         agent_level_failure = any(
             agent_res is None or # Treat None results as failure indication
-            (isinstance(agent_res, dict) and
-             (agent_res.get("status") == 'error' or
-              agent_res.get("verdict") == "NO_DATA" or
-              agent_res.get("error") is not None))
+            (isinstance(agent_res, dict) and (
+                agent_res.get("status") == 'error' or
+                agent_res.get("verdict") == "NO_DATA" or
+                agent_res.get("error") is not None
+            )) or
+            # Added: Treat non-None, non-dictionary items as failures,
+            # as they likely represent raw error strings or similar.
+            (agent_res is not None and not isinstance(agent_res, dict))
             for agent_res in agents_in_category
         )
         # Combine checks: category error OR no results OR agent-level failure
@@ -172,10 +188,13 @@ class TestSystemIntegration:
         # --- Ensure health_metrics_internal is a dict before accessing ---
         assert isinstance(health_metrics_internal, dict), f"Expected health_metrics_internal to be a dict, but got {type(health_metrics_internal)}"
         
-        component_statuses = health_metrics_internal.get("component_statuses", {})
-        assert isinstance(component_statuses, dict), f"Expected component_statuses to be a dict, but got {type(component_statuses)}"
+        components_data = health_metrics_internal.get("components", {}) # Changed from component_statuses
+        assert isinstance(components_data, dict), f"Expected components_data to be a dict, but got {type(components_data)}"
 
-        assert component_statuses.get("orchestrator") == "healthy", \
+        orchestrator_component = components_data.get("orchestrator", {})
+        assert isinstance(orchestrator_component, dict), f"Expected orchestrator_component to be a dict, but got {type(orchestrator_component)}"
+
+        assert orchestrator_component.get("status") == "healthy", \
             f"Orchestrator component should remain healthy in internal monitor after handling symbol error. Health was: {health_metrics_internal}"
 
     async def test_caching(self, orchestrator):
@@ -248,12 +267,15 @@ class TestSystemIntegration:
             # --- Ensure health_metrics is a dict before accessing ---
             assert isinstance(health_metrics, dict), f"Expected health_metrics to be a dict, but got {type(health_metrics)}"
             
-            component_statuses = health_metrics.get("component_statuses", {})
-            assert isinstance(component_statuses, dict), f"Expected component_statuses to be a dict, but got {type(component_statuses)}"
+            components_data = health_metrics.get("components", {}) # Changed from component_statuses
+            assert isinstance(components_data, dict), f"Expected components_data to be a dict, but got {type(components_data)}"
+
+            orchestrator_component = components_data.get("orchestrator", {})
+            assert isinstance(orchestrator_component, dict), f"Expected orchestrator_component to be a dict, but got {type(orchestrator_component)}"
             
             # Check overall system status if available, or component statuses
             # Assuming orchestrator should remain healthy despite symbol errors
-            assert component_statuses.get("orchestrator") == "healthy", \
+            assert orchestrator_component.get("status") == "healthy", \
                 f"Orchestrator component should remain healthy on iteration {i+1}. Health was: {health_metrics}"
             # Check if system metrics are still being reported
             system_metrics = health_metrics.get("system", {})

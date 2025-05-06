@@ -70,6 +70,7 @@ class APIKeys(BaseSettings):
     JWT_SECRET: Optional[str] = Field(None, env="JWT_SECRET")
     API_PASS: Optional[str] = Field(None, env="API_PASS")
     API_PASS_HASH: Optional[str] = Field(None, env="API_PASS_HASH")
+    TWITTER_BEARER_TOKEN: Optional[str] = Field(None, env="TWITTER_BEARER_TOKEN") # Added
 
     # Additional fields to resolve validation errors
     ENV: Optional[str] = Field(None, env="ENV")
@@ -278,7 +279,8 @@ class AgentSettings(BaseSettings):
     )  # Added correlation settings
     valuation: ValuationAgentSettings = ValuationAgentSettings() # Added valuation settings
     # Add missing market_regime settings for tests/agents
-    market_regime: dict = {"thresholds": {"bull": 0.7, "bear": 0.3}}
+    market_regime: dict = Field(default_factory=lambda: {"thresholds": {"bull": 0.7, "bear": 0.3}}) # Modified to use Field and default_factory
+    sector_pe_averages: Dict[str, float] = Field(default_factory=dict, env="SECTOR_PE_AVERAGES") # Added
 
 
 class Settings(BaseSettings):
