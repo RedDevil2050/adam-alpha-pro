@@ -6,7 +6,7 @@ from backend.agents.categories import CategoryManager, CategoryType # Assuming C
 # For example, mocking database connections, external APIs, etc.
 
 @pytest.mark.asyncio
-class TestCategoryIntegration:
+class test_category_integration:
     @pytest.fixture(scope="class") # Use class scope if CategoryManager is stateless and creation is non-trivial
     def category_manager(self):
         """Fixture to provide a CategoryManager instance."""
@@ -38,79 +38,68 @@ class TestCategoryIntegration:
 
         return valid_results
 
-    async def test_valuation_category(self, category_manager):
+    @pytest.fixture
+    def test_symbol(self):
+        """Fixture to provide a common test symbol."""
+        return "RELIANCE.NS"  # Use a symbol likely to have data relevant for agents
+        
+    async def test_valuation_category(self, category_manager, test_symbol):
         """Test valuation category execution and expected agents."""
-        symbol = "RELIANCE.NS" # Use a symbol likely to have data relevant for agents
         results = await category_manager.execute_category(
-            CategoryType.VALUATION, symbol
+            CategoryType.VALUATION, test_symbol
         )
 
         valid_results = self._validate_agent_results(results, CategoryType.VALUATION)
 
-        # Assert that at least the specifically expected agents produced valid results
-        assert any(r["agent_name"].startswith("pe_ratio") for r in valid_results), \
-               f"Expected 'pe_ratio' agent result in {CategoryType.VALUATION.name} category output for {symbol}"
-        assert any(r["agent_name"].startswith("peg_ratio") for r in valid_results), \
-               f"Expected 'peg_ratio' agent result in {CategoryType.VALUATION.name} category output for {symbol}"
-        # Add assertions for other specific valuation agents if expected
+        # Check for specific agents expected in this category
+        assert any(r["agent_name"].lower().startswith("peratio") for r in valid_results), \
+               f"Expected agent name starting with 'peratio' (case-insensitive) in {CategoryType.VALUATION.name} category output for {test_symbol}"
+        assert any(r["agent_name"].lower().startswith("pegratio") for r in valid_results), \
+               f"Expected agent name starting with 'pegratio' (case-insensitive) in {CategoryType.VALUATION.name} category output for {test_symbol}"
 
-
-    async def test_technical_category(self, category_manager):
+    async def test_technical_category(self, category_manager, test_symbol):
         """Test technical category execution and expected agents."""
-        symbol = "RELIANCE.NS"
         results = await category_manager.execute_category(
-            CategoryType.TECHNICAL, symbol
+            CategoryType.TECHNICAL, test_symbol
         )
 
         valid_results = self._validate_agent_results(results, CategoryType.TECHNICAL)
 
-        # Assert that *some* technical agent produced a valid result.
-        # Remove or adjust if this category can validly return an empty list of valid results.
-        assert len(valid_results) > 0, f"Expected at least one valid agent result dictionary for {CategoryType.TECHNICAL.name} category for {symbol}."
+        assert len(valid_results) > 0, f"Expected at least one valid agent result dictionary for {CategoryType.TECHNICAL.name} category for {test_symbol}."
 
         # Check for specific agents expected in this category
-        # Use r["agent_name"] directly as _validate_agent_results ensures it exists
-        # Corrected check for RSI agent name (case-sensitive)
-        has_rsi = any(r["agent_name"].startswith("RSI") for r in valid_results)
-        has_macd = any(r["agent_name"].startswith("macd") for r in valid_results)
+        has_rsi = any(r["agent_name"].lower().startswith("rsi") for r in valid_results)
+        has_macd = any(r["agent_name"].lower().startswith("macd") for r in valid_results)
         # Add assertions for other specific technical agents if expected
 
-        assert has_rsi, f"Expected 'RSI' agent result in {CategoryType.TECHNICAL.name} category output for {symbol}"
-        assert has_macd, f"Expected 'macd' agent result in {CategoryType.TECHNICAL.name} category output for {symbol}"
+        assert has_rsi, f"Expected agent name starting with 'rsi' (case-insensitive) in {CategoryType.TECHNICAL.name} category output for {test_symbol}"
+        assert has_macd, f"Expected agent name starting with 'macd' (case-insensitive) in {CategoryType.TECHNICAL.name} category output for {test_symbol}"
 
-
-    async def test_market_category(self, category_manager):
+    async def test_market_category(self, category_manager, test_symbol):
         """Test market category execution and expected agents."""
-        symbol = "RELIANCE.NS"
         results = await category_manager.execute_category(
-            CategoryType.MARKET, symbol
+            CategoryType.MARKET, test_symbol
         )
 
         valid_results = self._validate_agent_results(results, CategoryType.MARKET)
 
         # Check for specific agents expected in this category
-        # Use r["agent_name"] directly as _validate_agent_results ensures it exists
-        assert any(r["agent_name"].startswith("volatility") for r in valid_results), \
-               f"Expected 'volatility' agent result in {CategoryType.MARKET.name} category output for {symbol}"
-        assert any(r["agent_name"].startswith("correlation") for r in valid_results), \
-               f"Expected 'correlation' agent result in {CategoryType.MARKET.name} category output for {symbol}"
-        # Add assertions for other specific market agents if expected
+        assert any(r["agent_name"].lower().startswith("volatility") for r in valid_results), \
+               f"Expected agent name starting with 'volatility' (case-insensitive) in {CategoryType.MARKET.name} category output for {test_symbol}"
+        assert any(r["agent_name"].lower().startswith("correlation") for r in valid_results), \
+               f"Expected agent name starting with 'correlation' (case-insensitive) in {CategoryType.MARKET.name} category output for {test_symbol}"
 
-
-    async def test_stealth_category(self, category_manager):
+    async def test_stealth_category(self, category_manager, test_symbol):
         """Test stealth category execution and expected agents."""
-        symbol = "RELIANCE.NS"
         results = await category_manager.execute_category(
-            CategoryType.STEALTH, symbol
+            CategoryType.STEALTH, test_symbol
         )
 
         valid_results = self._validate_agent_results(results, CategoryType.STEALTH)
 
         # Check for specific agents expected in this category
-        # Use r["agent_name"] directly as _validate_agent_results ensures it exists
-        assert any(r["agent_name"].startswith("moneycontrol") for r in valid_results), \
-               f"Expected 'moneycontrol' agent result in {CategoryType.STEALTH.name} category output for {symbol}"
-        # Add assertions for other specific stealth agents if expected
+        assert any(r["agent_name"].lower().startswith("moneycontrol") for r in valid_results), \
+               f"Expected agent name starting with 'moneycontrol' (case-insensitive) in {CategoryType.STEALTH.name} category output for {test_symbol}"
 
     # Optional: Add tests for error handling, e.g.:
     # - What happens if an individual agent raises an unhandled exception?

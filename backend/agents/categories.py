@@ -91,6 +91,18 @@ class CategoryManager:
             description="AI-powered analysis",
             dependencies=["VALUATION", "TECHNICAL", "SENTIMENT"],
         ),
+        CategoryType.STEALTH: CategoryMetadata(
+            name="Stealth",
+            weight=0.0,
+            description="Stealth agents for data gathering",
+            dependencies=[],
+        ),
+        CategoryType.AUTOMATION: CategoryMetadata(
+            name="Automation",
+            weight=0.0,
+            description="Automation agents for tasks",
+            dependencies=[],
+        ),
     }
 
     _agent_registry: Dict[CategoryType, List[str]] = {
@@ -202,29 +214,35 @@ class CategoryManager:
         agents = await cls.get_category_agents(category)
         results = []
         for agent_func in agents: # Renamed variable for clarity
-            agent_name = agent_func.__name__ if hasattr(agent_func, '__name__') else 'unknown_agent'
+            # Use the agent's module name for better identification in fallbacks/errors
+            agent_module_name = agent_func.__module__.split('.')[-1] if hasattr(agent_func, '__module__') else 'unknown_agent_module'
+            # agent_name from function name is a less reliable fallback, prioritize module name if decorator doesn't set it
+            agent_name_from_func = agent_func.__name__ if hasattr(agent_func, '__name__') else 'unknown_agent_func'
+
+
             try:
                 # Pass an empty dictionary to each agent, ignoring the passed context
                 # Assuming agent signature is async def run(symbol) or handled by decorator
                 result = await agent_func(symbol) # Remove agent_outputs={}
                 if result:
                     # Ensure agent_name is included if not already present
-                    if 'agent_name' not in result: # Add missing colon
-                        result['agent_name'] = agent_name
+                    # The agent/decorator should ideally set this.
+                    if 'agent_name' not in result:
+                        result['agent_name'] = agent_module_name # Use module name as primary fallback
                     results.append(result)
             except ValueError as e:
-                logger.error(f"Agent {agent_name} failed for {symbol} with ValueError: {e}")
+                logger.error(f"Agent {agent_module_name} (func: {agent_name_from_func}) failed for {symbol} with ValueError: {e}")
                 results.append({
-                    'agent_name': agent_name,
+                    'agent_name': agent_module_name, # Use module name
                     'symbol': symbol,
                     'status': 'error',
                     'error': f"ValueError: {e}",
                     'details': {}
                 })
             except Exception as e:
-                logger.error(f"Agent {agent_name} failed for {symbol} with unexpected error: {e}", exc_info=True) # Added traceback
+                logger.error(f"Agent {agent_module_name} (func: {agent_name_from_func}) failed for {symbol} with unexpected error: {e}", exc_info=True) # Added traceback
                 results.append({
-                    'agent_name': agent_name,
+                    'agent_name': agent_module_name, # Use module name
                     'symbol': symbol,
                     'status': 'error',
                     'error': f"Unexpected error: {e}",
