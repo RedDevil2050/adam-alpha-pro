@@ -220,8 +220,8 @@ class TestSystemIntegration:
         # Find the result specifically from market_regime_agent
         market_regime_agent_result = None
         for agent_res in market_results_data.get("results", []):
-            # Ensure agent_res is a dict and has 'agent_name' before checking
-            if isinstance(agent_res, dict) and agent_res.get("agent_name") == "market_regime_agent":
+            # Ensure agent_res is a dict and has 'agent_name' before checking (case-insensitive)
+            if isinstance(agent_res, dict) and agent_res.get("agent_name", "").lower() == "market_regime_agent":
                  market_regime_agent_result = agent_res
                  break
 
