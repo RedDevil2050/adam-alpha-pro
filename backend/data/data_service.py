@@ -7,6 +7,8 @@ import asyncio
 import aiohttp
 from datetime import datetime, timedelta
 from functools import lru_cache
+import json  # Added import for json operations
+
 from .providers.unified_provider import UnifiedDataProvider, get_unified_provider
 from backend.config.settings import get_settings
 
@@ -115,7 +117,7 @@ class DataService:
             if self.cache:
                 cached = self.cache.get(key)
                 if cached:
-                    return eval(cached)  # Safe since we control what goes into cache
+                    return json.loads(cached)  # Use json.loads for safety
         except Exception as e:
             logger.error(f"Cache retrieval error: {e}")
         return None
@@ -124,6 +126,6 @@ class DataService:
         """Cache market data with expiration"""
         try:
             if self.cache:
-                self.cache.setex(key, expiry, str(data))
+                self.cache.setex(key, expiry, json.dumps(data))  # Use json.dumps for serialization
         except Exception as e:
             logger.error(f"Cache storage error: {e}")

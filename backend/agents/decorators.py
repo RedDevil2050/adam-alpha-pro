@@ -57,13 +57,13 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
                 # 2. Execute Core Logic
                 # Attempt to execute the agent function
                 try:
-                    # Ensure the decorated function is awaited if it's a coroutine
-                    if asyncio.iscoroutinefunction(func):
-                        result = await func(*args, **kwargs)
+                    # Execute the function first
+                    executed_func_result = func(*args, **kwargs)
+                    # Then, check if the result is a coroutine and await it if so
+                    if asyncio.iscoroutine(executed_func_result):
+                        result = await executed_func_result
                     else:
-                        # Handle synchronous functions if necessary, though less common here
-                        # This part might need adjustment based on actual usage
-                        result = func(*args, **kwargs) # Assuming sync functions are possible
+                        result = executed_func_result
 
                     # Ensure agent_name is in the result before returning/caching
                     if result and "agent_name" not in result:

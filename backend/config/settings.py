@@ -345,11 +345,25 @@ class Settings(BaseSettings):
                 except ValueError:
                     pass
         return 6379
-        
-@property
-def REDIS_URL(self) -> str:
-    """Get Redis URL from various possible sources"""
-    return "redis://redis:6379"
+
+    @property
+    def twitter_bearer_token(self) -> Optional[str]:
+        """Get Twitter Bearer Token from APIKeys settings."""
+        if self.api_keys:
+            return self.api_keys.TWITTER_BEARER_TOKEN
+        return None
+
+    @property
+    def sector_pe_averages(self) -> Dict[str, float]:
+        """Get Sector PE Averages from AgentSettings."""
+        if self.agent_settings:
+            return self.agent_settings.sector_pe_averages
+        return {}
+
+    @property
+    def REDIS_URL(self) -> str:
+        """Get Redis URL from various possible sources"""
+        return "redis://redis:6379"
 
     def get_api_key(self, provider: str) -> Optional[str]:
         provider = provider.upper()

@@ -1,6 +1,7 @@
 import asyncio
 import pandas as pd
 import numpy as np
+from datetime import datetime, timedelta
 
 # Assume these data provider functions exist or will be created:
 from backend.utils.data_provider import (
@@ -82,11 +83,14 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     # Fetch current EV, EBITDA, and historical data concurrently
     # NOTE: Assumes fetch_historical_ev/ebitda return Series aligned with price dates
     try:
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=ev_settings.HISTORICAL_YEARS * 365.25) # Approximate years
+
         ev_task = fetch_latest_ev(symbol)
         ebitda_task = fetch_latest_ebitda(symbol)
-        hist_ev_task = fetch_historical_ev(symbol, years=ev_settings.HISTORICAL_YEARS)
+        hist_ev_task = fetch_historical_ev(symbol, start_date=start_date.strftime('%Y-%m-%d'), end_date=end_date.strftime('%Y-%m-%d'))
         hist_ebitda_task = fetch_historical_ebitda(
-            symbol, years=ev_settings.HISTORICAL_YEARS
+            symbol, start_date=start_date.strftime('%Y-%m-%d'), end_date=end_date.strftime('%Y-%m-%d')
         )
 
         current_ev, current_ebitda, historical_ev, historical_ebitda = (
