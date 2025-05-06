@@ -205,11 +205,11 @@ class CategoryManager:
             agent_name = agent_func.__name__ if hasattr(agent_func, '__name__') else 'unknown_agent'
             try:
                 # Pass an empty dictionary to each agent, ignoring the passed context
-                # Assuming agent signature is async def run(symbol, agent_outputs={})
-                result = await agent_func(symbol, agent_outputs={}) # Pass empty dict for agent_outputs
+                # Assuming agent signature is async def run(symbol) or handled by decorator
+                result = await agent_func(symbol) # Remove agent_outputs={}
                 if result:
                     # Ensure agent_name is included if not already present
-                    if 'agent_name' not in result:
+                    if 'agent_name' not in result: # Add missing colon
                         result['agent_name'] = agent_name
                     results.append(result)
             except ValueError as e:

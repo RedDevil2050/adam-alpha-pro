@@ -8,13 +8,16 @@ from unittest.mock import AsyncMock, patch, MagicMock
 from backend.agents.technical.adx_agent import run as adx_run, agent_name # Import agent_name
 import datetime
 
+# Store original pandas Rolling.mean method at module level
+_original_pandas_rolling_mean = pd.core.window.rolling.Rolling.mean
+
 @pytest.mark.asyncio
 # Patch dependencies in the correct order (innermost first)
 @patch('backend.agents.technical.adx_agent.tracker.update')
 @patch('backend.agents.technical.adx_agent.get_redis_client')
 @patch('backend.agents.technical.adx_agent.fetch_ohlcv_series')
 # Mock the final pandas calculation step to control the ADX value
-@patch('pandas.core.window.rolling.Rolling.mean')
+@patch('pandas.core.window.rolling.Rolling.mean', autospec=True) # Added autospec=True
 async def test_adx_agent_strong_trend(mock_pd_mean, mock_fetch, mock_get_redis, mock_tracker_update):
     # --- Mock Configuration ---
     symbol = 'TEST_SYMBOL'
@@ -46,16 +49,18 @@ async def test_adx_agent_strong_trend(mock_pd_mean, mock_fetch, mock_get_redis, 
     mock_adx_series.iloc.__getitem__.return_value = mock_adx_value
 
     # Use side_effect to pass through initial calls and mock the last one
-    original_mean = pd.core.window.rolling.Rolling.mean # Store original method
     call_count = 0
-    def mean_side_effect(*args, **kwargs):
+    def mean_side_effect(*args, **kwargs): # args[0] should be the Rolling instance
         nonlocal call_count
         call_count += 1
         if call_count == 4: # Mock the 4th call (ADX)
             return mock_adx_series
         else: # Pass through other calls to the original method
-            # Need to bind the original method to the instance (`args[0]` is `self`)
-            return original_mean(args[0], **kwargs)
+            # args[0] is 'self' (the Rolling instance) due to autospec
+            # Call the *true* original method
+            if not args:
+                 raise AssertionError("mean_side_effect called with no args even with autospec")
+            return _original_pandas_rolling_mean(args[0], **kwargs) # Use the stored original
 
     mock_pd_mean.side_effect = mean_side_effect
 
