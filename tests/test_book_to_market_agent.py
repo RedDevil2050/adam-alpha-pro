@@ -1,38 +1,56 @@
 import sys, os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-
 import pytest
 import pandas as pd
 import numpy as np
 from backend.agents.valuation.book_to_market_agent import run as bm_run
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch, MagicMock # Import MagicMock
 
 @pytest.mark.asyncio
-async def test_book_to_market_agent(monkeypatch):
-    # Mock dependencies - adjust mocks as needed for realistic data
-    # Patch fetch_book_value where it's used in the agent module
-    monkeypatch.setattr('backend.agents.valuation.book_to_market_agent.fetch_book_value', AsyncMock(return_value=50.0))
-    # Mock price point to return a dictionary as expected by the agent
-    monkeypatch.setattr('backend.utils.data_provider.fetch_price_point', AsyncMock(return_value={"latestPrice": 100.0}))
-    # Mock historical prices to allow percentile calculation
+# Patch yfinance.Ticker to prevent actual network calls
+@patch('yfinance.Ticker', new_callable=MagicMock) 
+@patch('backend.agents.valuation.book_to_market_agent.fetch_historical_price_series', new_callable=AsyncMock)
+@patch('backend.agents.valuation.book_to_market_agent.fetch_price_point', new_callable=AsyncMock)
+@patch('backend.agents.valuation.book_to_market_agent.fetch_book_value', new_callable=AsyncMock)
+async def test_book_to_market_agent(
+    mock_fetch_book_value,
+    mock_fetch_price_point,
+    mock_fetch_hist_prices,
+    mock_yfinance_ticker, # Add the yfinance.Ticker mock
+    # monkeypatch
+):
+    # Mock dependencies
+    mock_fetch_book_value.return_value = 50.0
+    # This mock should now be fully effective as yfinance.Ticker is also mocked
+    mock_fetch_price_point.return_value = 100.0 
+    
     dates = pd.date_range(end='2025-05-03', periods=100)
-    hist_prices = pd.Series(np.random.normal(100, 10, 100), index=dates)
-    # Patch fetch_historical_price_series where it's used in the agent module
-    monkeypatch.setattr('backend.agents.valuation.book_to_market_agent.fetch_historical_price_series', AsyncMock(return_value=hist_prices))
-    # Mock settings if necessary (using defaults here)
-    # from backend.config.settings import Settings
-    # monkeypatch.setattr('backend.agents.valuation.book_to_market_agent.get_settings', lambda: Settings())
+    hist_prices_series = pd.Series(np.random.normal(100, 10, 100), index=dates)
+    mock_fetch_hist_prices.return_value = hist_prices_series
+
+    # Configure the yfinance.Ticker mock if its methods are called directly or indirectly
+    # For instance, if ticker_instance.info or ticker_instance.history is called by the underlying
+    # fetch_price_point (even if fetch_price_point itself is mocked at a higher level,
+    # the yfinance.Ticker mock ensures no network activity if something slips through)
+    mock_ticker_instance = MagicMock()
+    mock_ticker_instance.info = {} # Example: if .info is accessed
+    # If .history() is called by the actual (unmocked) data_provider.py's fetch_price_point
+    # despite our agent-level mock, this would catch it.
+    # However, the agent-level mock of fetch_price_point should prevent this.
+    # This yfinance.Ticker patch is more of a safety net.
+    mock_yfinance_ticker.return_value = mock_ticker_instance
+
 
     res = await bm_run('ABC', {})
 
     # Assertions
     assert res['symbol'] == 'ABC'
-    assert 'value' in res # Check for the primary value field
+    assert 'value' in res
     assert isinstance(res['value'], float)
-    assert res['value'] == pytest.approx(0.5) # 50.0 / 100.0
+    assert res['value'] == pytest.approx(0.5)
     assert 'details' in res
-    assert 'btm_ratio' in res['details'] # Check for btm_ratio in details
+    assert 'btm_ratio' in res['details']
     assert res['details']['btm_ratio'] == res['value']
     assert 'verdict' in res
     assert res.get('error') is None

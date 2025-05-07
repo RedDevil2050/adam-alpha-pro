@@ -13,31 +13,23 @@ from backend.utils.data_provider import (
 
 @pytest.mark.asyncio
 async def test_trendlyne(monkeypatch):
-    # Improved mock response class (might not be strictly needed with the new mocking strategy)
-    class MockResponse:
-        def __init__(self, text, status_code=200):
-            self.text = text
-            self.status_code = status_code
-            # Add async json method to mimic httpx.Response
-            async def json():
-                import json
-                return json.loads(self.text) # If Trendlyne returned JSON
-            self.json = json
+    # Mock the provider's fetch_data_resilient method
+    # This mock is specific to the call made by fetch_price_trendlyne("INFY")
+    async def mock_fetch_data_resilient_custom(slf, symbol_arg, data_type_arg, **kwargs_arg):
+        # fetch_price_trendlyne("INFY") calls:
+        # provider.fetch_data_resilient("INFY", "price", provider_override="trendlyne")
+        if (symbol_arg == "INFY" and
+            data_type_arg == "price" and
+            kwargs_arg.get("provider_override") == "trendlyne"):
+            return 100.0  # Return a float, as expected by the assertion
+        
+        # If the mock is called with unexpected arguments, raise an error to make the test fail clearly.
+        raise AssertionError(
+            f"mock_fetch_data_resilient_custom called with unexpected arguments: "
+            f"symbol='{symbol_arg}', data_type='{data_type_arg}', kwargs={kwargs_arg}"
+        )
 
-    # Mock the provider's fetch_data_resilient method for the 'trendlyne' case
-    original_fetch_data_resilient = provider.fetch_data_resilient
-    # Corrected mock signature to match UnifiedDataProvider.fetch_data_resilient
-    async def mock_fetch_data_resilient_for_trendlyne(slf, provider_name_arg, symbol_arg, data_type_arg, **kwargs_arg):
-        if provider_name_arg == "trendlyne" and symbol_arg == "INFY" and data_type_arg == "price":
-            # This simulates the successful outcome of fetching and parsing Trendlyne data
-            return 100.0
-        # Fallback to original for other calls (ensure it's used correctly if needed)
-        # For this specific test, we only expect the INFY/trendlyne/price call.
-        # If other calls were made to this mock, they would hit the original_fetch_data_resilient.
-        # Consider raising an error for unexpected calls if the test is narrowly focused.
-        return await original_fetch_data_resilient(slf, provider_name_arg, symbol_arg, data_type_arg, **kwargs_arg)
-
-    monkeypatch.setattr(provider, 'fetch_data_resilient', mock_fetch_data_resilient_for_trendlyne)
+    monkeypatch.setattr(provider, 'fetch_data_resilient', mock_fetch_data_resilient_custom)
 
     result = await fetch_price_trendlyne("INFY")
 

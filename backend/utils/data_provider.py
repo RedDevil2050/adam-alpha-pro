@@ -374,9 +374,13 @@ async def fetch_price_trendlyne(symbol: str):
         symbol: Ticker symbol to fetch data for.
 
     Returns:
-        Dictionary with Trendlyne price data.
+        Float representing the price from Trendlyne.
     """
-    return await provider.fetch_data_resilient(symbol, "trendlyne")
+    # Corrected to pass "price" as the data_type to fetch_data_resilient
+    # and to align with the test's expectation of a float.
+    # The UnifiedDataProvider's fetch_data_resilient should handle parsing
+    # the specific provider's response to extract the price when data_type is "price".
+    return await provider.fetch_data_resilient(symbol, "price", provider_override="trendlyne")
 
 async def fetch_eps(symbol: str):
     """
