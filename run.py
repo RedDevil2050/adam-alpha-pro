@@ -6,7 +6,7 @@ import tempfile
 import ssl
 import shutil
 import socket
-import pkg_resources
+# import pkg_resources # Removed pkg_resources
 from importlib.metadata import version, PackageNotFoundError, distributions
 from packaging.version import parse as parse_version
 

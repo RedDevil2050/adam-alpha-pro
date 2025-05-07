@@ -55,39 +55,39 @@ def custom_settings_source(settings_cls) -> Dict[str, Any]:
 class APIKeys(BaseSettings):
     """API keys for various data providers and additional security settings"""
 
-    ALPHA_VANTAGE_KEY: Optional[str] = Field(None, env="ALPHA_VANTAGE_KEY")
-    POLYGON_API_KEY: Optional[str] = Field(None, env="POLYGON_API_KEY")
-    FINNHUB_API_KEY: Optional[str] = Field(None, env="FINNHUB_API_KEY")
-    YAHOO_FINANCE_API_KEY: Optional[str] = Field(None, env="YAHOO_FINANCE_API_KEY")
-    TIINGO_API_KEY: Optional[str] = Field(None, env="TIINGO_API_KEY")
-    QUANDL_API_KEY: Optional[str] = Field(None, env="QUANDL_API_KEY")
-    IEX_CLOUD_API_KEY: Optional[str] = Field(None, env="IEX_CLOUD_API_KEY")
-    MARKETSTACK_API_KEY: Optional[str] = Field(None, env="MARKETSTACK_API_KEY")
-    REACT_APP_BACKEND_URL: Optional[str] = Field(None, env="REACT_APP_BACKEND_URL")
-    REDIS_URL: Optional[str] = Field(None, env="REDIS_URL")
-    METRICS_PORT: Optional[int] = Field(None, env="METRICS_PORT")
-    LOG_LEVEL: Optional[str] = Field(None, env="LOG_LEVEL")
-    JWT_SECRET: Optional[str] = Field(None, env="JWT_SECRET")
-    API_PASS: Optional[str] = Field(None, env="API_PASS")
-    API_PASS_HASH: Optional[str] = Field(None, env="API_PASS_HASH")
-    TWITTER_BEARER_TOKEN: Optional[str] = Field(None, env="TWITTER_BEARER_TOKEN") # Added
+    ALPHA_VANTAGE_KEY: Optional[str] = Field(None, json_schema_extra={"env":"ALPHA_VANTAGE_KEY"})
+    POLYGON_API_KEY: Optional[str] = Field(None, json_schema_extra={"env":"POLYGON_API_KEY"})
+    FINNHUB_API_KEY: Optional[str] = Field(None, json_schema_extra={"env":"FINNHUB_API_KEY"})
+    YAHOO_FINANCE_API_KEY: Optional[str] = Field(None, json_schema_extra={"env":"YAHOO_FINANCE_API_KEY"})
+    TIINGO_API_KEY: Optional[str] = Field(None, json_schema_extra={"env":"TIINGO_API_KEY"})
+    QUANDL_API_KEY: Optional[str] = Field(None, json_schema_extra={"env":"QUANDL_API_KEY"})
+    IEX_CLOUD_API_KEY: Optional[str] = Field(None, json_schema_extra={"env":"IEX_CLOUD_API_KEY"})
+    MARKETSTACK_API_KEY: Optional[str] = Field(None, json_schema_extra={"env":"MARKETSTACK_API_KEY"})
+    REACT_APP_BACKEND_URL: Optional[str] = Field(None, json_schema_extra={"env":"REACT_APP_BACKEND_URL"})
+    REDIS_URL: Optional[str] = Field(None, json_schema_extra={"env":"REDIS_URL"})
+    METRICS_PORT: Optional[int] = Field(None, json_schema_extra={"env":"METRICS_PORT"})
+    LOG_LEVEL: Optional[str] = Field(None, json_schema_extra={"env":"LOG_LEVEL"})
+    JWT_SECRET: Optional[str] = Field(None, json_schema_extra={"env":"JWT_SECRET"})
+    API_PASS: Optional[str] = Field(None, json_schema_extra={"env":"API_PASS"})
+    API_PASS_HASH: Optional[str] = Field(None, json_schema_extra={"env":"API_PASS_HASH"})
+    TWITTER_BEARER_TOKEN: Optional[str] = Field(None, json_schema_extra={"env":"TWITTER_BEARER_TOKEN"}) # Added
 
     # Additional fields to resolve validation errors
-    ENV: Optional[str] = Field(None, env="ENV")
-    PRIMARY_PROVIDER: Optional[str] = Field(None, env="PRIMARY_PROVIDER")
-    FALLBACK_PROVIDERS: Optional[str] = Field(None, env="FALLBACK_PROVIDERS")
-    MARKET_INDEX_SYMBOL: Optional[str] = Field(None, env="MARKET_INDEX_SYMBOL")
-    CACHE_TTL: Optional[int] = Field(None, env="CACHE_TTL")
-    REQUEST_TIMEOUT: Optional[int] = Field(None, env="REQUEST_TIMEOUT")
-    MAX_RETRIES: Optional[int] = Field(None, env="MAX_RETRIES")
-    RETRY_BACKOFF: Optional[float] = Field(None, env="RETRY_BACKOFF")
-    MARKET_HOURS_START: Optional[str] = Field(None, env="MARKET_HOURS_START")
-    MARKET_HOURS_END: Optional[str] = Field(None, env="MARKET_HOURS_END")
-    DB_HOST: Optional[str] = Field(None, env="DB_HOST")
-    DB_PORT: Optional[int] = Field(None, env="DB_PORT")
-    DB_NAME: Optional[str] = Field(None, env="DB_NAME")
-    DB_USER: Optional[str] = Field(None, env="DB_USER")
-    DB_PASSWORD: Optional[str] = Field(None, env="DB_PASSWORD")
+    ENV: Optional[str] = Field(None, json_schema_extra={"env":"ENV"})
+    PRIMARY_PROVIDER: Optional[str] = Field(None, json_schema_extra={"env":"PRIMARY_PROVIDER"})
+    FALLBACK_PROVIDERS: Optional[str] = Field(None, json_schema_extra={"env":"FALLBACK_PROVIDERS"})
+    MARKET_INDEX_SYMBOL: Optional[str] = Field(None, json_schema_extra={"env":"MARKET_INDEX_SYMBOL"})
+    CACHE_TTL: Optional[int] = Field(None, json_schema_extra={"env":"CACHE_TTL"})
+    REQUEST_TIMEOUT: Optional[int] = Field(None, json_schema_extra={"env":"REQUEST_TIMEOUT"})
+    MAX_RETRIES: Optional[int] = Field(None, json_schema_extra={"env":"MAX_RETRIES"})
+    RETRY_BACKOFF: Optional[float] = Field(None, json_schema_extra={"env":"RETRY_BACKOFF"})
+    MARKET_HOURS_START: Optional[str] = Field(None, json_schema_extra={"env":"MARKET_HOURS_START"})
+    MARKET_HOURS_END: Optional[str] = Field(None, json_schema_extra={"env":"MARKET_HOURS_END"})
+    DB_HOST: Optional[str] = Field(None, json_schema_extra={"env":"DB_HOST"})
+    DB_PORT: Optional[int] = Field(None, json_schema_extra={"env":"DB_PORT"})
+    DB_NAME: Optional[str] = Field(None, json_schema_extra={"env":"DB_NAME"})
+    DB_USER: Optional[str] = Field(None, json_schema_extra={"env":"DB_USER"})
+    DB_PASSWORD: Optional[str] = Field(None, json_schema_extra={"env":"DB_PASSWORD"})
 
     model_config = BaseSecretHandlingConfig.get_config_dict()
 
@@ -95,40 +95,40 @@ class APIKeys(BaseSettings):
 class DataProviderSettings(BaseSettings):
     """Settings for data providers"""
 
-    PRIMARY_PROVIDER: str = Field("yahoo_finance", env="PRIMARY_PROVIDER")
+    PRIMARY_PROVIDER: str = Field("yahoo_finance", json_schema_extra={"env":"PRIMARY_PROVIDER"})
     FALLBACK_PROVIDERS: List[str] = [
         "alpha_vantage",
         "polygon",
         "finnhub",
         "web_scraper",
     ]
-    CACHE_TTL: int = Field(3600, env="CACHE_TTL")  # seconds
-    REQUEST_TIMEOUT: int = Field(10, env="REQUEST_TIMEOUT")  # seconds
-    MAX_RETRIES: int = Field(3, env="MAX_RETRIES")
-    RETRY_BACKOFF: float = Field(2.0, env="RETRY_BACKOFF")
-    CIRCUIT_BREAKER_THRESHOLD: int = Field(5, env="CIRCUIT_BREAKER_THRESHOLD")
-    CIRCUIT_BREAKER_TIMEOUT: int = Field(300, env="CIRCUIT_BREAKER_TIMEOUT")  # seconds
+    CACHE_TTL: int = Field(3600, json_schema_extra={"env":"CACHE_TTL"})  # seconds
+    REQUEST_TIMEOUT: int = Field(10, json_schema_extra={"env":"REQUEST_TIMEOUT"})  # seconds
+    MAX_RETRIES: int = Field(3, json_schema_extra={"env":"MAX_RETRIES"})
+    RETRY_BACKOFF: float = Field(2.0, json_schema_extra={"env":"RETRY_BACKOFF"})
+    CIRCUIT_BREAKER_THRESHOLD: int = Field(5, json_schema_extra={"env":"CIRCUIT_BREAKER_THRESHOLD"})
+    CIRCUIT_BREAKER_TIMEOUT: int = Field(300, json_schema_extra={"env":"CIRCUIT_BREAKER_TIMEOUT"})  # seconds
     # Added fields for Beta Agent
-    MARKET_INDEX_SYMBOL: str = Field("^NSEI", env="MARKET_INDEX_SYMBOL")
-    RISK_FREE_RATE: float = Field(0.04, env="RISK_FREE_RATE")
+    MARKET_INDEX_SYMBOL: str = Field("^NSEI", json_schema_extra={"env":"MARKET_INDEX_SYMBOL"})
+    RISK_FREE_RATE: float = Field(0.04, json_schema_extra={"env":"RISK_FREE_RATE"})
 
 
 class LoggingSettings(BaseSettings):
     """Logging configuration"""
 
-    LEVEL: str = Field("INFO", env="LOG_LEVEL")
+    LEVEL: str = Field("INFO", json_schema_extra={"env":"LOG_LEVEL"})
     FORMAT: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    LOG_FILE: Optional[str] = Field("logs/app.log", env="LOG_FILE")
+    LOG_FILE: Optional[str] = Field("logs/app.log", json_schema_extra={"env":"LOG_FILE"})
 
 
 class SecuritySettings(BaseSettings):
     """Security-related settings"""
 
     # Use JWT_SECRET_KEY directly for consistency
-    JWT_SECRET_KEY: str = Field("test-jwt-secret-for-market-deployment-checks", env="JWT_SECRET_KEY")
-    TOKEN_EXPIRATION: int = Field(3600, env="JWT_TOKEN_EXPIRATION")  # seconds
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(60, env="JWT_ACCESS_TOKEN_EXPIRE_MINUTES") # Added field, default 60 mins
-    ALGORITHM: str = Field("HS256", env="JWT_ALGORITHM")
+    JWT_SECRET_KEY: str = Field("test-jwt-secret-for-market-deployment-checks", json_schema_extra={"env":"JWT_SECRET_KEY"})
+    TOKEN_EXPIRATION: int = Field(3600, json_schema_extra={"env":"JWT_TOKEN_EXPIRATION"})  # seconds
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(60, json_schema_extra={"env":"JWT_ACCESS_TOKEN_EXPIRE_MINUTES"}) # Added field, default 60 mins
+    ALGORITHM: str = Field("HS256", json_schema_extra={"env":"JWT_ALGORITHM"})
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -140,9 +140,9 @@ class SecuritySettings(BaseSettings):
 class DatabaseSettings(BaseSettings):
     """Database configuration"""
 
-    URL: str = Field("sqlite:///./test.db", env="DATABASE_URL")
-    POOL_SIZE: int = Field(5, env="DATABASE_POOL_SIZE")
-    MAX_OVERFLOW: int = Field(10, env="DATABASE_MAX_OVERFLOW")
+    URL: str = Field("sqlite:///./test.db", json_schema_extra={"env":"DATABASE_URL"})
+    POOL_SIZE: int = Field(5, json_schema_extra={"env":"DATABASE_POOL_SIZE"})
+    MAX_OVERFLOW: int = Field(10, json_schema_extra={"env":"DATABASE_MAX_OVERFLOW"})
 
     @field_validator("URL")
     def validate_database_url(cls, v):
@@ -161,18 +161,18 @@ class DatabaseSettings(BaseSettings):
 class BetaAgentSettings(BaseSettings):
     """Settings specific to the Beta Agent"""
 
-    VAR_CONFIDENCE_LEVEL: float = Field(0.95, env="BETA_VAR_CONFIDENCE_LEVEL")
+    VAR_CONFIDENCE_LEVEL: float = Field(0.95, json_schema_extra={"env":"BETA_VAR_CONFIDENCE_LEVEL"})
     SHARPE_ANNUALIZATION_FACTOR: int = Field(
-        252, env="BETA_SHARPE_ANNUALIZATION_FACTOR"
+        252, json_schema_extra={"env":"BETA_SHARPE_ANNUALIZATION_FACTOR"}
     )
-    COMPOSITE_WEIGHT_BETA: float = Field(0.4, env="BETA_COMPOSITE_WEIGHT_BETA")
-    COMPOSITE_WEIGHT_VAR: float = Field(0.3, env="BETA_COMPOSITE_WEIGHT_VAR")
-    COMPOSITE_WEIGHT_SHARPE: float = Field(0.3, env="BETA_COMPOSITE_WEIGHT_SHARPE")
+    COMPOSITE_WEIGHT_BETA: float = Field(0.4, json_schema_extra={"env":"BETA_COMPOSITE_WEIGHT_BETA"})
+    COMPOSITE_WEIGHT_VAR: float = Field(0.3, json_schema_extra={"env":"BETA_COMPOSITE_WEIGHT_VAR"})
+    COMPOSITE_WEIGHT_SHARPE: float = Field(0.3, json_schema_extra={"env":"BETA_COMPOSITE_WEIGHT_SHARPE"})
     VERDICT_THRESHOLD_LOW_RISK: float = Field(
-        0.7, env="BETA_VERDICT_THRESHOLD_LOW_RISK"
+        0.7, json_schema_extra={"env":"BETA_VERDICT_THRESHOLD_LOW_RISK"}
     )
     VERDICT_THRESHOLD_MODERATE_RISK: float = Field(
-        0.4, env="BETA_VERDICT_THRESHOLD_MODERATE_RISK"
+        0.4, json_schema_extra={"env":"BETA_VERDICT_THRESHOLD_MODERATE_RISK"}
     )
 
 
@@ -280,18 +280,18 @@ class AgentSettings(BaseSettings):
     valuation: ValuationAgentSettings = ValuationAgentSettings() # Added valuation settings
     # Add missing market_regime settings for tests/agents
     market_regime: dict = Field(default_factory=lambda: {"thresholds": {"bull": 0.7, "bear": 0.3}}) # Modified to use Field and default_factory
-    sector_pe_averages: Dict[str, float] = Field(default_factory=dict, env="SECTOR_PE_AVERAGES") # Added
+    sector_pe_averages: Dict[str, float] = Field(default_factory=dict, json_schema_extra={"env":"SECTOR_PE_AVERAGES"}) # Added
 
 
 class Settings(BaseSettings):
     """Main settings class"""
 
-    ENV: str = Field(default="development", env="ENV")
-    DEBUG: bool = Field(default=True, env="DEBUG")
-    HOST: str = Field(default="0.0.0.0", env="HOST")
-    PORT: int = Field(default=8000, env="PORT")
+    ENV: str = Field(default="development", json_schema_extra={"env":"ENV"})
+    DEBUG: bool = Field(default=True, json_schema_extra={"env":"DEBUG"})
+    HOST: str = Field(default="0.0.0.0", json_schema_extra={"env":"HOST"})
+    PORT: int = Field(default=8000, json_schema_extra={"env":"PORT"})
     # Update ALLOWED_ORIGINS to include the specific URL of the lovable frontend
-    ALLOWED_ORIGINS: List[str] = Field(default=["http://lovable-frontend-url.com"], env="ALLOWED_ORIGINS")
+    ALLOWED_ORIGINS: List[str] = Field(default=["http://lovable-frontend-url.com"], json_schema_extra={"env":"ALLOWED_ORIGINS"})
 
     # Nested settings
     api_keys: APIKeys = APIKeys()
@@ -302,7 +302,7 @@ class Settings(BaseSettings):
     agent_settings: AgentSettings = AgentSettings()  # Ensure this line exists
 
     agent_cache_ttl: int = Field(default=3600, description="Default cache TTL for agents in seconds")
-    news_api_key: str = Field(default="test-news-api-key", env="NEWS_API_KEY")
+    news_api_key: str = Field(default="test-news-api-key", json_schema_extra={"env":"NEWS_API_KEY"})
 
     @property
     def is_production(self) -> bool:
