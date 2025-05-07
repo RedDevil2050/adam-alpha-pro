@@ -15,6 +15,18 @@ class MetricsCollector:
         }
         self.gauges = {}  # Store gauge metrics
 
+    def reset(self):
+        """Reset all metrics to their initial state."""
+        self.metrics = {
+            "category_executions": {},
+            "response_times": [],
+            "error_rates": {},
+            "cache_hits": 0,
+            "cache_misses": 0,
+            "start_time": datetime.now(),
+        }
+        self.gauges = {}
+
     def gauge(self, name: str, value):
         """Store a gauge metric value"""
         self.gauges[name] = value
