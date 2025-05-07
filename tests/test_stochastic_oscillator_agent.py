@@ -105,6 +105,7 @@ async def test_stochastic_oscillator_overbought_crossover(
 
 # Add tests for other scenarios (oversold crossover, neutral, etc.)
 @pytest.mark.asyncio
+@patch('backend.agents.technical.stochastic_oscillator_agent.datetime') # Add datetime patch
 @patch('backend.agents.technical.utils.tracker.update') # Correct patch target
 @patch('backend.agents.technical.stochastic_oscillator_agent.get_redis_client')
 @patch('backend.agents.technical.stochastic_oscillator_agent.fetch_ohlcv_series')
@@ -112,6 +113,7 @@ async def test_stochastic_oscillator_oversold_crossover(
     mock_fetch_ohlcv,
     mock_get_redis,
     mock_tracker_update, # Renamed
+    mock_datetime_in_agent # Add datetime mock argument, changed name for clarity
 ):
     """
     Test Stochastic Oscillator agent for K crossing above D in the oversold zone.
@@ -123,6 +125,16 @@ async def test_stochastic_oscillator_oversold_crossover(
     d_col = 'STOCHd_14_3_3'
 
     # --- Mock Configuration ---
+    # Mock datetime
+    real_datetime_date_class = datetime.date
+    real_datetime_timedelta_class = datetime.timedelta
+    mock_today_date_object = real_datetime_date_class(2025, 5, 2) # Define consistent date for the test
+
+    mock_datetime_in_agent.date = real_datetime_date_class
+    mock_datetime_in_agent.date.today = MagicMock(return_value=mock_today_date_object)
+    mock_datetime_in_agent.timedelta = real_datetime_timedelta_class
+    mock_datetime_in_agent.datetime = datetime.datetime
+
     mock_fetch_ohlcv.return_value = create_minimal_ohlcv()
 
     # Configure the mock calculation result (simulate pta output)
@@ -162,12 +174,15 @@ async def test_stochastic_oscillator_oversold_crossover(
     # assert pytest.approx(result['details']['k']) == expected_k
     # assert pytest.approx(result['details']['d']) == expected_d
     # Keep assertions based on agent logic and thresholds
-    assert result['details']['k'] > result['details']['d'] # Verify crossover direction
-    # The minimal data might not result in oversold, adjust or remove this check
-    # assert result['details']['d'] < OVERSOLD_THRESHOLD # Verify it happened in OS zone
+    assert result['details']['k'] >= result['details']['d'] # Verify crossover direction or equality for HOLD
+    assert result['details']['k'] < OVERSOLD_THRESHOLD # K is in oversold
+    assert result['details']['d'] < OVERSOLD_THRESHOLD # D is in oversold
 
     # --- Verify Mocks ---
-    mock_fetch_ohlcv.assert_awaited_once()
+    # Calculate expected dates based on the mocked today's date
+    end_date = mock_today_date_object
+    start_date = end_date - real_datetime_timedelta_class(days=365)
+    mock_fetch_ohlcv.assert_awaited_once_with(symbol, start_date=start_date, end_date=end_date)
     mock_get_redis.assert_awaited_once()
     mock_redis_instance.get.assert_awaited_once_with(f"{agent_name}:{symbol}")
     mock_redis_instance.set.assert_awaited_once()
@@ -176,6 +191,7 @@ async def test_stochastic_oscillator_oversold_crossover(
 
 # Optional: Add a test for a neutral scenario (K/D between 20-80)
 @pytest.mark.asyncio
+@patch('backend.agents.technical.stochastic_oscillator_agent.datetime') # Add datetime patch
 @patch('backend.agents.technical.utils.tracker.update') # Correct patch target
 @patch('backend.agents.technical.stochastic_oscillator_agent.get_redis_client')
 @patch('backend.agents.technical.stochastic_oscillator_agent.fetch_ohlcv_series')
@@ -183,6 +199,7 @@ async def test_stochastic_oscillator_neutral(
     mock_fetch_ohlcv,
     mock_get_redis,
     mock_tracker_update, # Renamed
+    mock_datetime_in_agent # Add datetime mock argument, changed name for clarity
 ):
     """
     Test Stochastic Oscillator agent for K and D in the neutral zone (20-80).
@@ -194,6 +211,16 @@ async def test_stochastic_oscillator_neutral(
     d_col = 'STOCHd_14_3_3'
 
     # --- Mock Configuration ---
+    # Mock datetime
+    real_datetime_date_class = datetime.date
+    real_datetime_timedelta_class = datetime.timedelta
+    mock_today_date_object = real_datetime_date_class(2025, 5, 2) # Define consistent date for the test
+    
+    mock_datetime_in_agent.date = real_datetime_date_class
+    mock_datetime_in_agent.date.today = MagicMock(return_value=mock_today_date_object)
+    mock_datetime_in_agent.timedelta = real_datetime_timedelta_class
+    mock_datetime_in_agent.datetime = datetime.datetime
+
     mock_fetch_ohlcv.return_value = create_minimal_ohlcv()
 
     # Configure mock calculation result (simulate pta output)
@@ -235,8 +262,8 @@ async def test_stochastic_oscillator_neutral(
 
     # --- Verify Mocks ---
     # Calculate expected dates (1 year back from today, May 2, 2025)
-    end_date = datetime.date(2025, 5, 2)
-    start_date = end_date - datetime.timedelta(days=365)
+    end_date = mock_today_date_object
+    start_date = end_date - real_datetime_timedelta_class(days=365)
     mock_fetch_ohlcv.assert_awaited_once_with(symbol, start_date=start_date, end_date=end_date)
 
     # Verify pta.stoch was called

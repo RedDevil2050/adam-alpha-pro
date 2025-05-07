@@ -4,7 +4,8 @@ from backend.agents.event.corporate_action_agent import run as ca_run
 import httpx # Import httpx
 
 @pytest.mark.asyncio
-@patch('backend.agents.decorators.get_redis_client')  # Keep this if decorator is used (agent code shows it's not)
+# Patch get_redis_client where it is imported and used by the decorator
+@patch('backend.agents.decorators.get_redis_client') 
 @patch('httpx.AsyncClient.get', new_callable=AsyncMock) # Patch httpx client get
 async def test_corporate_action_agent(mock_httpx_get, mock_get_redis, monkeypatch): # Add mock_httpx_get
     # Set up Redis mock instance and return value correctly

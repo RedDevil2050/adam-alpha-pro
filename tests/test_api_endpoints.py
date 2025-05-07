@@ -28,59 +28,40 @@ def set_env(monkeypatch):
 # Mock the background task execution
 @pytest.fixture(autouse=True)
 def mock_orchestrator(monkeypatch):
-    from backend.orchestrator import Orchestrator # Import inside fixture
-
-    mock_instance = MagicMock(spec=Orchestrator)
-    mock_instance.run_analysis_async = AsyncMock(return_value="test_job_id_123")
-    # Mock get_status to simulate completion after a delay
-    status_store = {"test_job_id_123": {"status": "PENDING"}}
-    async def mock_get_status(job_id):
-        if job_id == "test_job_id_123":
-            if status_store[job_id]["status"] == "PENDING":
-                 # Simulate completion after first check
-                status_store[job_id] = {"status": "COMPLETE", "brain": {"result": "mock_analysis"}}
-            return status_store[job_id]
-        return {"status": "NOT_FOUND"}
-    mock_instance.get_status = mock_get_status
-
-    # Patch the Orchestrator instance where it's used in the analysis endpoint
-    # Adjust the path 'backend.api.endpoints.analysis.orchestrator' if it's incorrect
+    # Mock run_full_cycle directly as the endpoint calls it synchronously
+    mock_run_full_cycle = AsyncMock(return_value={"status": "COMPLETE", "brain": {"result": "mock_analysis"}})
+    
+    # Patch run_full_cycle where it's imported in the analysis endpoint module
     try:
-        # Assuming the orchestrator instance is accessed via an import in the analysis endpoint module
-        monkeypatch.setattr('backend.api.endpoints.analysis.orchestrator', mock_instance)
-    except AttributeError:
-         # Fallback if the path is different, adjust as necessary
-         # Example: maybe it's imported directly in main?
-         # monkeypatch.setattr('backend.api.main.orchestrator', mock_instance)
-         pytest.fail("Failed to patch orchestrator. Check the path in backend.api.endpoints.analysis.")
+        monkeypatch.setattr('backend.api.endpoints.analysis.run_full_cycle', mock_run_full_cycle)
+    except AttributeError as e:
+        pytest.fail(f"Failed to patch run_full_cycle. Check the import path in backend.api.endpoints.analysis. Error: {e}")
+    
+    # Return the mock if it needs to be accessed directly in a test (optional)
+    return mock_run_full_cycle 
 
 
 def test_api_analyze_and_results_flow():
     # Login - Assuming /api/login based on main.py prefix
-    resp = client.post("/api/login", json={"username":"admin","password":"testpass"})
-    assert resp.status_code == 200, f"Login failed: {resp.text}"
-    token = resp.json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
+    # The main.py doesn't show a /api/login endpoint. 
+    # For now, I will assume the /api/analyze endpoint is protected and test it directly.
+    # If login is indeed required and implemented elsewhere, this part needs adjustment.
+    
+    # For this test, let's assume verify_token is mocked or allows requests through in a test environment.
+    # If verify_token is strict, it needs to be patched to simulate a valid token.
+    with patch('backend.security.jwt_auth.verify_token', return_value={"sub": "testuser"}) as mock_verify_token:
+        headers = {"Authorization": "Bearer faketesttoken"} # Token content doesn't matter due to mock
 
-    # Submit job - Assuming /api/analyze
-    resp2 = client.post("/api/analyze", json={"symbol":"TCS"}, headers=headers)
-    assert resp2.status_code == 202, f"Analyze submission failed: {resp2.text}"
-    job_id = resp2.json()["job_id"]
-    assert job_id == "test_job_id_123" # Check against mocked return value
+        # Call the analyze endpoint directly - it's a GET request in analysis.py
+        # The test was trying to POST to /api/analyze, but the endpoint is GET /api/analyze/{symbol}
+        symbol_to_test = "TCS"
+        resp = client.get(f"/api/analyze/{symbol_to_test}", headers=headers)
+        
+        # Expect a direct result, not a job ID
+        assert resp.status_code == 200, f"Analyze call failed: {resp.text}"
+        result = resp.json()
 
-    # Poll for completion - Assuming /api/results/{job_id}
-    timeout = time.time() + 10 # Increased timeout slightly
-    result = None
-    while time.time() < timeout:
-        res3 = client.get(f"/api/results/{job_id}", headers=headers)
-        assert res3.status_code == 200, f"Fetching results failed: {res3.text}"
-        data = res3.json()
-        if data.get("status") == "COMPLETE":
-            result = data
-            break
-        time.sleep(0.5) # Shorter sleep for faster testing
-
-    assert result is not None, "Polling timed out, result never completed"
-    assert result["status"] == "COMPLETE"
-    assert "brain" in result
-    assert result["brain"] == {"result": "mock_analysis"} # Check against mocked result
+        assert result is not None, "API did not return a result"
+        assert result["status"] == "COMPLETE"
+        assert "brain" in result
+        assert result["brain"] == {"result": "mock_analysis"} # Check against mocked result

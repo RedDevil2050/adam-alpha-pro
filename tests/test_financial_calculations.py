@@ -71,6 +71,8 @@ async def test_macd_agent_accuracy(monkeypatch):
 @pytest.mark.asyncio
 # Use monkeypatch in addition to httpx_mock
 async def test_pe_ratio_calculation(httpx_mock, monkeypatch):
+    monkeypatch.setenv("ALPHA_VANTAGE_KEY", "demo") # Ensure data_provider uses 'demo' key
+
     # Mock Alpha Vantage price
     httpx_mock.add_response(
         url="https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=TCS&apikey=demo",

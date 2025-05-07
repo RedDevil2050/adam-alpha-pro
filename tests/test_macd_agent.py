@@ -24,14 +24,26 @@ async def test_macd_agent_buy_signal(
     mock_ewm_mean,
     mock_fetch_ohlcv,
     mock_get_market_context,
-    mock_datetime # Add mock_datetime to args
+    mock_datetime_in_agent # This is the mock for 'backend.agents.technical.macd_agent.datetime'
 ):
     # --- Mock Configuration ---
     symbol = "TEST_SYMBOL"
     market_regime = "BULL"
-    # Define the date to be used by the agent
-    mock_today = datetime.date(2025, 5, 2)
-    mock_datetime.date.today.return_value = mock_today
+    
+    # Use real datetime for test setup, but mock what the agent sees
+    real_datetime_date_class = datetime.date
+    real_datetime_timedelta_class = datetime.timedelta
+
+    mock_today_date_object = real_datetime_date_class(2025, 5, 2)
+
+    # Configure the 'datetime' module as seen by the agent
+    # This ensures that when the agent does 'from datetime import date, timedelta',
+    # it gets these specific implementations.
+    mock_datetime_in_agent.date = real_datetime_date_class
+    mock_datetime_in_agent.date.today = MagicMock(return_value=mock_today_date_object)
+    mock_datetime_in_agent.timedelta = real_datetime_timedelta_class
+    # If the agent uses datetime.datetime for other purposes, ensure it's available
+    mock_datetime_in_agent.datetime = datetime.datetime
 
     # 1. Mock fetch_ohlcv_series
     # Create a dummy DataFrame with a 'close' column
@@ -95,8 +107,8 @@ async def test_macd_agent_buy_signal(
 
     # --- Verify Mocks ---
     # Calculate expected dates based on the mocked today's date
-    end_date = mock_today
-    start_date = end_date - datetime.timedelta(days=365)
+    end_date = mock_today_date_object # Use the object used for mocking
+    start_date = end_date - real_datetime_timedelta_class(days=365) # Use real timedelta for test calculation
     mock_fetch_ohlcv.assert_awaited_once_with(symbol, start_date=start_date, end_date=end_date)
     # Check ewm().mean() calls
     assert mock_ewm_mean.call_count == 3

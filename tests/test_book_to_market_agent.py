@@ -13,7 +13,8 @@ async def test_book_to_market_agent(monkeypatch):
     # Mock dependencies - adjust mocks as needed for realistic data
     # Patch fetch_book_value where it's used in the agent module
     monkeypatch.setattr('backend.agents.valuation.book_to_market_agent.fetch_book_value', AsyncMock(return_value=50.0))
-    monkeypatch.setattr('backend.utils.data_provider.fetch_price_point', AsyncMock(return_value=100.0)) # Mock price point
+    # Mock price point to return a dictionary as expected by the agent
+    monkeypatch.setattr('backend.utils.data_provider.fetch_price_point', AsyncMock(return_value={"latestPrice": 100.0}))
     # Mock historical prices to allow percentile calculation
     dates = pd.date_range(end='2025-05-03', periods=100)
     hist_prices = pd.Series(np.random.normal(100, 10, 100), index=dates)

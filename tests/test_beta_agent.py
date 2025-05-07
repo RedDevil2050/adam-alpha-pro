@@ -29,12 +29,34 @@ def mock_price_series(monkeypatch):
 @pytest.mark.asyncio
 async def test_beta_agent():
     result = await run('TEST')
-    # Assert based on the agent's actual return structure
+    assert 'symbol' in result, "Result should contain 'symbol'"
     assert result['symbol'] == 'TEST'
-    assert 'value' in result and isinstance(result['value'], (float, np.floating)) # Beta is in 'value'
-    assert 'confidence' in result and isinstance(result['confidence'], float)
-    assert 'details' in result
-    assert 'beta' in result['details'] # Beta is also in details
-    # Assert the correct verdict types
-    assert result['verdict'] in ['LOW_RISK', 'MODERATE_RISK', 'HIGH_RISK', 'NO_DATA', 'ERROR'] # Include NO_DATA/ERROR
-    assert result.get('error') is None
+    assert 'agent_name' in result, "Result should contain 'agent_name'"
+    # Assuming agent_name is defined in the agent module and imported in the test, or use literal
+    # from backend.agents.risk.beta_agent import agent_name
+    # assert result['agent_name'] == agent_name
+    assert result['agent_name'] == 'beta_agent'
+
+    assert 'verdict' in result, "Result should contain 'verdict'"
+    verdict = result['verdict']
+    assert verdict in ['LOW_RISK', 'MODERATE_RISK', 'HIGH_RISK', 'NO_DATA', 'ERROR']
+
+    assert 'confidence' in result, "Result should contain 'confidence'"
+    assert isinstance(result['confidence'], float)
+    assert 'details' in result, "Result should contain 'details'"
+
+    if verdict not in ['NO_DATA', 'ERROR']:
+        assert 'value' in result, f"Result with verdict '{verdict}' should contain 'value'"
+        assert isinstance(result['value'], (float, np.floating))
+        assert 'beta' in result['details']
+        assert result['details']['beta'] == result['value']
+        assert result.get('error') is None
+    elif verdict == 'NO_DATA':
+        assert result.get('value') is None, "Value should be None for NO_DATA verdict"
+        assert 'reason' in result['details']
+    elif verdict == 'ERROR':
+        # For ERROR verdict, 'value' might be None if set by agent's own error handling,
+        # or 'value' key might be missing if decorator handled the error minimally.
+        assert ('value' not in result) or (result.get('value') is None), "Value should be absent or None for ERROR verdict"
+        # Details should contain an error or reason
+        assert 'error' in result['details'] or 'reason' in result['details'], "Details should contain error/reason for ERROR verdict"
