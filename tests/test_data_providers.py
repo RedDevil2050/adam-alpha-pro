@@ -3,7 +3,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 import pytest
 import asyncio
-from unittest.mock import AsyncMock # Import AsyncMock
+from unittest.mock import AsyncMock, patch # Import patch
 from backend.utils.data_provider import (
     fetch_price_trendlyne, fetch_price_tickertape,
     fetch_price_moneycontrol, fetch_price_stockedge,
@@ -18,17 +18,21 @@ async def test_trendlyne(monkeypatch):
     async def mock_fetch_data_resilient_custom(slf, symbol_arg, data_type_arg, **kwargs_arg):
         # fetch_price_trendlyne("INFY") calls:
         # provider.fetch_data_resilient("INFY", "price", provider_override="trendlyne")
-        if (symbol_arg == "INFY" and
+        if (
+            symbol_arg == "INFY" and
             data_type_arg == "price" and
-            kwargs_arg.get("provider_override") == "trendlyne"):
+            kwargs_arg.get("provider_override") == "trendlyne"
+        ):
             return 100.0  # Return a float, as expected by the assertion
         
         # If the mock is called with unexpected arguments, raise an error to make the test fail clearly.
+        # This helps in debugging if the call signature changes or if the mock is too broad.
         raise AssertionError(
             f"mock_fetch_data_resilient_custom called with unexpected arguments: "
             f"symbol='{symbol_arg}', data_type='{data_type_arg}', kwargs={kwargs_arg}"
         )
 
+    # Use monkeypatch to replace the method on the *instance* of UnifiedDataProvider
     monkeypatch.setattr(provider, 'fetch_data_resilient', mock_fetch_data_resilient_custom)
 
     result = await fetch_price_trendlyne("INFY")
