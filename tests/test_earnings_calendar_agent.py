@@ -55,14 +55,15 @@ async def test_earnings_calendar_agent_no_data(
 
 @pytest.mark.asyncio
 # Patch dependencies
-@patch('backend.agents.event.earnings_calendar_agent.get_tracker') # Tracker used by decorator
+# Patch tracker.update directly as used by the agent
+@patch('backend.agents.event.earnings_calendar_agent.tracker.update', new_callable=MagicMock)
 # Corrected patch target for the redis client based on other tests and typical decorator usage
 @patch('backend.agents.event.earnings_calendar_agent.get_redis_client', new_callable=AsyncMock) # Redis client used by agent/decorator
 @patch('backend.agents.event.earnings_calendar_agent.fetch_earnings_calendar') # Data fetching function used by agent
 async def test_earnings_calendar_agent_upcoming_event(
     mock_fetch_earnings,
     mock_agent_get_redis, # Renamed to reflect its new patch target
-    mock_decorator_get_tracker, # Mock for backend.agents.decorators.get_tracker
+    mock_tracker_update, # Changed from mock_decorator_get_tracker
     monkeypatch
 ):
     # --- Mock Configuration ---
@@ -77,10 +78,8 @@ async def test_earnings_calendar_agent_upcoming_event(
     mock_redis_instance_for_agent.set = AsyncMock()
     mock_agent_get_redis.return_value = mock_redis_instance_for_agent
 
-    # 3. Mock Tracker (used by decorator)
-    mock_tracker_instance_for_decorator = AsyncMock()
-    mock_tracker_instance_for_decorator.update_agent_status = AsyncMock() # Mock the async method
-    mock_decorator_get_tracker.return_value = mock_tracker_instance_for_decorator
+    # 3. Mock Tracker update (already patched with MagicMock)
+    mock_tracker_update.return_value = None # Synchronous mock
 
     # --- Expected Results ---
     expected_verdict = "UPCOMING" # Since days <= 7
@@ -120,5 +119,5 @@ async def test_earnings_calendar_agent_upcoming_event(
     else:
         mock_redis_instance_for_agent.set.assert_not_awaited() # Should not be called for NO_DATA/ERROR from agent
 
-    mock_decorator_get_tracker.assert_called_once() # Decorator called its get_tracker
-    mock_tracker_instance_for_decorator.update_agent_status.assert_awaited_once() # Decorator updated status
+    # Verify tracker update was called
+    mock_tracker_update.assert_called_once_with("event", agent_name, "implemented")

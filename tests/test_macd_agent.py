@@ -12,7 +12,9 @@ agent_name = "macd_agent"
 
 @pytest.mark.asyncio
 # Patch dependencies (innermost first)
-# Patch datetime used by the agent
+# Patch the 'date' class if it's imported directly by the agent (e.g., from datetime import date)
+@patch('backend.agents.technical.macd_agent.date')
+# Patch datetime used by the agent (for timedelta, datetime.datetime, etc.)
 @patch('backend.agents.technical.macd_agent.datetime')
 # Patch the get_market_context method directly on the class prototype
 @patch.object(MACDAgent, 'get_market_context')
@@ -24,7 +26,8 @@ async def test_macd_agent_buy_signal(
     mock_ewm_mean,
     mock_fetch_ohlcv,
     mock_get_market_context,
-    mock_datetime_in_agent # This is the mock for 'backend.agents.technical.macd_agent.datetime'
+    mock_datetime_in_agent, # This is the mock for 'backend.agents.technical.macd_agent.datetime'
+    mock_direct_date_ref  # This is the mock for 'backend.agents.technical.macd_agent.date'
 ):
     # --- Mock Configuration ---
     symbol = "TEST_SYMBOL"
@@ -36,13 +39,12 @@ async def test_macd_agent_buy_signal(
 
     mock_today_date_object = real_datetime_date_class(2025, 5, 2)
 
-    # Configure the 'datetime' module as seen by the agent
-    # REMOVE: mock_datetime_in_agent.date = real_datetime_date_class # This was the original problematic line
-
-    # Explicitly mock the 'date' class and its 'today' method within the mocked 'datetime' module
-    mock_date_class_for_agent = MagicMock(spec=datetime.date)
-    mock_date_class_for_agent.today = MagicMock(return_value=mock_today_date_object)
-    mock_datetime_in_agent.date = mock_date_class_for_agent
+    # Configure the 'date.today()' as seen by the agent (if imported as 'from datetime import date')
+    mock_direct_date_ref.today.return_value = mock_today_date_object
+    # If the agent also constructs date objects like date(Y,M,D) using the imported 'date' name,
+    # ensure the mock can still act as a constructor if needed.
+    # For example, by making it return a real date or a mock that can be constructed:
+    # mock_direct_date_ref.side_effect = lambda y, m, d: real_datetime_date_class(y, m, d)
 
     # Ensure timedelta and datetime.datetime are available if the agent uses them via the mocked datetime module
     mock_datetime_in_agent.timedelta = real_datetime_timedelta_class
