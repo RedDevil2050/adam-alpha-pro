@@ -112,22 +112,25 @@ class SystemOrchestrator:
             final_verdict = self._generate_composite_verdict(results)
             system_health = await self.system_monitor.get_health_metrics() # Use internal monitor
 
-            # Cache results
-            await self._cache_analysis(symbol, final_verdict)
+            # Construct the full response before caching
+            successful_response = {
+                "symbol": symbol,
+                "analysis_id": analysis_id,
+                "verdict": final_verdict,
+                "category_results": results,
+                "system_health": system_health,
+                "execution_metrics": self.metrics_collector.get_metrics(),
+            }
+
+            # Cache the full successful response
+            await self._cache_analysis(symbol, successful_response)
 
             end_time = time.time() # Record end time
             duration = end_time - start_time
             self.metrics_collector.record_response_time(duration) # Record response time
 
             self.system_monitor.end_analysis(analysis_id, "success") # Use internal monitor
-            return {
-                "symbol": symbol,
-                "analysis_id": analysis_id,
-                "verdict": final_verdict,
-                "category_results": results,
-                "system_health": system_health, # Use fetched health
-                "execution_metrics": self.metrics_collector.get_metrics(), # Use internal collector
-            }
+            return successful_response
 
         except Exception as e:
             end_time = time.time() # Record end time even on error
@@ -228,13 +231,13 @@ class SystemOrchestrator:
                 return None
         return None
 
-    async def _cache_analysis(self, symbol: str, analysis: Dict):
+    async def _cache_analysis(self, symbol: str, full_analysis_result: Dict):
         """Cache analysis results"""
         cache_key = f"analysis:{symbol}"
         import json
 
         try:
-            await self.cache.set(cache_key, json.dumps(analysis), ex=3600)  # 1 hour expiry
+            await self.cache.set(cache_key, json.dumps(full_analysis_result), ex=3600)  # 1 hour expiry
         except Exception as e:
             logger.error(f"Failed to cache analysis for {symbol}: {e}")
 
