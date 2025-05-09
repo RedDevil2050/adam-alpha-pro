@@ -56,8 +56,8 @@ def test_api_analyze_and_results_flow():
 
     # Call the analyze endpoint directly - it's a GET request in analysis.py
     symbol_to_test = "TCS"
-    # Ensure the mock for run_full_analysis_for_symbol is in place for the endpoint to use
-    with patch('backend.api.endpoints.analysis.run_full_analysis_for_symbol', new_callable=AsyncMock) as mock_run_analysis:
+    # Ensure the mock for run_full_cycle is in place for the endpoint to use
+    with patch('backend.api.endpoints.analysis.run_full_cycle', new_callable=AsyncMock) as mock_run_analysis:
         # Configure the mock to return a structure that the endpoint expects
         # The endpoint expects a dictionary that will be returned as JSON.
         # Based on the previous successful test, it should look something like:
