@@ -390,59 +390,59 @@ class UnifiedDataProvider(BaseDataProvider):
 
         if data_type == "price":
             params["function"] = "GLOBAL_QUOTE"
-            async with aiohttp.ClientSession() as session:
-                async with session.get(base_url, params=params) as response:
-                    if response.status != 200:
-                        logger.error(f"Alpha Vantage API error for GLOBAL_QUOTE {symbol}: {response.status} {await response.text()}")
-                        response.raise_for_status() 
-                    data = await response.json()
-                    if "Global Quote" in data and data["Global Quote"] and "05. price" in data["Global Quote"]:
-                        return {"price": float(data["Global Quote"]["05. price"])}
-                    else:
-                        logger.warning(f"Alpha Vantage: '05. price' not in GLOBAL_QUOTE for {symbol}. Response: {data}")
-                        if data.get("Note") and "API call frequency" in data["Note"]:
-                             raise Exception(f"Alpha Vantage API rate limit hit for {symbol} (price): {data['Note']}")
-                        return None
+            async with httpx.AsyncClient() as client:
+                response = await client.get(base_url, params=params)
+                if response.status_code != 200:
+                    logger.error(f"Alpha Vantage API error for GLOBAL_QUOTE {symbol}: {response.status_code} {response.text}")
+                    response.raise_for_status()
+                data = response.json()
+                if "Global Quote" in data and data["Global Quote"] and "05. price" in data["Global Quote"]:
+                    return {"price": float(data["Global Quote"]["05. price"])}
+                else:
+                    logger.warning(f"Alpha Vantage: '05. price' not in GLOBAL_QUOTE for {symbol}. Response: {data}")
+                    if data.get("Note") and "API call frequency" in data["Note"]:
+                         raise Exception(f"Alpha Vantage API rate limit hit for {symbol} (price): {data['Note']}")
+                    return None
 
-        elif data_type == "volume": 
+        elif data_type == "volume":
             params["function"] = "GLOBAL_QUOTE"
-            async with aiohttp.ClientSession() as session:
-                async with session.get(base_url, params=params) as response:
-                    if response.status != 200:
-                        logger.error(f"Alpha Vantage API error for GLOBAL_QUOTE (volume) {symbol}: {response.status} {await response.text()}")
-                        response.raise_for_status()
-                    data = await response.json()
-                    if "Global Quote" in data and data["Global Quote"] and "06. volume" in data["Global Quote"]:
-                        return {"volume": float(data["Global Quote"]["06. volume"])}
-                    else:
-                        logger.warning(f"Alpha Vantage: '06. volume' not in GLOBAL_QUOTE for {symbol}. Response: {data}")
-                        if data.get("Note") and "API call frequency" in data["Note"]:
-                             raise Exception(f"Alpha Vantage API rate limit hit for {symbol} (volume): {data['Note']}")
-                        return None
-        
+            async with httpx.AsyncClient() as client:
+                response = await client.get(base_url, params=params)
+                if response.status_code != 200:
+                    logger.error(f"Alpha Vantage API error for GLOBAL_QUOTE (volume) {symbol}: {response.status_code} {response.text}")
+                    response.raise_for_status()
+                data = response.json()
+                if "Global Quote" in data and data["Global Quote"] and "06. volume" in data["Global Quote"]:
+                    return {"volume": float(data["Global Quote"]["06. volume"])}
+                else:
+                    logger.warning(f"Alpha Vantage: '06. volume' not in GLOBAL_QUOTE for {symbol}. Response: {data}")
+                    if data.get("Note") and "API call frequency" in data["Note"]:
+                         raise Exception(f"Alpha Vantage API rate limit hit for {symbol} (volume): {data['Note']}")
+                    return None
+
         elif data_type == "eps" or data_type.startswith("company_info_eps") or data_type == "overview":
             params["function"] = "OVERVIEW"
-            async with aiohttp.ClientSession() as session:
-                async with session.get(base_url, params=params) as response:
-                    if response.status != 200:
-                        logger.error(f"Alpha Vantage API error for OVERVIEW {symbol}: {response.status} {await response.text()}")
-                        response.raise_for_status()
-                    data = await response.json()
-                    if "EPS" in data:
-                        try:
-                            eps_value_str = data["EPS"]
-                            if eps_value_str is None or str(eps_value_str).strip().lower() == "none":
-                                logger.warning(f"Alpha Vantage: EPS is None or 'None' string for {symbol}. Response: {data}")
-                                return {"EPS": None} 
-                            return {"EPS": float(eps_value_str)}
-                        except (ValueError, TypeError) as e:
-                            logger.error(f"Alpha Vantage: Could not parse EPS '{data['EPS']}' as float for {symbol}. Error: {e}. Response: {data}")
-                            return {"EPS": None} 
-                    else:
-                        logger.warning(f"Alpha Vantage: 'EPS' not in OVERVIEW response for {symbol}. Response: {data}")
-                        if data.get("Note") and "API call frequency" in data["Note"]:
-                             raise Exception(f"Alpha Vantage API rate limit hit for {symbol} (EPS): {data['Note']}")
-                        return None 
+            async with httpx.AsyncClient() as client:
+                response = await client.get(base_url, params=params)
+                if response.status_code != 200:
+                    logger.error(f"Alpha Vantage API error for OVERVIEW {symbol}: {response.status_code} {response.text}")
+                    response.raise_for_status()
+                data = response.json()
+                if "EPS" in data:
+                    try:
+                        eps_value_str = data["EPS"]
+                        if eps_value_str is None or str(eps_value_str).strip().lower() == "none":
+                            logger.warning(f"Alpha Vantage: EPS is None or 'None' string for {symbol}. Response: {data}")
+                            return {"EPS": None}
+                        return {"EPS": float(eps_value_str)}
+                    except (ValueError, TypeError) as e:
+                        logger.error(f"Alpha Vantage: Could not parse EPS '{data['EPS']}' as float for {symbol}. Error: {e}. Response: {data}")
+                        return {"EPS": None}
+                else:
+                    logger.warning(f"Alpha Vantage: 'EPS' not in OVERVIEW response for {symbol}. Response: {data}")
+                    if data.get("Note") and "API call frequency" in data["Note"]:
+                         raise Exception(f"Alpha Vantage API rate limit hit for {symbol} (EPS): {data['Note']}")
+                    return None
         else:
             logger.warning(f"Alpha Vantage: Unsupported data_type '{data_type}' for {symbol}")
 

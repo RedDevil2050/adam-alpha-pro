@@ -9,6 +9,8 @@ from backend.agents.technical.macd_agent import run as macd_run
 from backend.agents.valuation.pe_ratio_agent import run as pe_run
 from datetime import date, timedelta # Import date utilities
 import httpx # Import httpx for httpx_mock
+from backend.config.settings import get_settings # ADDED: Import get_settings
+import backend.config.settings as app_settings # Import the settings module itself
 
 # Define default dates for mocks
 DEFAULT_END_DATE = date.today()
@@ -71,6 +73,8 @@ async def test_macd_agent_accuracy(monkeypatch):
 @pytest.mark.asyncio
 # Use monkeypatch in addition to httpx_mock
 async def test_pe_ratio_calculation(httpx_mock, monkeypatch):
+    # Reset the global settings cache to ensure monkeypatched env var is read
+    app_settings._settings = None 
     monkeypatch.setenv("ALPHA_VANTAGE_KEY", "demo") # Ensure data_provider uses 'demo' key
 
     # Mock Alpha Vantage price
