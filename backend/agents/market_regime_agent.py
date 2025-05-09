@@ -2,8 +2,7 @@ from backend.utils.data_provider import fetch_price_series
 import pandas as pd
 from backend.agents.decorators import standard_agent_execution
 import asyncio
-
-agent_name = "MarketRegimeAgent"
+agent_name = "market_regime_agent" # Changed to lowercase for consistency
 AGENT_CATEGORY = "market"
 
 @standard_agent_execution(

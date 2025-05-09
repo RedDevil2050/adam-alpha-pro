@@ -2,6 +2,7 @@ import asyncio, pkgutil, importlib
 from backend.utils.cache_utils import get_redis_client
 from backend.config.settings import settings
 from backend.agents.automation.utils import tracker
+import json # Import json
 
 agent_name = "ask_alpha_agent"
 
@@ -11,7 +12,8 @@ async def run(symbol: str, agent_outputs: dict = {}, question: str = "") -> dict
     cache_key = f"{agent_name}:{symbol}:{question}"
     cached = await redis_client.get(cache_key)
     if cached:
-        return cached
+        # Parse the JSON string from cache before returning
+        return json.loads(cached)
 
     answer = ""
     q = question.lower()
@@ -53,6 +55,7 @@ async def run(symbol: str, agent_outputs: dict = {}, question: str = "") -> dict
         "agent_name": agent_name,
     }
 
-    await redis_client.set(cache_key, result, ex=settings.agent_cache_ttl)
+    # Convert result to JSON string before caching
+    await redis_client.set(cache_key, json.dumps(result), ex=settings.agent_cache_ttl)
     tracker.update("automation", agent_name, "implemented")
     return result

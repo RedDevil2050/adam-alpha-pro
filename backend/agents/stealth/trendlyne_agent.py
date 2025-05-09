@@ -93,5 +93,5 @@ class TrendlyneAgent(StealthAgentBase):
 
 async def run(symbol: str, agent_outputs: dict = {}) -> dict:
     agent = TrendlyneAgent()
-    # Pass only symbol to execute
-    return await agent.execute(symbol)
+    # Pass agent_outputs to execute
+    return await agent.execute(symbol, agent_outputs=agent_outputs)

@@ -3,6 +3,7 @@ from backend.utils.cache_utils import get_redis_client
 from backend.config.settings import settings
 from backend.agents.intelligence.utils import tracker
 import importlib
+import json # Import json
 
 agent_name = "peer_compare_agent"
 
@@ -12,7 +13,8 @@ async def run(symbol: str) -> dict:
     cache_key = f"{agent_name}:{symbol}"
     cached = await redis_client.get(cache_key)
     if cached:
-        return cached
+        # Parse the JSON string from cache before returning
+        return json.loads(cached)
 
     # Fetch PE ratio
     pe_mod = importlib.import_module("backend.agents.valuation.pe_ratio_agent")
@@ -43,6 +45,7 @@ async def run(symbol: str) -> dict:
             "agent_name": agent_name,
         }
 
-    await redis_client.set(cache_key, result, ex=3600)
+    # Convert result to JSON string before caching
+    await redis_client.set(cache_key, json.dumps(result), ex=3600) # ex=settings.agent_cache_ttl would be better
     tracker.update("intelligence", agent_name, "implemented")
     return result

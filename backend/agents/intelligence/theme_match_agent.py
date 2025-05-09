@@ -1,5 +1,6 @@
 import httpx
 from backend.utils.cache_utils import get_redis_client
+import json # Import json
 from backend.agents.intelligence.utils import tracker
 
 agent_name = "theme_match_agent"
@@ -11,7 +12,8 @@ async def run(symbol: str) -> dict:
     redis_client = await get_redis_client()
     cached = await redis_client.get(cache_key)
     if cached:
-        return cached
+        # Parse the JSON string from cache before returning
+        return json.loads(cached)
 
     # Fetch latest headlines
     from backend.utils.data_provider import fetch_news
@@ -37,6 +39,7 @@ async def run(symbol: str) -> dict:
         "agent_name": agent_name,
     }
 
-    await redis_client.set(cache_key, result, ex=None)
+    # Convert result to JSON string before caching
+    await redis_client.set(cache_key, json.dumps(result), ex=None) # ex=None means no expiry, consider settings.agent_cache_ttl
     tracker.update("intelligence", agent_name, "implemented")
     return result

@@ -92,4 +92,4 @@ class FactorScoreAgent(IntelligenceAgentBase):
 
 async def run(symbol: str, agent_outputs: dict = {}) -> dict:
     agent = FactorScoreAgent()
-    return await agent.execute(symbol, agent_outputs)
+    return await agent.execute(symbol, agent_outputs=agent_outputs) # Pass agent_outputs

@@ -1,5 +1,6 @@
 from backend.utils.cache_utils import get_redis_client
 from backend.utils.data_provider import fetch_price_series, fetch_eps_data
+import json # Import json
 from backend.agents.intelligence.utils import tracker
 
 agent_name = "ask_adam_agent"
@@ -10,7 +11,8 @@ async def run(symbol: str, question: str = "") -> dict:
     cache_key = f"{agent_name}:{symbol}:{question}"
     cached = await redis_client.get(cache_key)
     if cached:
-        return cached
+        # Parse the JSON string from cache before returning
+        return json.loads(cached)
 
     q = question.lower()
     if "price" in q:
@@ -34,6 +36,7 @@ async def run(symbol: str, question: str = "") -> dict:
         "agent_name": agent_name,
     }
 
-    await redis_client.set(cache_key, result, ex=None)
+    # Convert result to JSON string before caching
+    await redis_client.set(cache_key, json.dumps(result), ex=None) # ex=None means no expiry, consider settings.agent_cache_ttl
     tracker.update("intelligence", agent_name, "implemented")
     return result

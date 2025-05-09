@@ -8,8 +8,8 @@ agent_name = "zerodha_agent"
 
 
 class ZerodhaAgent(StealthAgentBase):
-    async def execute(self, symbol: str) -> dict:  # Added to override base and call _execute
-        return await self._execute(symbol, agent_outputs={})
+    async def execute(self, symbol: str, agent_outputs: dict = {}) -> dict:  # Modified signature
+        return await self._execute(symbol, agent_outputs=agent_outputs) # Pass agent_outputs
 
     async def _execute(self, symbol: str, agent_outputs: dict) -> dict:
         try:
@@ -123,6 +123,6 @@ class ZerodhaAgent(StealthAgentBase):
         return margins
 
 
-async def run(symbol: str) -> dict:  # Modified signature
+async def run(symbol: str, agent_outputs: dict = {}) -> dict:  # Modified signature
     agent = ZerodhaAgent()
-    return await agent.execute(symbol)  # Modified call
+    return await agent.execute(symbol, agent_outputs=agent_outputs) # Modified call

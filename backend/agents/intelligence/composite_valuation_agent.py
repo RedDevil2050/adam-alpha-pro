@@ -2,6 +2,7 @@ import pkgutil
 import importlib
 from backend.utils.cache_utils import get_redis_client
 from backend.utils.data_provider import fetch_price_series
+import json # Import json
 from backend.agents.intelligence.utils import tracker
 
 agent_name = "composite_valuation_agent"
@@ -12,7 +13,8 @@ async def run(symbol: str) -> dict:
     cache_key = f"{agent_name}:{symbol}"
     cached = await redis_client.get(cache_key)
     if cached:
-        return cached
+        # Parse the JSON string from cache before returning
+        return json.loads(cached)
 
     # Dummy fetch to ensure data load
     _ = await fetch_price_series(symbol, source_preference=["api", "scrape"])
@@ -22,7 +24,7 @@ async def run(symbol: str) -> dict:
     for _, fullname, _ in pkgutil.walk_packages(
         path=pkg.__path__, prefix="backend.agents.valuation."
     ):
-        if fullname.endswith(("utils", "__init__")):
+        if fullname.endswith(("utils", "__init__", "base")):
             continue
         mod = importlib.import_module(fullname)
         res = await mod.run(symbol)
@@ -45,6 +47,7 @@ async def run(symbol: str) -> dict:
         "agent_name": agent_name,
     }
 
-    await redis_client.set(cache_key, result, ex=None)
+    # Convert result to JSON string before caching
+    await redis_client.set(cache_key, json.dumps(result), ex=None) # ex=None means no expiry, consider settings.agent_cache_ttl
     tracker.update("intelligence", agent_name, "implemented")
     return result

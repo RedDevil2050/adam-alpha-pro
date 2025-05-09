@@ -78,18 +78,39 @@ async def run(symbol_input: str) -> dict:
     results = {}
     for sym_proc in symbols_to_process:
         try:
-            cycle_results_list = await run_full_cycle([sym_proc])
+            # Corrected call: run_full_cycle expects a single symbol string.
+            # It returns a dictionary of agent_name: agent_result.
+            cycle_data_dict = await run_full_cycle(sym_proc)
             
-            if cycle_results_list and isinstance(cycle_results_list, list) and cycle_results_list[0]:
-                cycle_data = cycle_results_list[0]
-                results[sym_proc] = {
-                    "verdict": cycle_data.get("verdict"),
-                    "score": cycle_data.get("score", 0.0),
-                    "error": cycle_data.get("error")
-                }
+            if cycle_data_dict and isinstance(cycle_data_dict, dict):
+                if "error" in cycle_data_dict and cycle_data_dict.get("status") == "failed": # Check for top-level cycle error
+                    logger.error(f"run_full_cycle for {sym_proc} in {agent_name} itself reported an error: {cycle_data_dict['error']}")
+                    results[sym_proc] = {"verdict": "ERROR", "score": 0.0, "error": cycle_data_dict['error']}
+                else:
+                    # If no top-level error, cycle_data_dict contains individual agent results.
+                    # Extract a summary verdict/score, e.g., from verdict_orchestrator_agent or composite_valuation_agent.
+                    summary_verdict = "UNKNOWN"
+                    summary_score = 0.0
+                    # Prioritize verdict_orchestrator_agent if available and successful
+                    verdict_orch_res = cycle_data_dict.get("verdict_orchestrator_agent")
+                    if verdict_orch_res and verdict_orch_res.get("error") is None:
+                        summary_verdict = verdict_orch_res.get("verdict", "UNKNOWN")
+                        summary_score = verdict_orch_res.get("score", 0.0)
+                    else: # Fallback to composite_valuation_agent or other key agent
+                        comp_val_res = cycle_data_dict.get("composite_valuation_agent")
+                        if comp_val_res and comp_val_res.get("error") is None:
+                            summary_verdict = comp_val_res.get("verdict", "UNKNOWN")
+                            summary_score = comp_val_res.get("score", 0.0)
+
+                    results[sym_proc] = {
+                        "verdict": summary_verdict,
+                        "score": summary_score,
+                        "error": None, # No error at this level, individual agents might have errors within cycle_data_dict
+                        # "full_cycle_results": cycle_data_dict # Optionally store all results for debugging
+                    }
             else:
-                logger.error(f"run_full_cycle for {sym_proc} in {agent_name} returned unexpected data: {cycle_results_list}")
-                results[sym_proc] = {"verdict": "ERROR", "score": 0.0, "error": "Unexpected result from sub-cycle"}
+                logger.error(f"run_full_cycle for {sym_proc} in {agent_name} returned unexpected data type: {type(cycle_data_dict)}")
+                results[sym_proc] = {"verdict": "ERROR", "score": 0.0, "error": "Unexpected result type from sub-cycle"}
         except Exception as e:
             logger.error(f"Error in run_full_cycle for {sym_proc} within {agent_name}: {e}", exc_info=True)
             results[sym_proc] = {"verdict": "ERROR", "score": 0.0, "error": str(e)}
@@ -131,6 +152,6 @@ async def run(symbol_input: str) -> dict:
     if error_message:
         result_payload["error"] = error_message
 
-    await redis_client.set(cache_key, json.dumps(result_payload), ex=settings.agent_settings.agent_cache_ttl)
+    await redis_client.set(cache_key, json.dumps(result_payload), ex=settings.agent_cache_ttl) # Corrected access
     await tracker.update("automation", agent_name, "implemented")
     return result_payload

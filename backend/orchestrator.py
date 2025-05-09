@@ -28,7 +28,8 @@ AGENT_SUCCESS_RATE = Gauge(
 
 class Orchestrator:
     def __init__(self):
-        self._agents: Dict[str, Type[AgentBase]] = {}
+        # self._agents: Dict[str, Type[AgentBase]] = {} # Old: Stored class type
+        self._known_agent_names: set[str] = set() # Names of agents initializer claims to know and can provide instances for
         self._dependencies: Dict[str, List[str]] = {}
         self._execution_times: Dict[str, float] = {}
         self.context: Dict = {}
@@ -40,50 +41,83 @@ class Orchestrator:
         self.health_check_interval = 300  # 5 minutes
 
     async def initialize(self) -> bool:
-        """Initialize the orchestrator and all agents"""
+        """Initialize the orchestrator by initializing agents via AgentInitializer
+        and then registering the successfully initialized ones with this orchestrator instance.
+        """
+        if self._known_agent_names: # Already initialized
+            logger.info("Orchestrator already initialized with known agents.")
+            return True
+
         success = self.agent_initializer.initialize_all_agents()
         if not success:
             logger.error("Critical agents failed to initialize")
             return False
 
-        self._register_initialized_agents()
+        self._register_initialized_agents() # Populate based on what AgentInitializer successfully initialized
         await self._verify_system_health()
+
+        if not self._known_agent_names:
+            logger.warning("Orchestrator initialization complete, but no agents were successfully registered with the orchestrator.")
+            # Depending on requirements, this could be a critical failure.
+            # For now, we allow it to proceed.
         return True
 
     def _register_initialized_agents(self):
-        """Register successfully initialized agents"""
-        for (
-            agent_name,
-            agent_class,
-        ) in self.agent_initializer._initialized_agents.items():
-            try:
-                self.register(agent_name, agent_class)
-            except Exception as e:
-                logger.error(f"Failed to register agent {agent_name}: {e}")
+        """Register agents that were successfully initialized by AgentInitializer."""
+        self._known_agent_names.clear()
+        self._dependencies.clear()
 
-    def register(self, name: str, agent_class: Type[AgentBase]) -> None:
-        """Register an agent with dependencies"""
-        if name in self._agents:
-            logger.warning(f"Agent {name} already registered")
+        initialized_agent_names_from_initializer = self.agent_initializer.get_initialized_agent_names()
+
+        if not initialized_agent_names_from_initializer:
+            logger.warning("AgentInitializer reported no initialized agents. Orchestrator will have no agents to run.")
             return
 
-        self._agents[name] = agent_class
-        agent = self.agent_initializer.get_agent_instance(name)
-        if agent:
-            self._dependencies[name] = agent.get_dependencies()
-        else:
-            self._dependencies[name] = []
+        for agent_name in initialized_agent_names_from_initializer:
+            agent_instance_or_func = self.agent_initializer.get_agent_instance(agent_name)
+            if agent_instance_or_func:
+                self._known_agent_names.add(agent_name) # Add to orchestrator's known list
+                # Get dependencies. Functional agents might not have get_dependencies directly.
+                if hasattr(agent_instance_or_func, 'get_dependencies') and callable(agent_instance_or_func.get_dependencies):
+                    self._dependencies[agent_name] = agent_instance_or_func.get_dependencies()
+                else:
+                    self._dependencies[agent_name] = [] # Default to no dependencies
+                    logger.debug(f"Agent {agent_name} does not have get_dependencies method or it's not callable. Assuming no dependencies.")
+                logger.info(f"Orchestrator: Agent {agent_name} acknowledged as initialized and dependencies registered.")
+            else:
+                logger.error(
+                    f"Orchestrator: Agent {agent_name} listed as initialized by AgentInitializer, "
+                    f"but get_agent_instance() returned None. It will not be available."
+                )
+
+    # The explicit `register` method is removed to enforce AgentInitializer as the sole source of agent list.
+    # If dynamic registration is needed later, it should be added back with careful consideration.
 
     async def execute_agent(self, name: str, symbol: str) -> Optional[Dict]:
         """Execute single agent with timing and monitoring"""
         start_time = time.time()
+
+        # Check against the orchestrator's own list of known agents,
+        # which was populated from the initializer.
+        if name not in self._known_agent_names:
+            logger.error(
+                f"Agent {name} is not in the orchestrator's list of known_agent_names. "
+                f"It was either not initialized by AgentInitializer or failed registration here."
+            )
+            AGENT_ERRORS.labels(agent_name=name, error_type="unknown_agent").inc()
+            # AGENT_SUCCESS_RATE.labels(agent_name=name).set(0) # Consider if to set for unknown
+            return {"error": f"Agent {name} is unknown or not initialized", "agent_name": name}
+
         agent_instance = self.agent_initializer.get_agent_instance(name)
 
         if not agent_instance:
             logger.error(f"Agent {name} instance not found. Initialization might have failed.")
+            # This path should ideally not be hit if `name` is in `_known_agent_names`
+            # because `_known_agent_names` is populated based on successful `get_agent_instance` calls.
+            # Logging it as a more severe "instance_not_found_inconsistency".
             AGENT_ERRORS.labels(agent_name=name, error_type="instance_not_found").inc()
             AGENT_SUCCESS_RATE.labels(agent_name=name).set(0)
-            return {"error": f"Agent {name} instance not found", "agent_name": name}
+            return {"error": f"Agent {name} instance not found (inconsistency)", "agent_name": name}
 
         try:
             # Check dependencies (using self.context which holds previous results)
@@ -108,18 +142,39 @@ class Orchestrator:
                     "agent_name": name,
                 }
 
-
-            # Execute agent instance, passing previous results as agent_outputs
-            # The AgentBase.execute method expects 'agent_outputs'
-            result = await agent_instance.execute(symbol, agent_outputs=self.context)
+            # Execute agent instance or function
+            if hasattr(agent_instance, 'execute') and callable(agent_instance.execute):
+                # Class-based agent (e.g., AgentBase subclass)
+                result = await agent_instance.execute(symbol, agent_outputs=self.context)
+            elif callable(agent_instance):
+                # Functional agent (e.g., a module-level 'run' function)
+                # Inspect signature to pass agent_outputs if accepted
+                import inspect
+                sig = inspect.signature(agent_instance)
+                if 'agent_outputs' in sig.parameters:
+                    result = await agent_instance(symbol, agent_outputs=self.context)
+                else:
+                    result = await agent_instance(symbol)
+            else:
+                logger.error(f"Agent {name} is neither a callable nor has a callable 'execute' method.")
+                AGENT_ERRORS.labels(agent_name=name, error_type="not_executable").inc()
+                AGENT_SUCCESS_RATE.labels(agent_name=name).set(0)
+                return {"error": f"Agent {name} not executable", "agent_name": name}
 
             # Update metrics
             execution_time = time.time() - start_time
             self._execution_times[name] = execution_time
+            
+            category_value = "unknown" # Default category
+            if hasattr(agent_instance, 'category') and agent_instance.category:
+                category_value = agent_instance.category.value
+            else:
+                logger.warning(f"Agent {name} instance is missing 'category' attribute or it's None.")
+
             AGENT_EXECUTION_TIME.labels(
                 agent_name=name,
-                category=agent_instance.category.value, # Instance is guaranteed here
-            ).observe(execution_time)
+                category=category_value,
+            ).observe(execution_time) # type: ignore
 
             # Validate result structure slightly more robustly
             if result and isinstance(result, dict) and result.get("error") is None:
@@ -127,24 +182,27 @@ class Orchestrator:
             else:
                 AGENT_SUCCESS_RATE.labels(agent_name=name).set(0)
                 error_type = "execution_error"
+                error_reason = "Unknown execution error" # Default
                 if result and isinstance(result, dict) and result.get("error"):
-                    logger.warning(f"Agent {name} returned error: {result['error']}")
+                    error_reason = result['error']
+                    logger.warning(f"Agent {name} returned error: {error_reason}")
                 else:
-                    logger.warning(f"Agent {name} returned invalid/null result: {result}")
+                    error_reason = f"Agent returned invalid/null result: {result}"
+                    logger.warning(error_reason)
                     error_type = "invalid_result"
 
                 AGENT_ERRORS.labels(
                     agent_name=name, error_type=error_type
                 ).inc()
                 # Ensure a consistent error structure is returned if agent didn't provide one
-                if not result or not isinstance(result, dict) or "error" not in result:
+                if not result or not isinstance(result, dict) or "agent_name" not in result: # Check for agent_name
                      result = {
                         "symbol": symbol,
                         "verdict": "ERROR",
                         "confidence": 0.0,
                         "value": None,
-                        "details": {"reason": f"Agent returned invalid result: {result}"},
-                        "error": f"Agent returned invalid result: {result}",
+                        "details": {"reason": error_reason},
+                        "error": error_reason,
                         "agent_name": name,
                     }
 
@@ -173,10 +231,10 @@ class Orchestrator:
         execution_order = self._build_execution_order()
 
         for agent_name in execution_order:
-            # Ensure agent exists before trying to execute
-            if agent_name not in self._agents:
-                 logger.warning(f"Agent {agent_name} requested in execution order but not registered. Skipping.")
-                 continue
+            # This check is now redundant because _build_execution_order iterates _known_agent_names
+            # if agent_name not in self._known_agent_names:
+            #     logger.warning(f"Agent {agent_name} in execution order but not in known_agent_names. This shouldn't happen. Skipping.")
+            #     continue
 
             result = await self.execute_agent(agent_name, symbol)
 
@@ -188,18 +246,18 @@ class Orchestrator:
 
             # Store all results (including errors) in the final results dictionary
             if result: # Store even if it's an error result
-                 results[agent_name] = result
+                results[agent_name] = result
             else: # Should not happen with the improved execute_agent, but handle defensively
-                 logger.error(f"execute_agent for {agent_name} returned None unexpectedly.")
-                 results[agent_name] = {
-                     "symbol": symbol,
-                     "verdict": "ERROR",
-                     "confidence": 0.0,
-                     "value": None,
-                     "details": {"reason": "Agent execution returned None"},
-                     "error": "Agent execution returned None",
-                     "agent_name": agent_name,
-                 }
+                logger.error(f"execute_agent for {agent_name} returned None unexpectedly.")
+                results[agent_name] = {
+                    "symbol": symbol,
+                    "verdict": "ERROR",
+                    "confidence": 0.0,
+                    "value": None,
+                    "details": {"reason": "Agent execution returned None"},
+                    "error": "Agent execution returned None",
+                    "agent_name": agent_name,
+                }
 
 
         # Periodic health check
@@ -217,12 +275,23 @@ class Orchestrator:
                 return
             visited.add(agent)
             for dep in self._dependencies.get(agent, []):
-                visit(dep)
+                # Only visit dependencies that are known and initialized
+                if dep in self._known_agent_names:
+                    visit(dep)
+                else:
+                    logger.warning(
+                        f"Dependency '{dep}' for agent '{agent}' is not in _known_agent_names. "
+                        f"It might have failed initialization. Skipping this dependency in execution order."
+                    )
+            # Append after visiting all dependencies
             order.append(agent)
 
-        for agent in self._agents:
+        # Iterate over a sorted list of known agent names for deterministic order if dependencies are similar
+        # Iterate over orchestrator's known agents
+        for agent in sorted(list(self._known_agent_names)):
             visit(agent)
 
+        logger.debug(f"Built execution order: {order}")
         return order
 
     async def _verify_system_health(self) -> bool:
@@ -255,14 +324,15 @@ class Orchestrator:
         """Get execution metrics"""
         return {
             "execution_times": self._execution_times.copy(),
-            "total_agents": len(self._agents),
-            "initialized_agents": len(self.agent_initializer._initialized_agents),
-            "initialization_errors": len(
+            "total_known_agents": len(self._known_agent_names),
+            "initialized_agents_by_initializer": len(self.agent_initializer.get_initialized_agent_names()),
+            "initialization_errors_by_initializer": len(
                 self.agent_initializer.get_initialization_errors()
             ),
             "agent_success_rates": {
-                name: float(AGENT_SUCCESS_RATE.labels(agent_name=name)._value.get())
-                for name in self._agents
+                # Iterate over orchestrator's known agents for success rate reporting
+                name: AGENT_SUCCESS_RATE.labels(agent_name=name)._value.get() # type: ignore
+                for name in self._known_agent_names
             },
         }
 
@@ -280,16 +350,17 @@ async def run_full_cycle(symbol: str, categories: Optional[List[str]] = None): #
     orchestrator = get_orchestrator()
 
     try:
-        # Initialize orchestrator if needed (idempotent check)
-        if not orchestrator._agents:
+        # Initialize orchestrator if it hasn't been already (e.g. no known agents)
+        if not orchestrator._known_agent_names:
             initialized = await orchestrator.initialize()
-            if not initialized:
+            if not initialized or not orchestrator._known_agent_names: # Check again after initialization
+                 logger.error("Orchestrator failed to initialize or no agents were registered.")
                  return {"error": "Orchestrator failed to initialize", "status": "failed"}
 
         # If specific categories are requested, filter agents
         if categories:
             category_manager = CategoryManager() # Assuming this exists and works
-            agents_to_run = set() # Use a set to avoid duplicates
+            agents_to_run_names = set() # Use a set to avoid duplicates
 
             # Convert category names (strings) to CategoryType enums if necessary
             valid_category_enums = []
@@ -307,31 +378,35 @@ async def run_full_cycle(symbol: str, categories: Optional[List[str]] = None): #
 
             # Get agents for the valid categories
             for category_enum in valid_category_enums:
-                 # Assuming get_agents_by_category takes the enum member
-                 agents_in_category = category_manager.get_agents_by_category(category_enum)
-                 agents_to_run.update(agents_in_category) # Add agents to the set
+                 # CategoryManager.get_registered_agents returns agent names for that category
+                 agents_in_cat = category_manager.get_registered_agents(category_enum)
+                 agents_to_run_names.update(agents_in_cat) # Add agent names to the set
 
 
-            if not agents_to_run:
+            if not agents_to_run_names:
                  return {"error": f"No agents found for specified categories: {categories}", "status": "failed"}
 
-            # Execute only the selected agents (respecting dependencies implicitly via execute_agent)
-            # Note: This simplified approach doesn't guarantee dependency order *between* categories
-            # if only a subset is run. A more robust solution might involve building a
-            # temporary dependency graph for the selected agents.
             results = {}
-            # Rebuild context iteratively for the selected agents
             orchestrator.context = {}
-            # We need to determine an execution order even for a subset
             full_order = orchestrator._build_execution_order()
-            ordered_subset = [agent for agent in full_order if agent in agents_to_run]
+            # Filter the full order to only include agents we want to run for these categories
+            # AND are known to the orchestrator
+            ordered_subset_to_run = [
+                agent_name for agent_name in full_order
+                # Crucially, check against orchestrator's _known_agent_names
+                if agent_name in agents_to_run_names and agent_name in orchestrator._known_agent_names
+            ]
+            
+            missing_from_known = agents_to_run_names - set(ordered_subset_to_run)
+            if missing_from_known:
+                logger.warning(f"Agents {missing_from_known} were requested by category but are not registered or initialized with the orchestrator.")
 
-            for agent_name in ordered_subset:
-                 # Check if agent is registered before executing
-                 if agent_name not in orchestrator._agents:
-                     logger.warning(f"Agent {agent_name} requested but not registered. Skipping.")
-                     continue
+            if not ordered_subset_to_run:
+                logger.warning(f"No agents to run for categories {categories} after filtering against known agents.")
+                return {"error": f"No executable agents found for specified categories: {categories}", "status": "failed"}
 
+            for agent_name in ordered_subset_to_run:
+                 # This check is now implicitly handled by how ordered_subset_to_run is constructed
                  agent_result = await orchestrator.execute_agent(agent_name, symbol)
 
                  # Store result in context *only if* valid

@@ -1,0 +1,54 @@
+2025-04-28 22:11:37,686 - INFO - Found available port: 8501
+2025-04-28 22:11:37,686 - INFO - Starting Streamlit on port 8501
+2025-04-29 06:48:16.195 | INFO     | backend.startup:initialize_system:15 - Starting system initialization...
+2025-04-29 06:48:20.178 | ERROR    | backend.startup:verify_redis_connection:49 - Redis connection failed: Error -2 connecting to redis:6379. Name or service not known.
+2025-04-29 06:48:20.179 | ERROR    | backend.startup:initialize_system:39 - System initialization failed: Error -2 connecting to redis:6379. Name or service not known.
+2025-04-29 06:48:20.180 | ERROR    | __main__:main:280 - System launch failed: Error -2 connecting to redis:6379. Name or service not known.
+2025-04-29 06:51:45.867 | INFO     | backend.startup:initialize_system:15 - Starting system initialization...
+2025-04-29 06:51:45.875 | INFO     | backend.startup:verify_redis_connection:47 - Redis connection verified
+2025-04-29 06:51:45.877 | ERROR    | backend.startup:initialize_system:39 - System initialization failed: 'str' object has no attribute 'value'
+2025-04-29 06:51:45.879 | ERROR    | __main__:main:280 - System launch failed: 'str' object has no attribute 'value'
+2025-04-29 13:50:25.125 | INFO     | backend.startup:initialize_system:15 - Starting system initialization...
+2025-04-29 13:50:25.138 | INFO     | backend.startup:verify_redis_connection:47 - Redis connection verified
+2025-04-29 13:50:25.139 | INFO     | backend.core.orchestrator:_initialize_system:23 - System orchestrator initialized
+2025-04-29 13:50:25.140 | ERROR    | backend.startup:initialize_system:39 - System initialization failed: 'SystemMonitor' object has no attribute 'register_component'
+2025-04-29 13:50:25.141 | ERROR    | __main__:main:286 - System launch failed: 'SystemMonitor' object has no attribute 'register_component'
+2025-04-29 14:02:48.803 | INFO     | backend.startup:initialize_system:15 - Starting system initialization...
+2025-04-29 14:02:48.822 | INFO     | backend.startup:verify_redis_connection:47 - Redis connection verified
+2025-04-29 14:02:48.824 | INFO     | backend.core.orchestrator:_initialize_system:23 - System orchestrator initialized
+2025-04-29 14:02:48.826 | INFO     | backend.startup:register_components:58 - Registered 4 components
+2025-04-29 14:02:48.828 | WARNING  | backend.startup:initialize_system:30 - System not fully ready: {'ready': False, 'components': {'orchestrator': 'initializing', 'redis': 'initializing', 'api': 'initializing', 'cache': 'initializing'}}
+2025-04-29 14:08:48.462 | INFO     | backend.startup:initialize_system:15 - Starting system initialization...
+2025-04-29 14:08:48.483 | INFO     | backend.startup:verify_redis_connection:47 - Redis connection verified
+2025-04-29 14:08:48.485 | INFO     | backend.core.orchestrator:_initialize_system:23 - System orchestrator initialized
+2025-04-29 14:08:48.487 | INFO     | backend.startup:register_components:58 - Registered 4 components
+2025-04-29 14:08:48.489 | WARNING  | backend.startup:initialize_system:30 - System not fully ready: {'ready': False, 'components': {'orchestrator': 'initializing', 'redis': 'initializing', 'api': 'initializing', 'cache': 'initializing'}}
+2025-04-29 14:29:05.964 | INFO     | backend.startup:initialize_system:15 - Starting system initialization...
+2025-04-29 14:29:05.974 | INFO     | backend.startup:verify_redis_connection:47 - Redis connection verified
+2025-04-29 14:29:05.975 | INFO     | backend.core.orchestrator:_initialize_system:23 - System orchestrator initialized
+2025-04-29 14:29:05.976 | INFO     | backend.startup:register_components:58 - Registered 4 components
+2025-04-29 14:29:05.977 | WARNING  | backend.startup:initialize_system:30 - System not fully ready: {'ready': False, 'components': {'orchestrator': 'initializing', 'redis': 'initializing', 'api': 'initializing', 'cache': 'initializing'}}
+2025-04-29 16:38:45.886 | INFO     | backend.startup:initialize_system:20 - Starting system initialization...
+2025-04-29 16:38:45.887 | DEBUG    | backend.startup:register_components:92 - Registering components with monitor object: <class 'backend.utils.system_monitor.SystemMonitor'>
+2025-04-29 16:38:45.888 | INFO     | backend.startup:register_components:96 - Registered 4 components
+2025-04-29 16:38:45.894 | INFO     | backend.startup:verify_redis_connection:81 - Redis connection verified
+2025-04-29 16:38:45.894 | INFO     | backend.core.orchestrator:initialize:23 - System orchestrator initialized
+2025-04-29 16:38:45.895 | INFO     | backend.startup:initialize_system:42 - API component assumed healthy (replace with actual init if needed)
+2025-04-29 16:38:45.896 | INFO     | backend.startup:initialize_system:48 - Cache component marked healthy (linked to Redis)
+2025-04-29 16:38:45.896 | INFO     | backend.startup:initialize_system:61 - System initialization complete and ready
+2025-04-29 16:42:40.082 | INFO     | backend.startup:initialize_system:20 - Starting system initialization...
+2025-04-29 16:42:40.083 | DEBUG    | backend.startup:register_components:92 - Registering components with monitor object: <class 'backend.utils.system_monitor.SystemMonitor'>
+2025-04-29 16:42:40.084 | INFO     | backend.startup:register_components:96 - Registered 4 components
+2025-04-29 16:42:40.089 | INFO     | backend.startup:verify_redis_connection:81 - Redis connection verified
+2025-04-29 16:42:40.089 | INFO     | backend.core.orchestrator:initialize:23 - System orchestrator initialized
+2025-04-29 16:42:40.090 | INFO     | backend.startup:initialize_system:42 - API component assumed healthy (replace with actual init if needed)
+2025-04-29 16:42:40.090 | INFO     | backend.startup:initialize_system:48 - Cache component marked healthy (linked to Redis)
+2025-04-29 16:42:40.091 | INFO     | backend.startup:initialize_system:61 - System initialization complete and ready
+2025-04-29 16:47:04.958 | INFO     | backend.startup:initialize_system:20 - Starting system initialization...
+2025-04-29 16:47:04.959 | DEBUG    | backend.startup:register_components:92 - Registering components with monitor object: <class 'backend.utils.system_monitor.SystemMonitor'>
+2025-04-29 16:47:04.960 | INFO     | backend.startup:register_components:96 - Registered 4 components
+2025-04-29 16:47:04.968 | INFO     | backend.startup:verify_redis_connection:81 - Redis connection verified
+2025-04-29 16:47:04.969 | INFO     | backend.core.orchestrator:initialize:23 - System orchestrator initialized
+2025-04-29 16:47:04.970 | INFO     | backend.startup:initialize_system:42 - API component assumed healthy (replace with actual init if needed)
+2025-04-29 16:47:04.971 | INFO     | backend.startup:initialize_system:48 - Cache component marked healthy (linked to Redis)
+2025-04-29 16:47:04.971 | INFO     | backend.startup:initialize_system:61 - System initialization complete and ready

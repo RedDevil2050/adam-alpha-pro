@@ -7,6 +7,25 @@ from datetime import datetime
 import asyncio
 from loguru import logger
 import time # Ensure time is imported
+import json
+from datetime import datetime # Ensure datetime is imported
+
+# Helper function for JSON serialization
+def json_serializer(obj):
+    logger.debug(f"json_serializer attempting to serialize object of type: {type(obj)}") # Ensure logging is active
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    try:
+        # Attempt to import pandas and check for Timestamp type
+        # This is to handle cases where pandas Timestamps might be in the data
+        import pandas as pd
+        if isinstance(obj, pd.Timestamp):
+            return obj.isoformat()
+    except ImportError:
+        pass # Pandas is not installed or used, so no need to handle its Timestamp
+
+    # Let other types raise TypeError to be caught by the caller if not handled
+    raise TypeError(f"Object of type {type(obj).__name__} (value: {str(obj)[:100]}) is not JSON serializable")
 
 
 class SystemOrchestrator:
@@ -234,10 +253,11 @@ class SystemOrchestrator:
     async def _cache_analysis(self, symbol: str, full_analysis_result: Dict):
         """Cache analysis results"""
         cache_key = f"analysis:{symbol}"
-        import json
+        # import json # Already imported at the top
 
         try:
-            await self.cache.set(cache_key, json.dumps(full_analysis_result), ex=3600)  # 1 hour expiry
+            # Use the custom serializer for datetime objects
+            await self.cache.set(cache_key, json.dumps(full_analysis_result, default=json_serializer), ex=3600)  # 1 hour expiry
         except Exception as e:
             logger.error(f"Failed to cache analysis for {symbol}: {e}")
 

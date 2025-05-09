@@ -3,6 +3,7 @@ from backend.utils.cache_utils import get_redis_client
 from backend.utils.data_provider import fetch_price_series
 from backend.agents.intelligence.utils import tracker
 from loguru import logger  # Add logger
+import json # Import json
 
 agent_name = "target_price_agent"
 
@@ -12,7 +13,8 @@ async def run(symbol: str) -> dict:
     cache_key = f"{agent_name}:{symbol}"
     cached = await redis_client.get(cache_key)
     if cached:
-        return cached
+        # Parse the JSON string from cache before returning
+        return json.loads(cached)
 
     # Fetch consensus using FinancialModelingPrep
     url = f"https://financialmodelingprep.com/api/v4/price-target?symbol={symbol}"
@@ -39,7 +41,7 @@ async def run(symbol: str) -> dict:
 
     # Current price
     prices = await fetch_price_series(symbol, source_preference=["api", "scrape"])
-    current = prices[-1] if prices else None
+    current = prices.iloc[-1] if prices is not None and not prices.empty else None
 
     if target is None or current is None:
         result = {
@@ -70,6 +72,7 @@ async def run(symbol: str) -> dict:
             "agent_name": agent_name,
         }
 
-    await redis_client.set(cache_key, result, ex=None)
+    # Convert result to JSON string before caching
+    await redis_client.set(cache_key, json.dumps(result), ex=None) # ex=None means no expiry, consider settings.agent_cache_ttl
     tracker.update("intelligence", agent_name, "implemented")
     return result

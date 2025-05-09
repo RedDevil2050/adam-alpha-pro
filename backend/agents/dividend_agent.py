@@ -8,6 +8,7 @@ from backend.agents.base import AgentBase
 
 logger = logging.getLogger(__name__)
 
+agent_name = "dividend_agent" # Added for discovery
 
 class DividendAgent(AgentBase):
     """
@@ -21,7 +22,7 @@ class DividendAgent(AgentBase):
     """
 
     async def _execute(self, symbol: str, agent_outputs: dict = None) -> dict:
-        agent_name = self.__class__.__name__
+        # agent_name is now defined at module level
         logger.debug(f"{agent_name} executing for {symbol}")
 
         try:

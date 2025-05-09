@@ -82,17 +82,35 @@ class TradingViewAgent(StealthAgentBase):
             opens = np.array(data.get("opens", []))
             closes = np.array(data.get("closes", []))
 
-            # Correct pandas_ta function names
-            patterns = {
-                "doji": ta.cdl_doji(opens, highs, lows, closes).iloc[-1] if len(opens) > 0 else 0,
-                "engulfing": ta.cdl_engulfing(opens, highs, lows, closes).iloc[-1] if len(opens) > 0 else 0,
-                "morning_star": ta.cdl_morningstar(opens, highs, lows, closes).iloc[-1] if len(opens) > 0 else 0,
-                "evening_star": ta.cdl_eveningstar(opens, highs, lows, closes).iloc[-1] if len(opens) > 0 else 0,
-                "hammer": ta.cdl_hammer(opens, highs, lows, closes).iloc[-1] if len(opens) > 0 else 0,
+            calculated_patterns = {}
+
+            # Helper to safely get the last element of a series, defaulting to 0 if empty or error
+            def get_last_signal_value(ohlc_func, *args):
+                # Ensure all input arrays have the same non-zero length
+                if not all(len(arg) > 0 for arg in args) or not all(len(arg) == len(args[0]) for arg in args):
+                    return 0
+                try:
+                    series = ohlc_func(*args)
+                    if not series.empty:
+                        return series.iloc[-1]
+                    return 0
+                except Exception as e_inner:
+                    logger.warning(f"Error calculating pattern with {ohlc_func.__name__}: {e_inner}")
+                    return 0
+
+            pattern_functions = {
+                "doji": ta.cdl_doji,
+                "engulfing": ta.cdl_engulfing,
+                "morning_star": ta.cdl_morningstar,
+                "evening_star": ta.cdl_eveningstar,
+                "hammer": ta.cdl_hammer,
             }
 
+            for name, func in pattern_functions.items():
+                calculated_patterns[name] = get_last_signal_value(func, opens, highs, lows, closes)
+
             # Return boolean indicating if the latest value is non-zero
-            return {k: bool(v != 0) for k, v in patterns.items()}
+            return {k: bool(v != 0) for k, v in calculated_patterns.items()}
         except Exception as e:
             logger.error(f"Pattern analysis error: {e}")
             return {}
@@ -100,9 +118,14 @@ class TradingViewAgent(StealthAgentBase):
     # --- Add Placeholder Implementations for Missing Methods ---
     def _calculate_fibonacci_levels(self, data: dict) -> dict:
         logger.warning(f"[_calculate_fibonacci_levels for {self.__class__.__name__}] Placeholder implementation.")
-        # Placeholder: Calculate based on recent high/low
-        high = max(data.get("highs", [0]))
-        low = min(data.get("lows", [0]))
+        highs = data.get("highs", [])
+        lows = data.get("lows", [])
+
+        if not highs or not lows: # Check if lists are empty
+            return {}
+
+        high = max(highs)
+        low = min(lows)
         diff = high - low
         return {
             "level_0.236": low + diff * 0.236,
@@ -208,5 +231,5 @@ class TradingViewAgent(StealthAgentBase):
 
 async def run(symbol: str, agent_outputs: dict = {}) -> dict:
     agent = TradingViewAgent()
-    # Pass only symbol to execute
-    return await agent.execute(symbol)
+    # Pass agent_outputs to execute
+    return await agent.execute(symbol, agent_outputs=agent_outputs)

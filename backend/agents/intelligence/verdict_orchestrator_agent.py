@@ -1,5 +1,6 @@
 from backend.utils.cache_utils import get_redis_client
 from backend.agents.intelligence.utils import tracker
+import json # Import json
 
 agent_name = "verdict_orchestrator_agent"
 
@@ -9,7 +10,10 @@ async def run(symbol: str, agent_outputs: dict = {}) -> dict:
     cache_key = f"{agent_name}:{symbol}"
     cached = await redis_client.get(cache_key)
     if cached:
-        return cached
+        try:
+            return json.loads(cached)
+        except json.JSONDecodeError:
+            pass # Fall through to recompute if cache is corrupt
 
     try:
         # Aggregate scores and verdicts from agent outputs
@@ -35,7 +39,7 @@ async def run(symbol: str, agent_outputs: dict = {}) -> dict:
             "agent_name": agent_name,
         }
 
-        await redis_client.set(cache_key, result, ex=3600)
+        await redis_client.set(cache_key, json.dumps(result), ex=3600)
         tracker.update("intelligence", agent_name, "implemented")
         return result
 

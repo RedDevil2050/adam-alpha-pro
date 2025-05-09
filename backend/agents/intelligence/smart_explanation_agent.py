@@ -1,5 +1,6 @@
 from backend.utils.cache_utils import get_redis_client
 from backend.agents.intelligence.utils import tracker
+import json # Import json
 from backend.config.settings import settings
 
 agent_name = "smart_explanation_agent"
@@ -10,7 +11,8 @@ async def run(symbol: str, agent_outputs: dict) -> dict:
     cache_key = f"{agent_name}:{symbol}"
     cached = await redis_client.get(cache_key)
     if cached:
-        return cached
+        # Parse the JSON string from cache before returning
+        return json.loads(cached)
 
     # Summarize top signals
     top = sorted(
@@ -28,6 +30,7 @@ async def run(symbol: str, agent_outputs: dict) -> dict:
         "agent_name": agent_name,
     }
 
-    await redis_client.set(cache_key, result, ex=None)
+    # Convert result to JSON string before caching
+    await redis_client.set(cache_key, json.dumps(result), ex=None) # ex=None means no expiry, consider settings.agent_cache_ttl
     tracker.update("intelligence", agent_name, "implemented")
     return result

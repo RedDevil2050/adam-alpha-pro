@@ -73,4 +73,4 @@ class TijoriAgent(StealthAgentBase):
 
 async def run(symbol: str, agent_outputs: dict = {}) -> dict:
     agent = TijoriAgent()
-    return await agent.execute(symbol)
+    return await agent.execute(symbol, agent_outputs=agent_outputs)

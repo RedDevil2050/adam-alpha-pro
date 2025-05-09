@@ -1,171 +1,180 @@
 import importlib
-import os
-from typing import Dict, List, Type, Optional
+import pkgutil
+import inspect
+from typing import Dict, Any, List, Optional, Type
 from loguru import logger
-from backend.agents.base import AgentBase
-from backend.agents.categories import CategoryType, CategoryManager
-from backend.utils.metrics_collector import MetricsCollector
-from backend.config.settings import get_settings
+
+# Attempt to import AgentBase. If it's in a different location or named differently (e.g., BaseAgent),
+# this import will need to be adjusted.
+# For now, assuming it's available as backend.agents.base.AgentBase
+try:
+    from backend.agents.base import AgentBase
+except ImportError:
+    logger.warning("Could not import AgentBase from backend.agents.base. Falling back to checking for 'execute' method for class agents.")
+    # Define a dummy AgentBase if not found, so isinstance checks don't break,
+    # but rely on hasattr for 'execute'
+    class AgentBase: pass
 
 
 class AgentInitializer:
-    """Handles agent initialization, validation, and dependency management"""
-
     def __init__(self):
-        self.metrics = MetricsCollector()
-        self.settings = get_settings()
-        self._initialized_agents: Dict[str, Type[AgentBase]] = {}
-        self._agent_instances: Dict[str, AgentBase] = {}
-        self._initialization_errors: List[str] = []
+        # Stores successfully initialized agents: {agent_name: instance_or_function}
+        self._initialized_agents: Dict[str, Any] = {}
+        # Stores initialization errors: {agent_name: error_message}
+        self._initialization_errors: Dict[str, str] = {}
+        self._is_initialized = False
 
     def initialize_all_agents(self) -> bool:
         """
-        Initialize all registered agents and validate their implementations.
-        Returns True if all critical agents are properly initialized.
+        Discovers and initializes all agents in the backend.agents package.
+        Returns True if initialization process completed (doesn't guarantee all agents succeeded).
         """
-        success = True
-        for category in CategoryType:
-            try:
-                agents = CategoryManager.get_registered_agents(category)
-                for agent_name in agents:
-                    if not self._initialize_agent(category, agent_name):
-                        if self._is_critical_agent(category, agent_name):
-                            success = False
-            except Exception as e:
-                logger.error(f"Failed to initialize category {category}: {e}")
-                if self._is_critical_category(category):
-                    success = False
+        if self._is_initialized:
+            logger.info("AgentInitializer already initialized.")
+            # Return based on previous success or re-evaluate if needed.
+            # For now, assume if initialized once, it's done.
+            return len(self._initialized_agents) > 0 or not self._initialization_errors
 
-        self._log_initialization_status()
-        return success
+        logger.info("Starting agent initialization...")
+        self._initialized_agents.clear()
+        self._initialization_errors.clear()
 
-    def _initialize_agent(self, category: CategoryType, agent_name: str) -> bool:
-        """Initialize and validate a single agent"""
+        agents_package_path = "backend.agents"
         try:
-            # Import agent module
-            module_path = f"backend.agents.{category.value}.{agent_name}"
-            try:
-                module = importlib.import_module(module_path)
-            except ImportError as e:
-                logger.error(f"Failed to import {module_path}: {e}")
-                self._initialization_errors.append(
-                    f"Import error for {agent_name}: {e}"
-                )
-                return False
-
-            # Validate module structure
-            if not hasattr(module, "run"):
-                logger.error(f"Agent {agent_name} missing run function")
-                self._initialization_errors.append(
-                    f"Missing run function in {agent_name}"
-                )
-                return False
-
-            # Get agent class if exists
-            agent_class = None
-            for attr in dir(module):
-                obj = getattr(module, attr)
-                if (
-                    isinstance(obj, type)
-                    and issubclass(obj, AgentBase)
-                    and obj != AgentBase
-                ):
-                    agent_class = obj
-                    break
-
-            # Initialize agent if class exists
-            if (agent_class):
-                try:
-                    instance = agent_class()
-                    instance_name = f"{category.value}.{agent_name}"
-                    self._agent_instances[instance_name] = instance
-                    self._initialized_agents[agent_name] = agent_class
-                    logger.info(f"Successfully initialized agent {agent_name}")
-                    return True
-                except Exception as e:
-                    logger.error(f"Failed to instantiate {agent_name}: {e}")
-                    self._initialization_errors.append(
-                        f"Instantiation error for {agent_name}: {e}"
-                    )
-                    return False
-            else:
-                # Function-based agent
-                self._initialized_agents[agent_name] = module.run
-                logger.info(f"Registered function-based agent {agent_name}")
-                return True
-
-        except Exception as e:
-            logger.error(f"Unexpected error initializing {agent_name}: {e}")
-            self._initialization_errors.append(f"Unexpected error in {agent_name}: {e}")
+            agents_package = importlib.import_module(agents_package_path)
+        except ImportError:
+            logger.error(f"Could not import the main agents package: {agents_package_path}")
+            self._is_initialized = True # Mark as initialized to prevent re-attempts
             return False
 
-    def _is_critical_agent(self, category: CategoryType, agent_name: str) -> bool:
-        """Determine if an agent is critical for system operation"""
-        critical_agents = {
-            CategoryType.VALUATION: ["pe_ratio_agent", "dcf_agent"],
-            CategoryType.TECHNICAL: ["rsi_agent", "macd_agent"],
-            CategoryType.MARKET: ["market_regime_agent"],
-            CategoryType.RISK: ["risk_core_agent"],
-            CategoryType.SENTIMENT: ["news_sentiment_agent"],
-        }
-        return agent_name in critical_agents.get(category, [])
+        for _, module_name_suffix, ispkg in pkgutil.walk_packages(
+            path=agents_package.__path__, prefix=agents_package.__name__ + "."
+        ):
+            if ispkg:
+                # logger.debug(f"Skipping package: {module_name_suffix}")
+                continue # Skip packages, only process modules
 
-    def _is_critical_category(self, category: CategoryType) -> bool:
-        """Determine if a category is critical for system operation"""
-        return category in {
-            CategoryType.VALUATION,
-            CategoryType.TECHNICAL,
-            CategoryType.MARKET,
-            CategoryType.RISK,
-        }
+            # Skip __init__.py files explicitly if they are not meant to be agents
+            if module_name_suffix.endswith(".__init__"):
+                # logger.debug(f"Skipping __init__ module: {module_name_suffix}")
+                continue
 
-    def _log_initialization_status(self):
-        """Log initialization status and metrics"""
-        total_agents = len(self._initialized_agents)
-        total_errors = len(self._initialization_errors)
+            try:
+                module = importlib.import_module(module_name_suffix)
+                agent_name_from_module: Optional[str] = None
+                agent_callable_or_instance: Optional[Any] = None
 
-        logger.info(f"Agent initialization complete: {total_agents} agents initialized")
-        if total_errors > 0:
-            logger.warning(f"{total_errors} initialization errors occurred")
-            for error in self._initialization_errors:
-                logger.warning(f"  - {error}")
+                # Strategy 1: Look for a module-level 'agent_name' variable and 'run' function (functional agents)
+                if hasattr(module, "agent_name") and isinstance(module.agent_name, str) and \
+                   hasattr(module, "run") and inspect.iscoroutinefunction(module.run):
+                    agent_name_from_module = module.agent_name
+                    agent_callable_or_instance = module.run # Store the run function directly
+                    logger.debug(f"Found functional agent: {agent_name_from_module} in module {module_name_suffix}")
 
-        # Update metrics
-        self.metrics.gauge("initialized_agents_total", total_agents)
-        self.metrics.gauge("agent_initialization_errors", total_errors)
+                # Strategy 2: Look for a class that might be an agent
+                # This strategy is more complex due to various class naming conventions.
+                # We'll iterate through classes defined in the module.
+                else:
+                    for attr_name in dir(module):
+                        if attr_name.startswith("_"): # Skip private/magic attributes
+                            continue
+                        
+                        potential_class = getattr(module, attr_name)
+                        if inspect.isclass(potential_class) and potential_class.__module__ == module_name_suffix:
+                            # Check if class has 'agent_name' attribute and an 'execute' method
+                            class_agent_name = getattr(potential_class, 'agent_name', None)
+                            if class_agent_name is None and hasattr(module, 'agent_name') and isinstance(module.agent_name, str):
+                                # Fallback: if class is named same as module's agent_name
+                                if potential_class.__name__.lower() == module.agent_name.replace("_agent","").lower() or potential_class.__name__ == module.agent_name:
+                                     class_agent_name = module.agent_name
 
-    def get_agent_instance(self, name: str) -> Optional[AgentBase]:
-        """Get initialized agent instance by name"""
-        return self._agent_instances.get(name)
+                            if isinstance(class_agent_name, str) and \
+                               hasattr(potential_class, 'execute') and \
+                               inspect.iscoroutinefunction(potential_class.execute):
+                                
+                                # Check if it's a subclass of AgentBase (if AgentBase was imported)
+                                # or just has the execute method.
+                                if AgentBase.__name__ != "AgentBase" or isinstance(potential_class, type) and issubclass(potential_class, AgentBase):
+                                    pass # It's an AgentBase subclass
+                                elif not (AgentBase.__name__ != "AgentBase" or isinstance(potential_class, type) and issubclass(potential_class, AgentBase)) and hasattr(potential_class, 'execute'):
+                                    logger.debug(f"Class {potential_class.__name__} in {module_name_suffix} has 'execute' but is not AgentBase subclass. Proceeding.")
+                                    pass
+                                else: # Does not meet class criteria
+                                    continue
 
-    def get_initialization_errors(self) -> List[str]:
-        """Get list of initialization errors"""
+                                agent_name_from_module = class_agent_name
+                                try:
+                                    agent_callable_or_instance = potential_class() # Instantiate the class
+                                    logger.debug(f"Instantiated class-based agent: {agent_name_from_module} from class {potential_class.__name__} in module {module_name_suffix}")
+                                    break # Found and instantiated a class agent in this module
+                                except Exception as inst_e:
+                                    logger.error(f"Failed to instantiate agent class {potential_class.__name__} (intended name: {agent_name_from_module}) in module {module_name_suffix}: {inst_e}")
+                                    self._initialization_errors[agent_name_from_module or f"{module_name_suffix}.{potential_class.__name__}"] = f"Instantiation failed: {inst_e}"
+                                    agent_name_from_module = None # Reset if instantiation failed
+                                    agent_callable_or_instance = None
+                                    continue # Try next class in module
+
+                if agent_name_from_module and agent_callable_or_instance:
+                    if agent_name_from_module in self._initialized_agents:
+                        registered_origin_module = "unknown source"
+                        registered_agent = self._initialized_agents[agent_name_from_module]
+                        if hasattr(registered_agent, '__module__'):
+                            registered_origin_module = registered_agent.__module__
+                        elif inspect.isclass(registered_agent): # It's a class type
+                            registered_origin_module = registered_agent.__module__
+
+                        logger.warning(
+                            f"Duplicate agent name found: {agent_name_from_module} in module {module_name_suffix}. "
+                            f"Already registered from {registered_origin_module}. Skipping."
+                        )
+                        self._initialization_errors[agent_name_from_module] = f"Duplicate agent name (original: {registered_origin_module})"
+                    else:
+                        self._initialized_agents[agent_name_from_module] = agent_callable_or_instance
+                        logger.info(f"Initialized agent: {agent_name_from_module} from module {module_name_suffix}")
+                elif not module_name_suffix.endswith(('.base', '.utils', '.decorators', '.initialization', '.categories', '.registry', '.base_agent')): # Avoid logging utility modules
+                    logger.debug(f"Module {module_name_suffix} did not yield a recognized agent format.")
+
+            except ImportError as ie:
+                logger.error(f"Could not import module {module_name_suffix}: {ie}")
+                self._initialization_errors[module_name_suffix] = f"ImportError: {ie}"
+            except Exception as e:
+                logger.error(f"Error processing module {module_name_suffix} for agents: {e}", exc_info=True)
+                self._initialization_errors[module_name_suffix] = f"General processing error: {e}"
+
+        self._is_initialized = True
+        logger.info(f"Agent initialization finished. Successfully initialized {len(self._initialized_agents)} agents. Encountered {len(self._initialization_errors)} errors during discovery/initialization.")
+        if self._initialization_errors:
+            logger.warning(f"Initialization errors: {self._initialization_errors}")
+
+        return True # Returns true if process completed, check errors for specifics
+
+    def get_agent_instance(self, name: str) -> Any:
+        """Retrieves an initialized agent instance or function by name."""
+        if not self._is_initialized:
+            # This case should ideally be handled by calling initialize_all_agents first.
+            # For robustness, we can try to initialize if not done.
+            logger.warning("AgentInitializer.get_agent_instance called before explicit initialization. Attempting to initialize now.")
+            self.initialize_all_agents()
+
+        agent = self._initialized_agents.get(name)
+        if agent is None:
+            logger.debug(f"Agent '{name}' not found in initialized agents. Available: {list(self._initialized_agents.keys())}")
+        return agent
+
+    def get_initialization_errors(self) -> Dict[str, str]:
+        """Returns a dictionary of agents/modules that failed to initialize and their errors."""
         return self._initialization_errors.copy()
 
-    def validate_agent_implementation(self, agent_class: Type[AgentBase]) -> bool:
-        """Validate agent class implementation"""
-        required_methods = [
-            "execute",
-            "_execute" if hasattr(agent_class, "_execute") else "run",
-        ]
-
-        for method in required_methods:
-            if not hasattr(agent_class, method):
-                logger.error(
-                    f"Agent {agent_class.__name__} missing required method: {method}"
-                )
-                return False
-
-        return True
-
+    def get_initialized_agent_names(self) -> List[str]:
+        """Returns a list of names of successfully initialized agents."""
+        return list(self._initialized_agents.keys())
 
 # Global instance
-_agent_initializer = None
-
+_agent_initializer_instance: Optional[AgentInitializer] = None
 
 def get_agent_initializer() -> AgentInitializer:
-    """Get or create the global AgentInitializer instance"""
-    global _agent_initializer
-    if not _agent_initializer:
-        _agent_initializer = AgentInitializer()
-    return _agent_initializer
+    """Get or create the global AgentInitializer instance."""
+    global _agent_initializer_instance
+    if _agent_initializer_instance is None:
+        _agent_initializer_instance = AgentInitializer()
+    return _agent_initializer_instance
