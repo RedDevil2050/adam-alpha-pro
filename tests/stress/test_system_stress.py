@@ -23,6 +23,7 @@ class TestSystemStress:
         mock_cache_storage = {}
 
         async def mock_cache_get(key):
+            # Ensure this uses the fixture's metrics_collector
             value = mock_cache_storage.get(key)
             if value is not None:
                 if hasattr(metrics_collector, 'record_cache_event'):
@@ -32,15 +33,16 @@ class TestSystemStress:
                     metrics_collector.record_cache_event(False)
             return value
 
-        async def mock_cache_set(key, value, ex=None, ttl=None): # Modified to accept ex and ttl
+        async def mock_cache_set(key, value, ex=None, ttl=None): # Accept ex and ttl
             mock_cache_storage[key] = value
-            if hasattr(metrics_collector, 'record_cache_write'):
-                metrics_collector.record_cache_write()
+            # if hasattr(metrics_collector, 'record_cache_write'): # No such method in current MetricsCollector
+            #     metrics_collector.record_cache_write()
             return True
-
+        
+        # Ensure AsyncMock is used and side_effects are assigned to its methods
         mock_cache_client = AsyncMock()
-        mock_cache_client.get = AsyncMock(side_effect=mock_cache_get)
-        mock_cache_client.set = AsyncMock(side_effect=mock_cache_set)
+        mock_cache_client.get.side_effect = mock_cache_get
+        mock_cache_client.set.side_effect = mock_cache_set
 
         # --- Mock data fetching functions ---
         # Improved Mock DataFrame for fetch_price_series and fetch_ohlcv_series
