@@ -77,19 +77,33 @@ async def test_pe_ratio_calculation(httpx_mock, monkeypatch):
     app_settings._settings = None 
     monkeypatch.setenv("ALPHA_VANTAGE_KEY", "demo") # Ensure data_provider uses 'demo' key
 
-    # Mock Alpha Vantage price
-    httpx_mock.add_response(
-        url="https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=TCS&apikey=demo",
-        json={"Global Quote": {"05. price": "120.00"}},
+    # Remove previous httpx_mock responses for Alpha Vantage price and EPS
+    # as we will mock the data provider functions directly.
+
+    # Mock the function responsible for fetching current price within the agent's context
+    # Assuming the agent calls a function like 'fetch_current_price'
+    mock_fetch_price = AsyncMock(return_value=120.0)
+    monkeypatch.setattr(
+        'backend.agents.valuation.pe_ratio_agent.fetch_current_price',  # Path where agent looks up this function
+        mock_fetch_price
     )
-    # Mock Alpha Vantage EPS
-    httpx_mock.add_response(
-        url="https://www.alphavantage.co/query?function=OVERVIEW&symbol=TCS&apikey=demo",
-        json={"EPS": "4.00"},
+
+    # Mock the function responsible for fetching EPS within the agent's context
+    # Assuming the agent calls a function like 'fetch_company_info' for EPS
+    # The original Alpha Vantage mock returned {"EPS": "4.00"}, agent expects float.
+    async def mock_fetch_company_info_for_eps(symbol, data_field, **kwargs):
+        if data_field.upper() == 'EPS': # Making the check case-insensitive for robustness
+            return 4.0
+        # You might want to raise an error or return None for other fields if applicable
+        raise NotImplementedError(f"Mock not implemented for symbol={symbol}, data_field={data_field}")
+
+    monkeypatch.setattr(
+        'backend.agents.valuation.pe_ratio_agent.fetch_company_info',  # Path where agent looks up this function
+        AsyncMock(side_effect=mock_fetch_company_info_for_eps) # Use side_effect for more control
     )
     
     # Mock the historical price fetch function within the agent's module
-    # Return None to simulate missing historical data
+    # Return None to simulate missing historical data (this part was already correct)
     mock_hist_prices = AsyncMock(return_value=None)
     monkeypatch.setattr(
         'backend.agents.valuation.pe_ratio_agent.fetch_historical_price_series', 
