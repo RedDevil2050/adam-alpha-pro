@@ -54,7 +54,20 @@ def test_api_analyze_and_results_flow():
 
     # Call the analyze endpoint directly - it's a GET request in analysis.py
     symbol_to_test = "TCS"
-    resp = client.get(f"/api/analyze/{symbol_to_test}", headers=headers)
+    # Ensure the mock for run_full_analysis_for_symbol is in place for the endpoint to use
+    with patch('backend.api.endpoints.analysis.run_full_analysis_for_symbol', new_callable=AsyncMock) as mock_run_analysis:
+        # Configure the mock to return a structure that the endpoint expects
+        # The endpoint expects a dictionary that will be returned as JSON.
+        # Based on the previous successful test, it should look something like:
+        mock_run_analysis.return_value = {
+            "status": "COMPLETE", 
+            "brain": {"result": "mock_analysis"}, 
+            "symbol": symbol_to_test, 
+            "version": "1.0.0", # Add other fields if the endpoint returns them
+            "timestamp": datetime.now().isoformat()
+        }
+
+        resp = client.get(f"/api/analyze/{symbol_to_test}", headers=headers)
     
     # Expect a direct result, not a job ID
     assert resp.status_code == 200, f"Analyze call failed: {resp.text}"

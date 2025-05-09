@@ -37,13 +37,16 @@ async def test_macd_agent_buy_signal(
     mock_today_date_object = real_datetime_date_class(2025, 5, 2)
 
     # Configure the 'datetime' module as seen by the agent
-    # This ensures that when the agent does 'from datetime import date, timedelta',
-    # it gets these specific implementations.
-    mock_datetime_in_agent.date = MagicMock() # mock_datetime_in_agent.date is now a mock
-    mock_datetime_in_agent.date.today = MagicMock(return_value=mock_today_date_object)
+    # REMOVE: mock_datetime_in_agent.date = real_datetime_date_class # This was the original problematic line
+
+    # Explicitly mock the 'date' class and its 'today' method within the mocked 'datetime' module
+    mock_date_class_for_agent = MagicMock(spec=datetime.date)
+    mock_date_class_for_agent.today = MagicMock(return_value=mock_today_date_object)
+    mock_datetime_in_agent.date = mock_date_class_for_agent
+
+    # Ensure timedelta and datetime.datetime are available if the agent uses them via the mocked datetime module
     mock_datetime_in_agent.timedelta = real_datetime_timedelta_class
-    # If the agent uses datetime.datetime for other purposes, ensure it's available
-    mock_datetime_in_agent.datetime = datetime.datetime
+    mock_datetime_in_agent.datetime = datetime.datetime # Assigns the actual datetime module to this attribute of the mock
 
     # 1. Mock fetch_ohlcv_series
     # Create a dummy DataFrame with a 'close' column

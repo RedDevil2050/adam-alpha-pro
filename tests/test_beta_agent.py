@@ -59,4 +59,5 @@ async def test_beta_agent():
         # or 'value' key might be missing if decorator handled the error minimally.
         assert ('value' not in result) or (result.get('value') is None), "Value should be absent or None for ERROR verdict"
         # Details should contain an error or reason
-        assert 'error' in result['details'] or 'reason' in result['details'], "Details should contain error/reason for ERROR verdict"
+        # The decorator now ensures details.error exists.
+        assert 'error' in result.get('details', {}), "Details should contain error for ERROR verdict"

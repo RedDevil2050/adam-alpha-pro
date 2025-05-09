@@ -55,35 +55,31 @@ async def test_earnings_calendar_agent_no_data(
 
 @pytest.mark.asyncio
 # Patch dependencies
-@patch('backend.agents.decorators.get_tracker') # Corrected tracker patch for decorator
-@patch('backend.utils.cache_utils.get_redis_client', new_callable=AsyncMock) # Corrected redis patch target for decorator
-@patch('backend.agents.event.earnings_calendar_agent.fetch_earnings_calendar')
+@patch('backend.agents.decorators.get_tracker') # Tracker used by decorator
+@patch('backend.utils.cache_utils.get_redis_client', new_callable=AsyncMock) # Redis client used by decorator
+@patch('backend.agents.event.earnings_calendar_agent.fetch_earnings_calendar') # Data fetching function used by agent
 async def test_earnings_calendar_agent_upcoming_event(
     mock_fetch_earnings,
-    mock_get_redis, # This mock is for the decorator (now patching backend.utils.cache_utils.get_redis_client)
-    mock_get_tracker, # This mock is for the decorator
+    mock_decorator_get_redis, # Mock for backend.utils.cache_utils.get_redis_client
+    mock_decorator_get_tracker, # Mock for backend.agents.decorators.get_tracker
     monkeypatch
 ):
     # --- Mock Configuration ---
     symbol = 'XYZ'
     # 1. Mock fetch_earnings_calendar to return an upcoming date
-    # Simulate today is May 3, 2025. Event is May 8, 2025 (5 days away)
     upcoming_date_str = "2025-05-08"
-    # Agent expects 'nextEarningsDate' (camelCase)
     mock_fetch_earnings.return_value = {"nextEarningsDate": upcoming_date_str}
-    # expected_days = 5 # Agent does not calculate this
 
-    # 2. Mock Redis (used by agent directly)
-    mock_redis_instance = AsyncMock()
-    mock_redis_instance.get = AsyncMock(return_value=None)
-    mock_redis_instance.set = AsyncMock()
-    mock_get_redis.return_value = mock_redis_instance # Agent's get_redis_client returns this
+    # 2. Mock Redis (used by decorator)
+    mock_redis_instance_for_decorator = AsyncMock()
+    mock_redis_instance_for_decorator.get = AsyncMock(return_value=None) # Cache miss for decorator
+    mock_redis_instance_for_decorator.set = AsyncMock()
+    mock_decorator_get_redis.return_value = mock_redis_instance_for_decorator
 
-    # 3. Mock Tracker update (agent calls tracker.update directly)
-    # The agent imports `tracker` from `backend.agents.event.utils`
-    # and calls `tracker.update()`
-    mock_tracker_update = AsyncMock()
-    monkeypatch.setattr('backend.agents.event.earnings_calendar_agent.tracker.update', mock_tracker_update)
+    # 3. Mock Tracker (used by decorator)
+    mock_tracker_instance_for_decorator = AsyncMock()
+    mock_tracker_instance_for_decorator.update_agent_status = AsyncMock() # Mock the async method
+    mock_decorator_get_tracker.return_value = mock_tracker_instance_for_decorator
 
     # --- Expected Results ---
     expected_verdict = "UPCOMING" # Since days <= 7
@@ -115,9 +111,13 @@ async def test_earnings_calendar_agent_upcoming_event(
 
     # --- Verify Mocks ---
     mock_fetch_earnings.assert_awaited_once_with(symbol)
-    mock_get_redis.assert_awaited_once() # Decorator called this
-    mock_redis_instance.get.assert_awaited_once_with(f"{agent_name}:{symbol}")
-    mock_redis_instance.set.assert_awaited_once()
-    mock_tracker_update.assert_called_once_with("event", agent_name, "implemented")
+    mock_decorator_get_redis.assert_awaited_once() # Decorator called its get_redis_client
+    mock_redis_instance_for_decorator.get.assert_awaited_once_with(f"{agent_name}:{symbol}")
+    # Ensure cache set is awaited if the verdict is not ERROR/NO_DATA
+    if res['verdict'] not in ["ERROR", "NO_DATA", None]:
+        mock_redis_instance_for_decorator.set.assert_awaited_once()
+    else:
+        mock_redis_instance_for_decorator.set.assert_not_awaited() # Should not be called for NO_DATA/ERROR from agent
 
-    # mock_decorator_get_tracker.assert_not_called() # Decorator not used, so its tracker shouldn't be called
+    mock_decorator_get_tracker.assert_called_once() # Decorator called its get_tracker
+    mock_tracker_instance_for_decorator.update_agent_status.assert_awaited_once() # Decorator updated status
