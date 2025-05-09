@@ -104,21 +104,31 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
 
     # Corrected parsing for raw Alpha Vantage JSON responses
     parsed_price = None
-    if price_data and isinstance(price_data, dict):
-        global_quote = price_data.get("Global Quote")
-        if isinstance(global_quote, dict) and "05. price" in global_quote:
-            try:
-                parsed_price = float(global_quote["05. price"])
-            except (ValueError, TypeError) as e:
-                logger.warning(f"[{agent_name}] Error parsing price for {symbol} from {global_quote['05. price']}: {e}")
+    # price_data is the result of fetch_price_point -> fetch_quote -> fetch_data_resilient(symbol, "price")
+    # The "data" part of fetch_data_resilient's result for Alpha Vantage (if successful) is {"price": value}
+    if price_data and isinstance(price_data, dict) and "price" in price_data: # Check for "price" key
+        try:
+            price_val = price_data["price"]
+            if price_val is not None:
+                parsed_price = float(price_val)
+            else:
+                logger.warning(f"[{agent_name}] Price value is None for {symbol} from data_provider.")
+        except (ValueError, TypeError) as e:
+            logger.warning(f"[{agent_name}] Error parsing price for {symbol} from {price_data['price']}: {e}")
     current_price = parsed_price
 
     parsed_eps = None
-    if current_eps_data and isinstance(current_eps_data, dict) and "EPS" in current_eps_data:
+    # current_eps_data is the result of fetch_latest_eps -> fetch_company_info(symbol, "eps")
+    # fetch_company_info for "eps" returns a dict like {"eps": value}
+    if current_eps_data and isinstance(current_eps_data, dict) and "eps" in current_eps_data: # Check for "eps" (lowercase)
         try:
-            parsed_eps = float(current_eps_data["EPS"])
+            eps_val = current_eps_data["eps"]
+            if eps_val is not None:
+                parsed_eps = float(eps_val)
+            else:
+                logger.warning(f"[{agent_name}] EPS value is None for {symbol} from data_provider.")
         except (ValueError, TypeError) as e:
-            logger.warning(f"[{agent_name}] Error parsing EPS for {symbol} from {current_eps_data['EPS']}: {e}")
+            logger.warning(f"[{agent_name}] Error parsing EPS for {symbol} from {current_eps_data['eps']}: {e}")
     current_eps = parsed_eps
 
     # Validate fetched data
