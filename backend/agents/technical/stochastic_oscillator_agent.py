@@ -43,10 +43,10 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         OVERBOUGHT_THRESHOLD = 80
 
         # Crossover logic
-        if prev_k <= prev_d and latest_k > latest_d and latest_k < (OVERSOLD_THRESHOLD + 10) and prev_k < (OVERSOLD_THRESHOLD + 10): # BUY only if oversold crossover (K and prev_K near/below threshold)
+        if prev_k <= prev_d and latest_k > latest_d and latest_k < OVERSOLD_THRESHOLD and prev_k < OVERSOLD_THRESHOLD: # BUY only if oversold crossover (K and prev_K below threshold)
             verdict = "BUY"
             score = 1.0
-        elif prev_k >= prev_d and latest_k < latest_d and latest_k > (OVERBOUGHT_THRESHOLD - 10) and prev_k > (OVERBOUGHT_THRESHOLD - 10): # AVOID only if overbought crossover (K and prev_K near/above threshold)
+        elif prev_k >= prev_d and latest_k < latest_d and latest_k > OVERBOUGHT_THRESHOLD and prev_k > OVERBOUGHT_THRESHOLD: # AVOID only if overbought crossover (K and prev_K above threshold)
             verdict = "AVOID"
             score = 0.0
         else:

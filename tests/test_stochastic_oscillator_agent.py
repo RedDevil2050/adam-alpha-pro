@@ -156,39 +156,41 @@ async def test_stochastic_oscillator_oversold_crossover(
     # Let's create a DataFrame of 30 periods.
     # Prices should be generally low, then a slight uptick at the end.
     periods = 30
-    # Start high, go low, then slightly recover to create the K/D crossover from oversold
-    base_prices = np.concatenate([
-        np.linspace(70, 50, 15), # Initial drop
-        np.linspace(50, 40, 10), # Further drop to oversold
-        np.linspace(40, 45, 5)   # Slight recovery for crossover
-    ])
-    close_prices = base_prices
-    # Ensure high/low accommodate close for K calculation
+    # Craft data to ensure K and D are in oversold region and K crosses D upwards.
+    # Target: prev_k=10, latest_k=15, prev_d=10, latest_d=11.67
+    # OVERSOLD_THRESHOLD in agent is 20.
     # K = 100 * ((close - low_min_14) / (high_max_14 - low_min_14))
-    # To make K low: close should be near low_min_14
-    # To make K rise: close should rise relative to low_min_14 and high_max_14
-    high_prices = close_prices + np.random.uniform(1, 3, periods) # Ensure high is above close
-    low_prices = close_prices - np.random.uniform(1, 3, periods)   # Ensure low is below close
-    # Refine last few data points to force crossover
-    # Example: Make last two close prices significantly different to force K to change
-    # This is hard to craft perfectly without iterative testing of the TA calculation.
-    # A more robust way would be to mock the output of the TA calculation itself (k,d series)
-    # For now, providing a plausible dataset:
+    # For K=10, with range (high_max-low_min) of 20, (close-low_min) should be 2.
+    # For K=15, with range (high_max-low_min) of 20, (close-low_min) should be 3.
+
+    # Ensure low_min_14 is 20 and high_max_14 is 40 for the relevant K calculations.
+    # This requires the last ~17 values of low/high arrays to be set accordingly.
+    low_array = np.concatenate((np.linspace(25, 22, periods - 17), np.full(17, 20.0)))
+    high_array = np.concatenate((np.linspace(45, 42, periods - 17), np.full(17, 40.0)))
+
+    close_array = np.full(periods, 25.0) # Default values
+    # Set earlier close values to be generally decreasing towards the desired K values.
+    close_array[0:(periods - 4)] = np.linspace(30, 23, periods - 4)
+    
+    # close values for specific K values (assuming low_min=20, high_max=40):
+    # k_minus_4 (for prev_d calculation): target k=10 => close = 20 + 0.10 * (40-20) = 22
+    close_array[-4] = 22.0
+    # k_minus_3 (for prev_d and latest_d): target k=10 => close = 22
+    close_array[-3] = 22.0
+    # k_minus_2 (agent's prev_k, for prev_d and latest_d): target k=10 => close = 22
+    close_array[-2] = 22.0
+    # k_minus_1 (agent's latest_k, for latest_d): target k=15 => close = 20 + 0.15 * (40-20) = 23
+    close_array[-1] = 23.0
+
+    open_array = close_array.copy() # Keep open same as close for simplicity
+    volume_array = np.random.randint(1000, 5000, periods)
+
     df_data = pd.DataFrame({
-        'high': np.array([ # Needs to be high enough not to clip K values too much
-            60,59,58,57,56,55,54,53,52,51,50,49,48,47,46, # Initial period for rolling
-            45,44,43,42,41,40,39,38,37,36,35,36,38,40,42  # Data for calculation
-        ]),
-        'low': np.array([
-            40,39,38,37,36,35,34,33,32,31,30,29,28,27,26,
-            25,24,23,22,21,20,19,18,17,16,15,16,18,20,22
-        ]),
-        'close': np.array([ # Ensure this array has 30 elements
-            50,49,48,47,46,45,44,43,42,41,40,39,38,37,36, 
-            30,28,26,24,22,20,22,24,26,28,30,32,35,38,39 # Ensured 15 elements in this line
-        ]),
-        'open': np.array([50,49,48,47,46,45,44,43,42,41,40,39,38,37,36,30,28,26,24,22,20,22,24,26,28,30,32,35,38,39]),
-        'volume': np.random.randint(1000, 5000, periods)
+        'high': high_array,
+        'low': low_array,
+        'close': close_array,
+        'open': open_array,
+        'volume': volume_array
     }, index=pd.date_range(end='2025-05-01', periods=periods, freq='D'))
     mock_fetch_ohlcv.return_value = df_data
 
