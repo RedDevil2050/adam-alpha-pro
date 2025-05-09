@@ -11,6 +11,7 @@ from backend.api.main import app # Assuming main.py defines the FastAPI app
 from unittest.mock import MagicMock, AsyncMock, patch
 # Import verify_token for dependency override
 from backend.security.jwt_auth import verify_token
+from backend.security.jwt_auth import verify_token
 
 client = TestClient(app)
 
