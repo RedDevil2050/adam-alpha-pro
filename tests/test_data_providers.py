@@ -16,21 +16,25 @@ async def test_trendlyne(monkeypatch):
     # Mock the provider's fetch_data_resilient method
     # This mock is specific to the call made by fetch_price_trendlyne("INFY")
     # Assuming fetch_data_resilient might be a staticmethod or called in a way that 'slf' is not the instance
-    async def mock_fetch_data_resilient_custom(symbol_arg, data_type_arg, **kwargs_arg):
+    # Removed 'self' as the original method might be static or called like one.
+    async def mock_fetch_data_resilient_custom(symbol_arg, data_type_arg, *, provider_override=None, **other_kwargs):
         # fetch_price_trendlyne("INFY") calls:
         # provider.fetch_data_resilient("INFY", "price", provider_override="trendlyne")
         if (
             symbol_arg == "INFY" and
             data_type_arg == "price" and
-            kwargs_arg.get("provider_override") == "trendlyne"
+            provider_override == "trendlyne" # Check provider_override directly
         ):
-            return 100.0  # Return a float, as expected by the assertion
+            return 100.0
         
         # If the mock is called with unexpected arguments, raise an error to make the test fail clearly.
         # This helps in debugging if the call signature changes or if the mock is too broad.
+        all_kwargs_received = other_kwargs.copy()
+        if provider_override is not None:
+            all_kwargs_received['provider_override'] = provider_override
         raise AssertionError(
             f"mock_fetch_data_resilient_custom called with unexpected arguments: "
-            f"symbol='{symbol_arg}', data_type='{data_type_arg}', kwargs={kwargs_arg}"
+            f"symbol='{symbol_arg}', data_type='{data_type_arg}', kwargs={all_kwargs_received}"
         )
 
     # Use monkeypatch to replace the method on the *instance* of UnifiedDataProvider

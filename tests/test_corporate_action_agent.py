@@ -13,9 +13,8 @@ from backend.agents.event.corporate_actions_agent import run as ca_run, agent_na
 @patch('backend.agents.event.corporate_actions_agent.get_redis_client', new_callable=AsyncMock)
 # Patch fetch_corporate_actions directly where it's used by the agent
 @patch('backend.agents.event.corporate_actions_agent.fetch_corporate_actions', new_callable=AsyncMock)
-@patch('httpx.AsyncClient.get', new_callable=AsyncMock)
+# Remove the unnecessary patch for httpx.AsyncClient.get
 async def test_corporate_action_agent(
-    mock_httpx_get,
     mock_fetch_corporate_actions, # Updated mock name
     mock_agent_get_redis,
     monkeypatch # monkeypatch might not be needed if only using @patch
@@ -31,11 +30,11 @@ async def test_corporate_action_agent(
     # or None, or a structure that leads to no actions being processed.
     mock_fetch_corporate_actions.return_value = [] # Simulate empty list of actions
 
-    # Configure the httpx mock response
-    mock_response = MagicMock(spec=httpx.Response)
-    mock_response.status_code = 200
-    mock_response.json.return_value = {"actions": []} # Simulate an empty list of actions
-    mock_httpx_get.return_value = mock_response
+    # Remove configuration for the httpx mock response as it's no longer used
+    # mock_response = MagicMock(spec=httpx.Response)
+    # mock_response.status_code = 200
+    # mock_response.json.return_value = {"actions": []} 
+    # mock_httpx_get.return_value = mock_response
 
     res = await ca_run('ABC')
 
@@ -51,8 +50,8 @@ async def test_corporate_action_agent(
     assert res.get('error') is None
 
     # Verify mocks
-    # mock_httpx_get.assert_awaited_once() # Original assertion
-    assert mock_httpx_get.await_count > 0, "Expected httpx.AsyncClient.get to have been awaited at least once."
+    # Remove assertion for mock_httpx_get
+    # assert mock_httpx_get.await_count > 0, "Expected httpx.AsyncClient.get to have been awaited at least once."
     mock_agent_get_redis.assert_awaited_once() # Check that the get_redis_client mock was called
     mock_redis_instance.get.assert_awaited_once_with(f"{agent_name}:ABC")
     # Cache SET is called by the agent if actions were found or even if not (to cache NO_DATA/ERROR)
