@@ -120,12 +120,11 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
                         "verdict": "ERROR",
                         "confidence": 0.0,
                         "value": None,
-                        "details": {},
-                        "error": str(e),
+                        "details": {"error": str(e)}, # Store the error message in details
+                        "error": str(e), # Keep the top-level error for now, or decide if it's redundant
                         "agent_name": agent_name,
                     }
                     # Ensure agent_name is added in error case (already done)
-                    error_result["agent_name"] = agent_name 
 
                     # Try to update tracker even if the main agent logic failed
                     try:
@@ -153,8 +152,8 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
                     "verdict": "ERROR",
                     "confidence": 0.0,
                     "value": None,
-                    "details": {},
-                    "error": f"Decorator execution error: {e}",
+                    "details": {"error": f"Decorator execution error: {e}"}, # Store the error message in details
+                    "error": f"Decorator execution error: {e}", # Keep top-level error
                     "agent_name": agent_name, # Ensure agent_name is here too
                 }
                 # Attempt tracker update even for outer errors

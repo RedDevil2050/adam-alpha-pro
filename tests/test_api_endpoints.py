@@ -8,6 +8,8 @@ from fastapi.testclient import TestClient
 from backend.api.main import app # Assuming main.py defines the FastAPI app
 # Import necessary mocking tools
 from unittest.mock import MagicMock, AsyncMock, patch
+# Import verify_token for dependency override
+from backend.security.jwt_auth import verify_token
 
 client = TestClient(app)
 
@@ -42,26 +44,26 @@ def mock_orchestrator(monkeypatch):
 
 
 def test_api_analyze_and_results_flow():
-    # Login - Assuming /api/login based on main.py prefix
-    # The main.py doesn't show a /api/login endpoint. 
-    # For now, I will assume the /api/analyze endpoint is protected and test it directly.
-    # If login is indeed required and implemented elsewhere, this part needs adjustment.
+    # Override the verify_token dependency for this test
+    async def mock_verify_token_override():
+        return {"sub": "testuser"}
     
-    # For this test, let's assume verify_token is mocked or allows requests through in a test environment.
-    # If verify_token is strict, it needs to be patched to simulate a valid token.
-    with patch('backend.security.jwt_auth.verify_token', return_value={"sub": "testuser"}) as mock_verify_token:
-        headers = {"Authorization": "Bearer faketesttoken"} # Token content doesn't matter due to mock
+    app.dependency_overrides[verify_token] = mock_verify_token_override
 
-        # Call the analyze endpoint directly - it's a GET request in analysis.py
-        # The test was trying to POST to /api/analyze, but the endpoint is GET /api/analyze/{symbol}
-        symbol_to_test = "TCS"
-        resp = client.get(f"/api/analyze/{symbol_to_test}", headers=headers)
-        
-        # Expect a direct result, not a job ID
-        assert resp.status_code == 200, f"Analyze call failed: {resp.text}"
-        result = resp.json()
+    headers = {"Authorization": "Bearer faketesttoken"} # Token content doesn't matter due to override
 
-        assert result is not None, "API did not return a result"
-        assert result["status"] == "COMPLETE"
-        assert "brain" in result
-        assert result["brain"] == {"result": "mock_analysis"} # Check against mocked result
+    # Call the analyze endpoint directly - it's a GET request in analysis.py
+    symbol_to_test = "TCS"
+    resp = client.get(f"/api/analyze/{symbol_to_test}", headers=headers)
+    
+    # Expect a direct result, not a job ID
+    assert resp.status_code == 200, f"Analyze call failed: {resp.text}"
+    result = resp.json()
+
+    assert result is not None, "API did not return a result"
+    assert result["status"] == "COMPLETE"
+    assert "brain" in result
+    assert result["brain"] == {"result": "mock_analysis"} # Check against mocked result
+
+    # Clean up the dependency override after the test
+    app.dependency_overrides = {}

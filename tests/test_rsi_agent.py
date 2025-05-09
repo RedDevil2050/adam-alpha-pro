@@ -34,10 +34,11 @@ async def test_rsi_agent_oversold(
     mock_today_date_object = real_datetime_date_class(2025, 5, 2)
 
     # Configure the 'datetime' module as seen by the agent
-    mock_datetime_in_agent.date = real_datetime_date_class
+    mock_datetime_in_agent.date = MagicMock() # mock_datetime_in_agent.date is now a mock
     mock_datetime_in_agent.date.today = MagicMock(return_value=mock_today_date_object)
     mock_datetime_in_agent.timedelta = real_datetime_timedelta_class
-    mock_datetime_in_agent.datetime = datetime.datetime # Ensure full datetime is available if needed
+    # If the agent uses datetime.datetime for other purposes, ensure it's available
+    mock_datetime_in_agent.datetime = datetime.datetime
 
     rsi_period = 14 # Default RSI period
     num_periods = rsi_period + 50 # Need enough data for calculation + stability

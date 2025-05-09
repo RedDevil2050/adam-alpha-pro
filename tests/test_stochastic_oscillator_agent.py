@@ -185,7 +185,7 @@ async def test_stochastic_oscillator_oversold_crossover(
         ]),
         'close': np.array([
             50,49,48,47,46,45,44,43,42,41,40,39,38,37,36, # Close values for K, D
-            30,28,26,24,22,20,22,24,26,28,30,32,35,38 # Forcing an upward K movement
+            30,28,26,24,22,20,22,24,26,28,30,32,35,38,39 # Forcing an upward K movement, increased length to 30
         ]),
         'open': np.array([50,49,48,47,46,45,44,43,42,41,40,39,38,37,36,30,28,26,24,22,20,22,24,26,28,30,32,35,38,39]),
         'volume': np.random.randint(1000, 5000, periods)

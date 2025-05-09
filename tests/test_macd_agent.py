@@ -39,7 +39,7 @@ async def test_macd_agent_buy_signal(
     # Configure the 'datetime' module as seen by the agent
     # This ensures that when the agent does 'from datetime import date, timedelta',
     # it gets these specific implementations.
-    mock_datetime_in_agent.date = real_datetime_date_class
+    mock_datetime_in_agent.date = MagicMock() # mock_datetime_in_agent.date is now a mock
     mock_datetime_in_agent.date.today = MagicMock(return_value=mock_today_date_object)
     mock_datetime_in_agent.timedelta = real_datetime_timedelta_class
     # If the agent uses datetime.datetime for other purposes, ensure it's available

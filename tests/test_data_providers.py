@@ -15,7 +15,8 @@ from backend.utils.data_provider import (
 async def test_trendlyne(monkeypatch):
     # Mock the provider's fetch_data_resilient method
     # This mock is specific to the call made by fetch_price_trendlyne("INFY")
-    async def mock_fetch_data_resilient_custom(slf, symbol_arg, data_type_arg, **kwargs_arg):
+    # Assuming fetch_data_resilient might be a staticmethod or called in a way that 'slf' is not the instance
+    async def mock_fetch_data_resilient_custom(symbol_arg, data_type_arg, **kwargs_arg):
         # fetch_price_trendlyne("INFY") calls:
         # provider.fetch_data_resilient("INFY", "price", provider_override="trendlyne")
         if (
