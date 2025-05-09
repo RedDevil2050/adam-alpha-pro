@@ -177,7 +177,8 @@ class TestSystemStress:
         execution_time = time.time() - start_time
         
         assert execution_time < 150  # Increased timeout to 150 seconds
-        assert all(cat in result["category_results"] for cat in [
-            "TECHNICAL", "VALUATION", "MARKET", "RISK"
-        ])
+        # Assert against lowercase category names as used by the orchestrator
+        expected_categories = ["technical", "valuation", "market", "risk"]
+        assert all(cat in result["category_results"] for cat in expected_categories), \
+            f"Missing categories. Expected: {expected_categories}, Got: {list(result['category_results'].keys())}"
 
