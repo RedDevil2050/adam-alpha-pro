@@ -183,9 +183,9 @@ async def test_stochastic_oscillator_oversold_crossover(
             40,39,38,37,36,35,34,33,32,31,30,29,28,27,26,
             25,24,23,22,21,20,19,18,17,16,15,16,18,20,22
         ]),
-        'close': np.array([ # Corrected length to 30 to match other arrays and 'periods'
+        'close': np.array([ # Ensure this array has 30 elements
             50,49,48,47,46,45,44,43,42,41,40,39,38,37,36, 
-            30,28,26,24,22,20,22,24,26,28,30,32,35,38,39 
+            30,28,26,24,22,20,22,24,26,28,30,32,35,38,39 # Ensured 15 elements in this line
         ]),
         'open': np.array([50,49,48,47,46,45,44,43,42,41,40,39,38,37,36,30,28,26,24,22,20,22,24,26,28,30,32,35,38,39]),
         'volume': np.random.randint(1000, 5000, periods)

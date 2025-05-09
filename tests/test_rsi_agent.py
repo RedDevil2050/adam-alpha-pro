@@ -33,11 +33,9 @@ async def test_rsi_agent_oversold(
     real_datetime_timedelta_class = datetime.timedelta
     mock_today_date_object = real_datetime_date_class(2025, 5, 2)
 
-    # Configure the 'datetime' module as seen by the agent
-    # Explicitly mock the 'date' class and its 'today' method within the mocked 'datetime' module
-    mock_date_class_for_agent = MagicMock(spec=datetime.date)
-    mock_date_class_for_agent.today = MagicMock(return_value=mock_today_date_object)
-    mock_datetime_in_agent.date = mock_date_class_for_agent
+    # Configure datetime.date.today() as seen by the agent
+    # The agent calls datetime.date.today()
+    mock_datetime_in_agent.date.today.return_value = mock_today_date_object
 
     # Ensure timedelta and datetime.datetime are available if the agent uses them via the mocked datetime module
     mock_datetime_in_agent.timedelta = real_datetime_timedelta_class
