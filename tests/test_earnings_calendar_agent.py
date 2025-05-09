@@ -56,11 +56,12 @@ async def test_earnings_calendar_agent_no_data(
 @pytest.mark.asyncio
 # Patch dependencies
 @patch('backend.agents.decorators.get_tracker') # Tracker used by decorator
-@patch('backend.utils.cache_utils.get_redis_client', new_callable=AsyncMock) # Redis client used by decorator
+# Corrected patch target for the redis client based on other tests and typical decorator usage
+@patch('backend.agents.event.earnings_calendar_agent.get_redis_client', new_callable=AsyncMock) # Redis client used by agent/decorator
 @patch('backend.agents.event.earnings_calendar_agent.fetch_earnings_calendar') # Data fetching function used by agent
 async def test_earnings_calendar_agent_upcoming_event(
     mock_fetch_earnings,
-    mock_decorator_get_redis, # Mock for backend.utils.cache_utils.get_redis_client
+    mock_agent_get_redis, # Renamed to reflect its new patch target
     mock_decorator_get_tracker, # Mock for backend.agents.decorators.get_tracker
     monkeypatch
 ):
@@ -70,11 +71,11 @@ async def test_earnings_calendar_agent_upcoming_event(
     upcoming_date_str = "2025-05-08"
     mock_fetch_earnings.return_value = {"nextEarningsDate": upcoming_date_str}
 
-    # 2. Mock Redis (used by decorator)
-    mock_redis_instance_for_decorator = AsyncMock()
-    mock_redis_instance_for_decorator.get = AsyncMock(return_value=None) # Cache miss for decorator
-    mock_redis_instance_for_decorator.set = AsyncMock()
-    mock_decorator_get_redis.return_value = mock_redis_instance_for_decorator
+    # 2. Mock Redis (used by agent/decorator)
+    mock_redis_instance_for_agent = AsyncMock()
+    mock_redis_instance_for_agent.get = AsyncMock(return_value=None) # Cache miss for decorator
+    mock_redis_instance_for_agent.set = AsyncMock()
+    mock_agent_get_redis.return_value = mock_redis_instance_for_agent
 
     # 3. Mock Tracker (used by decorator)
     mock_tracker_instance_for_decorator = AsyncMock()
@@ -111,13 +112,13 @@ async def test_earnings_calendar_agent_upcoming_event(
 
     # --- Verify Mocks ---
     mock_fetch_earnings.assert_awaited_once_with(symbol)
-    mock_decorator_get_redis.assert_awaited_once() # Decorator called its get_redis_client
-    mock_redis_instance_for_decorator.get.assert_awaited_once_with(f"{agent_name}:{symbol}")
+    mock_agent_get_redis.assert_awaited_once() # Agent/decorator called its get_redis_client
+    mock_redis_instance_for_agent.get.assert_awaited_once_with(f"{agent_name}:{symbol}")
     # Ensure cache set is awaited if the verdict is not ERROR/NO_DATA
     if res['verdict'] not in ["ERROR", "NO_DATA", None]:
-        mock_redis_instance_for_decorator.set.assert_awaited_once()
+        mock_redis_instance_for_agent.set.assert_awaited_once()
     else:
-        mock_redis_instance_for_decorator.set.assert_not_awaited() # Should not be called for NO_DATA/ERROR from agent
+        mock_redis_instance_for_agent.set.assert_not_awaited() # Should not be called for NO_DATA/ERROR from agent
 
     mock_decorator_get_tracker.assert_called_once() # Decorator called its get_tracker
     mock_tracker_instance_for_decorator.update_agent_status.assert_awaited_once() # Decorator updated status
