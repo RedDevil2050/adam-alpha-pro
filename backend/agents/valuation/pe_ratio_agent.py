@@ -102,9 +102,24 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
             "error": "Could not fetch required data (EPS, price, or sector PE)."
         }
 
-    current_price = price_data.get("latestPrice") if price_data else None
-    # Extract EPS value from the fetched data
-    current_eps = current_eps_data.get("eps") if current_eps_data else None
+    # Corrected parsing for raw Alpha Vantage JSON responses
+    parsed_price = None
+    if price_data and isinstance(price_data, dict):
+        global_quote = price_data.get("Global Quote")
+        if isinstance(global_quote, dict) and "05. price" in global_quote:
+            try:
+                parsed_price = float(global_quote["05. price"])
+            except (ValueError, TypeError) as e:
+                logger.warning(f"[{agent_name}] Error parsing price for {symbol} from {global_quote['05. price']}: {e}")
+    current_price = parsed_price
+
+    parsed_eps = None
+    if current_eps_data and isinstance(current_eps_data, dict) and "EPS" in current_eps_data:
+        try:
+            parsed_eps = float(current_eps_data["EPS"])
+        except (ValueError, TypeError) as e:
+            logger.warning(f"[{agent_name}] Error parsing EPS for {symbol} from {current_eps_data['EPS']}: {e}")
+    current_eps = parsed_eps
 
     # Validate fetched data
     if current_price is None or current_price <= 0:
