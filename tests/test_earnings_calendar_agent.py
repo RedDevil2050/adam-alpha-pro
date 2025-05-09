@@ -55,7 +55,7 @@ async def test_earnings_calendar_agent_no_data(
 
 @pytest.mark.asyncio
 # Patch dependencies
-@patch('backend.agents.decorators.get_tracker') # Tracker used by decorator
+@patch('backend.agents.event.earnings_calendar_agent.get_tracker') # Tracker used by decorator
 # Corrected patch target for the redis client based on other tests and typical decorator usage
 @patch('backend.agents.event.earnings_calendar_agent.get_redis_client', new_callable=AsyncMock) # Redis client used by agent/decorator
 @patch('backend.agents.event.earnings_calendar_agent.fetch_earnings_calendar') # Data fetching function used by agent
