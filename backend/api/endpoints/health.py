@@ -40,9 +40,12 @@ async def health_check(
         # Try to set and get a test value
         test_key = "health_check_test"
         test_value = "ok"
-        redis_client.set(test_key, test_value)
-        result = redis_client.get(test_key)
-        redis_client.delete(test_key)
+        await redis_client.set(test_key, test_value) # Add await
+        result = await redis_client.get(test_key)
+        # Ensure result is decoded if it's bytes
+        if isinstance(result, bytes):
+            result = result.decode('utf-8')
+        await redis_client.delete(test_key) # Add await
         redis_ok = result == test_value
         logger.debug("Redis connection successful.")
     except Exception as e:

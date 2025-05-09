@@ -2,10 +2,18 @@ import pytest
 import pytest_asyncio # Import pytest_asyncio
 from unittest.mock import AsyncMock, patch
 import nltk # Import nltk
+import warnings # Add this line
 
 # Download vader_lexicon once per session
 def pytest_configure(config):
     """Download NLTK data needed for tests."""
+    # Suppress the specific DeprecationWarning from pandas_ta related to pkg_resources
+    warnings.filterwarnings(
+        "ignore",
+        category=DeprecationWarning,
+        message=r"pkg_resources is deprecated as an API.*",
+        module="pandas_ta"  # Filter for warnings originating from the pandas_ta module
+    )
     try:
         # Check if the resource exists to avoid repeated downloads
         nltk.data.find('sentiment/vader_lexicon.zip')
@@ -19,17 +27,32 @@ def pytest_configure(config):
 
 @pytest_asyncio.fixture(scope="session", autouse=True) # Use pytest_asyncio.fixture
 def mock_redis_client():
-    """Globally mock redis_client for all tests."""
-    # Use a context manager for patching
+    """Globally mock redis_client for all tests with stateful behavior."""
     with patch("backend.utils.cache_utils.get_redis_client", new_callable=AsyncMock) as mock_get_redis_client:
-        # Configure the mock instance that get_redis_client will return
         mock_instance = AsyncMock()
-        mock_instance.get.return_value = None  # Default behavior for get
-        mock_instance.set.return_value = True  # Default behavior for set
-        mock_instance.ping.return_value = True # Mock ping as well
+        actual_cache = {}  # Simple dict to simulate cache storage
 
-        # Make the patched get_redis_client return the configured instance
+        async def mock_get(key):
+            # logger.debug(f"Mock Redis GET: key={key}, value={actual_cache.get(key, None)}")
+            return actual_cache.get(key, None)
+
+        async def mock_set(key, value, ex=None): # ex is for expiry
+            # logger.debug(f"Mock Redis SET: key={key}, value={value}, ex={ex}")
+            actual_cache[key] = value
+            return True
+
+        async def mock_delete(key):
+            # logger.debug(f"Mock Redis DELETE: key={key}")
+            if key in actual_cache:
+                del actual_cache[key]
+                return 1
+            return 0
+
+        mock_instance.get = AsyncMock(side_effect=mock_get)
+        mock_instance.set = AsyncMock(side_effect=mock_set)
+        mock_instance.delete = AsyncMock(side_effect=mock_delete)
+        mock_instance.ping = AsyncMock(return_value=True) # Mock ping as well
+
         mock_get_redis_client.return_value = mock_instance
-
-        # Yield the mock *instance* so it's correctly used by the code under test
-        yield mock_instance # Yield the instance, not the mock function
+        yield mock_instance
+        actual_cache.clear() # Clear cache after session

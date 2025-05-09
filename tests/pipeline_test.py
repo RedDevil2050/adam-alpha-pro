@@ -1,7 +1,9 @@
 import asyncio
 import aiohttp
 from loguru import logger
+import pytest # Add pytest import for the marker
 
+@pytest.mark.asyncio # Add the asyncio marker
 async def test_pipeline():
     """End-to-end pipeline test"""
     try:
