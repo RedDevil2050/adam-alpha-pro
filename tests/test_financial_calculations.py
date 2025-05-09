@@ -78,7 +78,7 @@ async def test_pe_ratio_calculation(httpx_mock, monkeypatch):
     monkeypatch.setenv("ALPHA_VANTAGE_KEY", "demo") # Ensure data_provider uses 'demo' key
 
     # Mock the function responsible for fetching current price
-    mock_fetch_price = AsyncMock(return_value={"latestPrice": 120.0}) # Adjusted to match expected return
+    mock_fetch_price = AsyncMock(return_value={"price": 120.0}) # Corrected key to "price"
     monkeypatch.setattr(
         'backend.agents.valuation.pe_ratio_agent.fetch_price_point',  # Corrected path
         mock_fetch_price
