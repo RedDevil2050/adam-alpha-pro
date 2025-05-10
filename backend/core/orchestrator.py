@@ -131,6 +131,11 @@ class SystemOrchestrator:
             final_verdict = self._generate_composite_verdict(results)
             system_health = await self.system_monitor.get_health_metrics() # Use internal monitor
 
+            # Record end time and duration BEFORE getting metrics
+            end_time = time.perf_counter() 
+            duration = end_time - start_time
+            self.metrics_collector.record_response_time(duration)
+
             # Construct the full response before caching
             successful_response = {
                 "symbol": symbol,
@@ -138,23 +143,20 @@ class SystemOrchestrator:
                 "verdict": final_verdict,
                 "category_results": results,
                 "system_health": system_health,
-                "execution_metrics": self.metrics_collector.get_metrics(),
+                "execution_metrics": self.metrics_collector.get_metrics(), # Now get_metrics will include current duration
             }
 
             # Cache the full successful response
             await self._cache_analysis(symbol, successful_response)
 
-            end_time = time.perf_counter() # Record end time
-            duration = end_time - start_time
-            self.metrics_collector.record_response_time(duration) # Record response time
-
             self.system_monitor.end_analysis(analysis_id, "success") # Use internal monitor
             return successful_response
 
         except Exception as e:
-            end_time = time.perf_counter() # Record end time even on error
+            # Record end time and duration BEFORE getting metrics in error path too
+            end_time = time.perf_counter() 
             duration = end_time - start_time
-            self.metrics_collector.record_response_time(duration) # Record response time on error too
+            self.metrics_collector.record_response_time(duration) 
 
             self.system_monitor.end_analysis(analysis_id, "error") # Use internal monitor
             logger.error(f"System analysis failed for {symbol}: {e}", exc_info=True) # Add traceback
