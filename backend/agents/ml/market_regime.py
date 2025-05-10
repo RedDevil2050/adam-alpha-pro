@@ -38,7 +38,7 @@ class MarketRegimeDetector:
 
 async def run(symbol: str) -> dict:
     cache_key = f"{agent_name}:{symbol}"
-    cached = await get_redis_client().get(cache_key)
+    cached = await (await get_redis_client()).get(cache_key)
     if cached:
         return cached
 
@@ -84,7 +84,7 @@ async def run(symbol: str) -> dict:
             "agent_name": agent_name,
         }
 
-        await get_redis_client().set(cache_key, result, ex=3600)
+        await (await get_redis_client()).set(cache_key, result, ex=3600)
         # tracker.update("ml", agent_name, "implemented")  # Uncomment and fix import if tracker is needed
         return result
 
