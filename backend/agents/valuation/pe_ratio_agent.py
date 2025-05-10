@@ -103,18 +103,31 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         }
 
     # Corrected parsing for raw Alpha Vantage JSON responses
-    parsed_price = None
     # price_data is the result of fetch_price_point -> fetch_quote -> fetch_data_resilient(symbol, "price")
     # The "data" part of fetch_data_resilient's result for Alpha Vantage (if successful) is {"price": value}
-    if price_data and isinstance(price_data, dict) and "price" in price_data: # Check for "price" key
-        try:
-            price_val = price_data["price"]
-            if price_val is not None:
-                parsed_price = float(price_val)
-            else:
-                logger.warning(f"[{agent_name}] Price value is None for {symbol} from data_provider.")
-        except (ValueError, TypeError) as e:
-            logger.warning(f"[{agent_name}] Error parsing price for {symbol} from {price_data['price']}: {e}")
+    # Accommodate "latestPrice" as well, as it might be provided by some sources or tests.
+    parsed_price = None
+    if price_data and isinstance(price_data, dict):
+        price_value_candidate = None
+        key_used_for_price = None
+
+        if "price" in price_data:
+            price_value_candidate = price_data.get("price")
+            key_used_for_price = "price"
+        elif "latestPrice" in price_data: # Check for "latestPrice" if "price" is not found
+            price_value_candidate = price_data.get("latestPrice")
+            key_used_for_price = "latestPrice"
+            logger.info(f"[{agent_name}] Used 'latestPrice' key for price for {symbol} as 'price' key was not found.")
+
+        if price_value_candidate is not None:
+            try:
+                parsed_price = float(price_value_candidate)
+            except (ValueError, TypeError) as e:
+                logger.warning(f"[{agent_name}] Error parsing price for {symbol} from key '{key_used_for_price}' with value '{price_value_candidate}': {e}")
+        elif key_used_for_price: # A relevant key was found, but its value was None
+            logger.warning(f"[{agent_name}] Price value is None for {symbol} from data_provider using key '{key_used_for_price}'.")
+        else: # Neither "price" nor "latestPrice" key was found
+            logger.warning(f"[{agent_name}] Neither 'price' nor 'latestPrice' key found in price_data for {symbol}. Price data: {str(price_data)[:200]}")
     current_price = parsed_price
 
     parsed_eps = None
@@ -272,24 +285,24 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
 
     # Prepare details dictionary
     details = {
-        "current_pe_ratio": round(current_pe, 2),
-        "current_eps": round(current_eps, 2),
-        "current_price": round(current_price, 2),
+        "current_pe_ratio": float(round(current_pe, 2)) if current_pe is not None else None,
+        "current_eps": float(round(current_eps, 2)) if current_eps is not None else None,
+        "current_price": float(round(current_price, 2)) if current_price is not None else None,
         "historical_mean_pe": (
-            round(mean_hist_pe, 2) if mean_hist_pe is not None else None
+            float(round(mean_hist_pe, 2)) if mean_hist_pe is not None else None
         ),
         "historical_std_dev_pe": (
-            round(std_hist_pe, 2) if std_hist_pe is not None else None
+            float(round(std_hist_pe, 2)) if std_hist_pe is not None else None
         ),
         "percentile_rank": (
-            round(percentile_rank, 1) if percentile_rank is not None else None
+            float(round(percentile_rank, 1)) if percentile_rank is not None else None
         ),
-        "z_score": round(z_score, 2) if z_score is not None else None,
+        "z_score": float(round(z_score, 2)) if z_score is not None else None,
         "data_source": data_source,
         "config_used": {
-            "historical_years": pe_settings.HISTORICAL_YEARS,
-            "percentile_undervalued": pe_settings.PERCENTILE_UNDERVALUED,
-            "percentile_overvalued": pe_settings.PERCENTILE_OVERVALUED,
+            "historical_years": int(pe_settings.HISTORICAL_YEARS),
+            "percentile_undervalued": float(pe_settings.PERCENTILE_UNDERVALUED),
+            "percentile_overvalued": float(pe_settings.PERCENTILE_OVERVALUED),
         },
     }
 
@@ -297,8 +310,8 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     result = {
         "symbol": symbol,
         "verdict": verdict,
-        "confidence": round(confidence, 4),
-        "value": round(current_pe, 2),
+        "confidence": float(round(confidence, 4)),
+        "value": float(round(current_pe, 2)) if current_pe is not None else None,
         "details": details,
         "agent_name": agent_name,
     }

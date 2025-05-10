@@ -5,9 +5,61 @@ import functools
 import json
 from loguru import logger
 from backend.utils.cache_utils import get_redis_client
-
-# Import the tracker access function (adjust path if needed)
 from backend.monitor.tracker import get_tracker
+from datetime import datetime
+import numpy as np
+import pandas as pd
+from decimal import Decimal
+from pydantic import BaseModel
+
+# Helper function for robust JSON serialization
+def robust_json_serializer(obj):
+    if isinstance(obj, (datetime, pd.Timestamp)):
+        return obj.isoformat()
+    if isinstance(obj, np.integer):
+        return int(obj)
+    # Handle np.floating first, then Python floats for NaN/Infinity
+    if isinstance(obj, np.floating):
+        if np.isnan(obj):
+            return None
+        if np.isinf(obj):
+            # Represent infinity as a string, as JSON standard doesn't support Infinity literal
+            return "Infinity" if obj > 0 else "-Infinity"
+        return float(obj)
+    if isinstance(obj, float): # Handle standard Python floats for NaN/Infinity
+        if np.isnan(obj): # Use np.isnan for Python floats too for consistency
+            return None
+        if np.isinf(obj): # Use np.isinf for Python floats too
+            return "Infinity" if obj > 0 else "-Infinity"
+        return obj # Return the float if it's a normal number
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, np.bool_):
+        return bool(obj)
+    if isinstance(obj, BaseModel): # Check for Pydantic models
+        try:
+            return obj.model_dump() # pydantic v2
+        except AttributeError:
+            return obj.dict() # pydantic v1
+    if isinstance(obj, Decimal): # Handle Decimal type
+        return float(obj)
+    
+    # If it's a standard Python type that json.dumps can handle, return it directly.
+    # This check should come after specific type handlers like float for NaN/Inf.
+    if isinstance(obj, (dict, list, str, int, bool, type(None))):
+        return obj
+        
+    # Last resort for any other unhandled type
+    try:
+        # It's generally safer to avoid str(obj) if it's not a known serializable structure,
+        # as str(obj) might not be a valid JSON component or could be misleading.
+        # However, if we must serialize, provide a clear indication of type.
+        logger.warning(f"robust_json_serializer: Attempting to convert unhandled type {type(obj)} to string. Value snippet: {str(obj)[:100]}")
+        return f"UNSERIALIZABLE_TYPE_{type(obj).__name__}:{str(obj)}"
+    except Exception as e:
+        logger.error(f"robust_json_serializer: Failed to convert object of type {type(obj)} to string: {e}")
+        # Raising TypeError here will be caught by the caller of json.dumps
+        raise TypeError(f"Object of type {type(obj).__name__} could not be converted to string for JSON serialization by robust_json_serializer")
 
 
 def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 3600):
@@ -74,10 +126,10 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
                         # 3. Cache Result (only on success/valid data)
                         if result and result.get("verdict") not in ["ERROR", "NO_DATA", None]:
                             try:
-                                await redis_client.set(cache_key, json.dumps(result), ex=cache_ttl)
+                                await redis_client.set(cache_key, json.dumps(result, default=robust_json_serializer), ex=cache_ttl)
                                 logger.debug(f"Cached result for {cache_key} with TTL {cache_ttl}s")
                             except TypeError as json_err:
-                                logger.error(f"Failed to serialize result for {cache_key} to JSON: {json_err}. Result not cached.")
+                                logger.error(f"Failed to serialize result for {cache_key} to JSON using robust_json_serializer: {json_err}. Result not cached.")
                             except Exception as cache_err:
                                 logger.error(f"Failed to set cache for {cache_key}: {cache_err}. Result not cached.")
 
