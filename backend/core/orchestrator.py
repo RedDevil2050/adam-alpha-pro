@@ -73,7 +73,7 @@ class SystemOrchestrator:
     ) -> Dict:
         """Run full analysis with advanced caching and error recovery"""
         analysis_id = f"{symbol}_{datetime.now().timestamp()}"
-        start_time = time.time() # Record start time
+        start_time = time.perf_counter() # Record start time
         try:
             self.system_monitor.start_analysis(analysis_id)
 
@@ -144,7 +144,7 @@ class SystemOrchestrator:
             # Cache the full successful response
             await self._cache_analysis(symbol, successful_response)
 
-            end_time = time.time() # Record end time
+            end_time = time.perf_counter() # Record end time
             duration = end_time - start_time
             self.metrics_collector.record_response_time(duration) # Record response time
 
@@ -152,7 +152,7 @@ class SystemOrchestrator:
             return successful_response
 
         except Exception as e:
-            end_time = time.time() # Record end time even on error
+            end_time = time.perf_counter() # Record end time even on error
             duration = end_time - start_time
             self.metrics_collector.record_response_time(duration) # Record response time on error too
 

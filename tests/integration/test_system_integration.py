@@ -319,12 +319,17 @@ class TestSystemIntegration:
 
     async def test_metrics_collection(self, orchestrator):
         """Test metrics collection"""
-        # metrics_collector = MetricsCollector() # Collector is internal now
         monitor = SystemMonitor()
+        symbol_to_test = "RELIANCE.NS"
+
+        # Ensure a fresh analysis by clearing cache for the symbol
+        cache_client = await get_redis_client()
+        await cache_client.delete(f"analysis:{symbol_to_test}")
+        logger.info(f"Cache cleared for {symbol_to_test} before metrics collection test.")
+
         result = await orchestrator.analyze_symbol( # Call analyze_symbol
-            symbol="RELIANCE.NS",
+            symbol=symbol_to_test,
             monitor=monitor
-            # metrics_collector=metrics_collector # Removed
         )
         # Get metrics from the result, as collector is internal
         metrics = result.get("execution_metrics", {}) # Access metrics from result
