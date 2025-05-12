@@ -1,0 +1,82 @@
+2025-05-11 15:21:30,236 - yfinance - ERROR - $RELIANCE.NS: possibly delisted; no price data found  (1d 2024-05-10 -> 2025-05-10)
+2025-05-11 15:21:30,240 - backend.utils.data_provider - WARNING - Source api returned empty/None data for RELIANCE.NS
+2025-05-11 15:21:30,240 - backend.utils.data_provider - ERROR - Failed to fetch price series for RELIANCE.NS from all sources: ['api']
+2025-05-11 15:21:30,266 - yfinance - ERROR - $RELIANCE.NS: possibly delisted; no price data found  (1d 2024-05-11 -> 2025-05-11)
+2025-05-11 15:21:30,360 - backend.agents.categories - ERROR - Agent bulk_portfolio_agent (func: run) failed for RELIANCE.NS with unexpected error: object NoneType can't be used in 'await' expression
+Traceback (most recent call last):
+  File "D:\Zion\backend\agents\categories.py", line 226, in execute_category
+    result = await agent_func(symbol) # Remove agent_outputs={}
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Zion\backend\agents\automation\bulk_portfolio_agent.py", line 180, in run
+    await tracker.update("automation", agent_name, "implemented")
+TypeError: object NoneType can't be used in 'await' expression
+2025-05-11 15:21:30,374 - yfinance - ERROR - $RELIANCE.NS: possibly delisted; no price data found  (1d 2024-05-11 -> 2025-05-11)
+2025-05-11 15:21:30,376 - backend.utils.data_provider - WARNING - Source api returned empty/None data for RELIANCE.NS
+2025-05-11 15:21:30,377 - backend.utils.data_provider - WARNING - scrape_price_data method not available in provider for RELIANCE.NS
+2025-05-11 15:21:30,377 - backend.utils.data_provider - ERROR - Failed to fetch price series for RELIANCE.NS from all sources: ['api', 'scrape']
+2025-05-11 15:21:30,377 - backend.agents.categories - ERROR - Agent auto_watchlist_agent (func: run) failed for RELIANCE.NS with ValueError: Failed to fetch price series for RELIANCE.NS from all sources.
+2025-05-11 15:21:30,380 - yfinance - ERROR - $RELIANCE.NS: possibly delisted; no price data found  (1d 2024-05-11 -> 2025-05-11)
+2025-05-11 15:21:30,383 - backend.utils.data_provider - WARNING - Source api returned empty/None data for RELIANCE.NS
+2025-05-11 15:21:30,383 - backend.utils.data_provider - WARNING - scrape_price_data method not available in provider for RELIANCE.NS
+2025-05-11 15:21:30,383 - backend.utils.data_provider - ERROR - Failed to fetch price series for RELIANCE.NS from all sources: ['api', 'scrape']
+2025-05-11 15:21:30,384 - backend.agents.categories - ERROR - Agent alert_engine_agent (func: run) failed for RELIANCE.NS with ValueError: Failed to fetch price series for RELIANCE.NS from all sources.
+2025-05-11 15:21:30,390 - backend.utils.system_monitor - INFO - SystemMonitor: Ending analysis RELIANCE.NS_1746869064.265582 with status success
+2025-05-11 15:21:30,423 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis HDFCBANK.NS_1746957090.423872
+2025-05-11 15:21:30,424 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis RELIANCE.NS_1746957090.424998
+2025-05-11 15:21:30,426 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis RELIANCE.NS_1746957090.426054
+2025-05-11 15:21:30,426 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis TCS.NS_1746957090.426054
+2025-05-11 15:21:30,427 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis HDFCBANK.NS_1746957090.427074
+2025-05-11 15:21:30,427 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis RELIANCE.NS_1746957090.427074
+2025-05-11 15:21:30,428 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis INFY.NS_1746957090.428092
+2025-05-11 15:21:30,429 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis HDFCBANK.NS_1746957090.429107
+2025-05-11 15:21:30,429 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis TCS.NS_1746957090.429107
+2025-05-11 15:21:30,430 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis SBIN.NS_1746957090.430396
+2025-05-11 15:21:30,430 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis SBIN.NS_1746957090.430396
+2025-05-11 15:21:30,431 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis HDFCBANK.NS_1746957090.431415
+2025-05-11 15:21:30,431 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis RELIANCE.NS_1746957090.431415
+2025-05-11 15:21:30,432 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis INFY.NS_1746957090.432432
+2025-05-11 15:21:30,432 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis INFY.NS_1746957090.432432
+2025-05-11 15:21:30,435 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis HDFCBANK.NS_1746957090.435667
+2025-05-11 15:21:30,436 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis RELIANCE.NS_1746957090.436687
+2025-05-11 15:21:30,437 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis TCS.NS_1746957090.437705
+2025-05-11 15:21:30,437 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis INFY.NS_1746957090.437705
+2025-05-11 15:21:30,438 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis INFY.NS_1746957090.438723
+2025-05-11 15:21:30,438 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis HDFCBANK.NS_1746957090.438723
+2025-05-11 15:21:30,439 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis SBIN.NS_1746957090.43974
+2025-05-11 15:21:30,440 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis SBIN.NS_1746957090.440757
+2025-05-11 15:21:30,440 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis RELIANCE.NS_1746957090.440757
+2025-05-11 15:21:30,441 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis INFY.NS_1746957090.441775
+2025-05-11 15:21:30,442 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis INFY.NS_1746957090.442792
+2025-05-11 15:21:30,442 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis INFY.NS_1746957090.442792
+2025-05-11 15:21:30,443 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis RELIANCE.NS_1746957090.443809
+2025-05-11 15:21:30,444 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis HDFCBANK.NS_1746957090.444833
+2025-05-11 15:21:30,444 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis RELIANCE.NS_1746957090.444833
+2025-05-11 15:21:30,446 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis RELIANCE.NS_1746957090.446166
+2025-05-11 15:21:30,446 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis TCS.NS_1746957090.446166
+2025-05-11 15:21:30,447 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis TCS.NS_1746957090.447186
+2025-05-11 15:21:30,447 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis INFY.NS_1746957090.447186
+2025-05-11 15:21:30,448 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis HDFCBANK.NS_1746957090.448432
+2025-05-11 15:21:30,449 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis SBIN.NS_1746957090.449432
+2025-05-11 15:21:30,449 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis INFY.NS_1746957090.449432
+2025-05-11 15:21:30,450 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis RELIANCE.NS_1746957090.450448
+2025-05-11 15:21:30,451 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis INFY.NS_1746957090.451463
+2025-05-11 15:21:30,451 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis HDFCBANK.NS_1746957090.451463
+2025-05-11 15:21:30,452 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis SBIN.NS_1746957090.452478
+2025-05-11 15:21:30,452 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis TCS.NS_1746957090.452478
+2025-05-11 15:21:30,453 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis SBIN.NS_1746957090.453492
+2025-05-11 15:21:30,454 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis HDFCBANK.NS_1746957090.454507
+2025-05-11 15:21:30,454 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis INFY.NS_1746957090.454507
+2025-05-11 15:21:30,455 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis TCS.NS_1746957090.45552
+2025-05-11 15:21:30,455 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis TCS.NS_1746957090.45552
+2025-05-11 15:21:30,456 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis HDFCBANK.NS_1746957090.456956
+2025-05-11 15:21:30,456 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis TCS.NS_1746957090.456956
+2025-05-11 15:21:30,457 - backend.utils.system_monitor - INFO - SystemMonitor: Starting analysis TCS.NS_1746957090.457972
+2025-05-11 15:21:30,458 - backend.utils.circuit_breaker - INFO - Circuit breaker 'polygon' transitioning from OPEN to HALF_OPEN
+2025-05-11 15:21:30,460 - backend.utils.circuit_breaker - WARNING - Circuit breaker 'polygon' failed in HALF_OPEN state, reopening circuit
+2025-05-11 15:21:30,460 - backend.utils.circuit_breaker - INFO - Circuit breaker 'finnhub' transitioning from OPEN to HALF_OPEN
+2025-05-11 15:21:30,460 - backend.utils.circuit_breaker - WARNING - Circuit breaker 'finnhub' failed in HALF_OPEN state, reopening circuit
+2025-05-11 15:21:47,382 - backend.agents.risk.beta_agent - ERROR - Error processing price data in beta_agent: Data must be 1-dimensional, got ndarray of shape (100, 5) instead
+2025-05-11 15:21:48,995 - backend.agents.risk.beta_agent - ERROR - Error processing price data in beta_agent: Data must be 1-dimensional, got ndarray of shape (100, 5) instead
+2025-05-11 15:21:50,339 - backend.agents.risk.beta_agent - ERROR - Error processing price data in beta_agent: Data must be 1-dimensional, got ndarray of shape (100, 5) instead
+2025-05-11 15:21:51,307 - backend.agents.risk.beta_agent - ERROR - Error processing price data in beta_agent: Data must be 1-dimensional, got ndarray of shape (100, 5) instead
+2025-05-11 15:21:52,335 - backend.agents.risk.beta_agent - ERROR - Error processing price data in beta_agent: Data must be 1-dimensional, got ndarray of shape (100, 5) instead

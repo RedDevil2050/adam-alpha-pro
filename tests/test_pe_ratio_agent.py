@@ -66,7 +66,7 @@ async def test_pe_ratio_agent(
     mock_get_redis.assert_awaited_once()
     mock_redis_instance.get.assert_awaited_once()
     # Assert set is called because data is valid
-    mock_redis_instance.set.assert_awaited_once()
+    mock_redis_instance.set.assert_called_once() # Changed from assert_awaited_once()
 
     # --- Verify Tracker --- 
     mock_get_tracker.assert_called_once()
