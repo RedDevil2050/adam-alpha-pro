@@ -107,7 +107,8 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
                         logger.debug(f"Cache hit for {cache_key}")
                         return cached_result
                     except json.JSONDecodeError:
-                        logger.warning(f"Failed to decode cached JSON for {cache_key}. Fetching fresh data.")                logger.debug(f"Cache miss for {cache_key}")
+                        logger.warning(f"Failed to decode cached JSON for {cache_key}. Fetching fresh data.")
+                        logger.debug(f"Cache miss for {cache_key}")
                 # 2. Execute Core Logic
                 # Attempt to execute the agent function
                 try:
