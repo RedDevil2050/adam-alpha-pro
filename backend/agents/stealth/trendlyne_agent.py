@@ -11,7 +11,7 @@ class TrendlyneAgent(StealthAgentBase):
         try:
             data = await self._fetch_stealth_data(symbol)
             if not data:
-                return self._error_response(symbol, "No data available")
+                return await self._error_response(symbol, "No data available")
 
             score = self._calculate_score(data)
             verdict = self._get_verdict(score)
@@ -29,7 +29,7 @@ class TrendlyneAgent(StealthAgentBase):
 
         except Exception as e:
             logger.error(f"Trendlyne scraping error: {e}")
-            return self._error_response(symbol, str(e))
+            return await self._error_response(symbol, str(e))
 
     async def _fetch_stealth_data(self, symbol: str) -> dict:
         url = f"https://trendlyne.com/equity/{symbol}/"

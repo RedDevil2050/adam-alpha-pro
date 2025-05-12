@@ -17,7 +17,7 @@ class MoneyControlAgent(StealthAgentBase):
         try:
             data = await self._fetch_stealth_data(symbol)
             if not data:
-                return self._error_response(symbol, "No data available")
+                return await self._error_response(symbol, "No data available")
 
             # Enhanced analysis
             multi_tf_analysis = self._analyze_multiple_timeframes(data)
@@ -52,7 +52,7 @@ class MoneyControlAgent(StealthAgentBase):
             }
         except Exception as e:
             logger.error(f"MoneyControl advanced analysis error: {e}")
-            return self._error_response(symbol, str(e))
+            return await self._error_response(symbol, str(e))
 
     def _analyze_multiple_timeframes(self, data: dict) -> dict:
         analyses = {}
@@ -118,7 +118,7 @@ class MoneyControlAgent(StealthAgentBase):
         # This is a placeholder for the actual implementation
         return min(score * 0.8, 1.0)
 
-    def _error_response(self, symbol: str, message: str) -> dict:
+    async def _error_response(self, symbol: str, message: str) -> dict:
         """Generates a standard error response dictionary."""
         logger.error(f"Agent error for {symbol} in {self.__class__.__name__}: {message}")
         return {

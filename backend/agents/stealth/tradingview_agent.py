@@ -17,7 +17,7 @@ class TradingViewAgent(StealthAgentBase):
             "technicals": {}, "oscillators": {}, "moving_averages": {}
         }
 
-    def _error_response(self, symbol: str, message: str):
+    async def _error_response(self, symbol: str, message: str):
         # Placeholder implementation matching expected return structure
         logger.error(f"Agent error for {symbol} in {self.__class__.__name__}: {message}")
         return {
@@ -34,7 +34,7 @@ class TradingViewAgent(StealthAgentBase):
         try:
             data = await self._fetch_stealth_data(symbol)
             if not data:
-                return self._error_response(symbol, "No data available")
+                return await self._error_response(symbol, "No data available")
 
             # Advanced technical analysis
             candlestick_patterns = self._analyze_candlestick_patterns(data)
@@ -73,7 +73,7 @@ class TradingViewAgent(StealthAgentBase):
 
         except Exception as e:
             logger.error(f"TradingView advanced analysis error: {e}")
-            return self._error_response(symbol, str(e))
+            return await self._error_response(symbol, str(e))
 
     def _analyze_candlestick_patterns(self, data: dict) -> dict:
         try:
