@@ -82,7 +82,7 @@ async def test_momentum_strong_positive(mock_get_settings, mock_fetch_hist, mock
     assert result["confidence"] == 0.8
     mock_fetch_hist.assert_awaited_once()
     # Check await counts on the patched function and the instance's methods
-    mock_get_redis_decorator.assert_awaited_once()
+    mock_get_redis_decorator.assert_called_once() # Correct: Check if the factory was called
     mock_redis_instance.get.assert_awaited_once()
     mock_redis_instance.set.assert_awaited_once()
 
@@ -119,7 +119,7 @@ async def test_momentum_positive(mock_get_settings, mock_fetch_hist, mock_get_re
     assert result["confidence"] == 0.6
     mock_fetch_hist.assert_awaited_once()
     # Check await counts
-    mock_get_redis_decorator.assert_awaited_once()
+    mock_get_redis_decorator.assert_called_once() # Correct
     mock_redis_instance.get.assert_awaited_once()
     mock_redis_instance.set.assert_awaited_once()
 
@@ -156,7 +156,7 @@ async def test_momentum_negative(mock_get_settings, mock_fetch_hist, mock_get_re
     assert result["confidence"] == 0.6
     mock_fetch_hist.assert_awaited_once()
     # Check await counts
-    mock_get_redis_decorator.assert_awaited_once()
+    mock_get_redis_decorator.assert_called_once() # Correct
     mock_redis_instance.get.assert_awaited_once()
     mock_redis_instance.set.assert_awaited_once()
 
@@ -191,7 +191,7 @@ async def test_momentum_strong_negative(mock_get_settings, mock_fetch_hist, mock
     assert result["confidence"] == 0.8 # Check exact confidence
     mock_fetch_hist.assert_awaited_once()
     # Check await counts
-    mock_get_redis_decorator.assert_awaited_once()
+    mock_get_redis_decorator.assert_called_once() # Correct
     mock_redis_instance.get.assert_awaited_once()
     mock_redis_instance.set.assert_awaited_once()
 
@@ -230,7 +230,7 @@ async def test_momentum_flat(mock_get_settings, mock_fetch_hist, mock_get_redis_
     assert result["confidence"] == 0.6 # Confidence for POSITIVE_MOMENTUM
     mock_fetch_hist.assert_awaited_once()
     # Check await counts
-    mock_get_redis_decorator.assert_awaited_once()
+    mock_get_redis_decorator.assert_called_once() # Correct
     mock_redis_instance.get.assert_awaited_once()
     mock_redis_instance.set.assert_awaited_once()
 
@@ -264,7 +264,7 @@ async def test_momentum_insufficient_data(mock_get_settings, mock_fetch_hist, mo
     assert "Insufficient historical data" in result["details"]["reason"] # Adjusted reason check
     mock_fetch_hist.assert_awaited_once()
     # Check await counts - get should be called, set should not
-    mock_get_redis_decorator.assert_awaited_once()
+    mock_get_redis_decorator.assert_called_once() # Correct
     mock_redis_instance.get.assert_awaited_once()
     mock_redis_instance.set.assert_not_awaited() # Correct assertion
 
@@ -301,7 +301,7 @@ async def test_momentum_fetch_error(mock_get_settings, mock_fetch_hist, mock_get
     assert error_message in result["error"]
     mock_fetch_hist.assert_awaited_once()
     # Check await counts - get should be called, set should not
-    mock_get_redis_decorator.assert_awaited_once()
+    mock_get_redis_decorator.assert_called_once() # Correct
     mock_redis_instance.get.assert_awaited_once()
     mock_redis_instance.set.assert_not_awaited() # Correct assertion
 
@@ -336,7 +336,7 @@ async def test_momentum_cache_hit(mock_get_settings, mock_fetch_hist, mock_get_r
 
     # Assert
     assert result == cached_result # Should return the exact cached result
-    mock_get_redis_decorator.assert_awaited_once() # Patched function was called
+    mock_get_redis_decorator.assert_called_once() # Correct: Check if the factory was called
     mock_redis_instance.get.assert_awaited_once() # Get was called on the instance
     mock_fetch_hist.assert_not_awaited() # Fetch should NOT be called
     mock_redis_instance.set.assert_not_awaited() # Set should NOT be called
@@ -365,7 +365,7 @@ async def test_momentum_no_data_not_cached(mock_get_settings, mock_fetch_hist, m
 
     # Assert
     assert result["verdict"] == "NO_DATA"
-    mock_get_redis_decorator.assert_awaited_once()
+    mock_get_redis_decorator.assert_called_once() # Correct
     mock_redis_instance.get.assert_awaited_once()
     mock_fetch_hist.assert_awaited_once()
     mock_redis_instance.set.assert_not_awaited() # Ensure NO_DATA result is not cached
@@ -394,8 +394,10 @@ async def test_momentum_error_not_cached(mock_get_settings, mock_fetch_hist, moc
 
     # Assert
     assert result["verdict"] == "ERROR"
-    mock_get_redis_decorator.assert_awaited_once()
-    mock_redis_instance.get.assert_awaited_once()
+    assert mock_get_redis_decorator.call_count == 1 # Check if the factory itself was called
+    
+    # Assert that the methods on the returned mock_redis_instance were called as expected
+    mock_redis_instance.get.assert_awaited_once_with(f"{agent_name}:{SYMBOL}") # Changed from momentum_run.__name__
     mock_fetch_hist.assert_awaited_once()
     mock_redis_instance.set.assert_not_awaited() # Ensure ERROR result is not cached
 
