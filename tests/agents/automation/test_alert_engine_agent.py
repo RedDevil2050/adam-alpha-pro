@@ -15,12 +15,18 @@ MOCK_CORP_OUTPUT_NONE = {"details": {"actions": []}}
 # Use pytest fixture for mock redis client to ensure isolation between tests
 @pytest.fixture(autouse=True)
 def mock_redis():
-    # Create a new mock for each test
-    mock_client = AsyncMock()
-    mock_client.get.return_value = None # Default: cache miss
-    mock_client.set.return_value = True
-    with patch('backend.agents.automation.alert_engine_agent.get_redis_client', return_value=mock_client):
-        yield mock_client # Provide the mock client to the test if needed
+    # This mock represents the actual Redis client instance with async methods
+    actual_client_mock = AsyncMock()
+    actual_client_mock.get.return_value = None # Default: cache miss, get() returns a coroutine
+    actual_client_mock.set.return_value = True  # set() returns a coroutine
+
+    # This mock represents the get_redis_client function itself.
+    # It's an AsyncMock because the agent code awaits get_redis_client().
+    # When awaited, it should return the actual_client_mock.
+    mock_get_redis_function = AsyncMock(return_value=actual_client_mock)
+    
+    with patch('backend.agents.automation.alert_engine_agent.get_redis_client', new=mock_get_redis_function):
+        yield actual_client_mock # This is the client mock that the agent code will interact with
 
 # Remove the redundant @patch for get_redis_client from each test
 
