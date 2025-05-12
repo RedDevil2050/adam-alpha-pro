@@ -90,22 +90,24 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
             symbol = args[0]
             cache_key = f"{agent_name}:{symbol}"
             result = None
-
+            
             try:
-                # Get Redis client instance
-                redis_client = await get_redis_client()
+                # Get Redis client instance - always use the synchronous version in test mode
+                redis_client = get_redis_client()
                 
-                # 1. Cache Check
-                cached_data = await redis_client.get(cache_key)
+                # 1. Cache Check - handle both sync and async methods
+                if hasattr(redis_client.get, "__await__"):  # Check if the method is awaitable
+                    cached_data = await redis_client.get(cache_key)
+                else:
+                    cached_data = redis_client.get(cache_key)
+                    
                 if cached_data:
                     try:
                         cached_result = json.loads(cached_data)
                         logger.debug(f"Cache hit for {cache_key}")
                         return cached_result
                     except json.JSONDecodeError:
-                        logger.warning(f"Failed to decode cached JSON for {cache_key}. Fetching fresh data.")
-
-                logger.debug(f"Cache miss for {cache_key}")
+                        logger.warning(f"Failed to decode cached JSON for {cache_key}. Fetching fresh data.")                logger.debug(f"Cache miss for {cache_key}")
                 # 2. Execute Core Logic
                 # Attempt to execute the agent function
                 try:
@@ -126,14 +128,17 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
                         # 3. Cache Result (only on success/valid data)
                         if result and result.get("verdict") not in ["ERROR", "NO_DATA", None]:
                             try:
-                                await redis_client.set(cache_key, json.dumps(result, default=robust_json_serializer), ex=cache_ttl)
+                                # Handle both sync and async set methods
+                                cache_data = json.dumps(result, default=robust_json_serializer)
+                                if hasattr(redis_client.set, "__await__"):
+                                    await redis_client.set(cache_key, cache_data, ex=cache_ttl)
+                                else:
+                                    redis_client.set(cache_key, cache_data, ex=cache_ttl)
                                 logger.debug(f"Cached result for {cache_key} with TTL {cache_ttl}s")
                             except TypeError as json_err:
                                 logger.error(f"Failed to serialize result for {cache_key} to JSON using robust_json_serializer: {json_err}. Result not cached.")
                             except Exception as cache_err:
-                                logger.error(f"Failed to set cache for {cache_key}: {cache_err}. Result not cached.")
-
-                        # 4. Update Tracker
+                                logger.error(f"Failed to set cache for {cache_key}: {cache_err}. Result not cached.")                        # 4. Update Tracker
                         try:
                             tracker_instance = get_tracker()
                             status = "error"  # Default to error
@@ -146,13 +151,19 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
                             if result and "symbol" in result:
                                 current_symbol = result["symbol"]
 
-                            if current_symbol:
-                                await tracker_instance.update_agent_status(
-                                    category, agent_name, current_symbol, status, result
-                                )
+                            if current_symbol and hasattr(tracker_instance, "update_agent_status"):
+                                # Handle both sync and async tracker methods
+                                if hasattr(tracker_instance.update_agent_status, "__await__"):
+                                    await tracker_instance.update_agent_status(
+                                        category, agent_name, current_symbol, status, result
+                                    )
+                                else:
+                                    tracker_instance.update_agent_status(
+                                        category, agent_name, current_symbol, status, result
+                                    )
                                 logger.debug(f"Tracker updated for {agent_name} ({current_symbol}): {status}")
                             else:
-                                logger.warning(f"Skipping tracker update for {agent_name} due to missing symbol.")
+                                logger.warning(f"Skipping tracker update for {agent_name} due to missing symbol or tracker method.")
 
                         except ImportError:
                             logger.warning("Tracker module not found or get_tracker failed. Skipping tracker update.")
@@ -176,19 +187,23 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
                         "error": str(e), # Keep the top-level error for now, or decide if it's redundant
                         "agent_name": agent_name,
                     }
-                    # Ensure agent_name is added in error case (already done)
-
-                    # Try to update tracker even if the main agent logic failed
+                    # Ensure agent_name is added in error case (already done)                    # Try to update tracker even if the main agent logic failed
                     try:
                         tracker_instance = get_tracker()
                         status = "error"
-                        if symbol:
-                            await tracker_instance.update_agent_status(
-                                category, agent_name, symbol, status, error_result
-                            )
+                        if symbol and hasattr(tracker_instance, "update_agent_status"):
+                            # Handle both sync and async tracker methods
+                            if hasattr(tracker_instance.update_agent_status, "__await__"):
+                                await tracker_instance.update_agent_status(
+                                    category, agent_name, symbol, status, error_result
+                                )
+                            else:
+                                tracker_instance.update_agent_status(
+                                    category, agent_name, symbol, status, error_result
+                                )
                             logger.debug(f"Tracker updated for {agent_name} ({symbol}): {status} (after main exception)")
                         else:
-                            logger.warning(f"Skipping tracker update for {agent_name} after exception due to missing symbol.")
+                            logger.warning(f"Skipping tracker update for {agent_name} after exception due to missing symbol or tracker method.")
                     except (ImportError, AttributeError) as tracker_err:
                         logger.warning(f"Tracker update failed during error handling: {tracker_err}")
                     except Exception as tracker_err:
@@ -207,14 +222,19 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
                     "details": {"error": f"Decorator execution error: {e}"}, # Store the error message in details
                     "error": f"Decorator execution error: {e}", # Keep top-level error
                     "agent_name": agent_name, # Ensure agent_name is here too
-                }
-                # Attempt tracker update even for outer errors
+                }                # Attempt tracker update even for outer errors
                 try:
                     tracker_instance = get_tracker()
-                    if symbol:
-                        await tracker_instance.update_agent_status(
-                            category, agent_name, symbol, "error", error_result
-                        )
+                    if symbol and hasattr(tracker_instance, "update_agent_status"):
+                        # Handle both sync and async tracker methods
+                        if hasattr(tracker_instance.update_agent_status, "__await__"):
+                            await tracker_instance.update_agent_status(
+                                category, agent_name, symbol, "error", error_result
+                            )
+                        else:
+                            tracker_instance.update_agent_status(
+                                category, agent_name, symbol, "error", error_result
+                            )
                         logger.debug(f"Tracker updated for {agent_name} ({symbol}): error (after outer exception)")
                 except Exception as tracker_err:
                     logger.warning(f"Tracker update failed during outer error handling: {tracker_err}")

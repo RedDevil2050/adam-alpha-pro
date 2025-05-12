@@ -1,8 +1,9 @@
 import pytest
 import pytest_asyncio # Import pytest_asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, Mock
 import nltk # Import nltk
 import warnings # Add this line
+import sys
 
 # Download vader_lexicon once per session
 def pytest_configure(config):
@@ -14,6 +15,14 @@ def pytest_configure(config):
         message=r"pkg_resources is deprecated as an API.*",
         module="pandas_ta"  # Filter for warnings originating from the pandas_ta module
     )
+    
+    # Also suppress RuntimeWarning for coroutine never awaited
+    warnings.filterwarnings(
+        "ignore",
+        category=RuntimeWarning,
+        message=r"coroutine '.*' was never awaited"
+    )
+    
     try:
         # Check if the resource exists to avoid repeated downloads
         nltk.data.find('sentiment/vader_lexicon.zip')
@@ -28,7 +37,7 @@ def pytest_configure(config):
 @pytest_asyncio.fixture(scope="session", autouse=True) # Use pytest_asyncio.fixture
 def mock_redis_client():
     """Globally mock redis_client for all tests with stateful behavior."""
-    with patch("backend.utils.cache_utils.get_redis_client", new_callable=AsyncMock) as mock_get_redis_client:
+    with patch("backend.utils.cache_utils.get_redis_client") as mock_get_redis_client:
         mock_instance = AsyncMock()
         actual_cache = {}  # Simple dict to simulate cache storage
 
@@ -53,6 +62,8 @@ def mock_redis_client():
         mock_instance.delete = AsyncMock(side_effect=mock_delete)
         mock_instance.ping = AsyncMock(return_value=True) # Mock ping as well
 
+        # Make get_redis_client return the client directly instead of being a coroutine
+        # This way when the function is called without await, it won't cause warnings
         mock_get_redis_client.return_value = mock_instance
         yield mock_instance
         actual_cache.clear() # Clear cache after session

@@ -21,7 +21,12 @@ class TestSystemIntegration:
         monitor = SystemMonitor() # This is the monitor passed to initialize()
         instance = None # Initialize instance to handle potential failure before assignment
         try:
-            cache_client = await get_redis_client()
+            # Get the Redis client - handle both async and sync implementations
+            if asyncio.iscoroutinefunction(get_redis_client):
+                cache_client = await get_redis_client()
+            else:
+                cache_client = get_redis_client()
+                
             instance = SystemOrchestrator(cache_client=cache_client) # This creates its own internal instance.system_monitor
             await instance.initialize(monitor) # Initializes using 'monitor' and also instance.system_monitor
         except Exception as e:
@@ -197,12 +202,17 @@ class TestSystemIntegration:
         assert orchestrator_component.get("status") == "healthy", \
             f"Orchestrator component should remain healthy in internal monitor after handling symbol error. Health was: {health_metrics_internal}"
 
-    async def test_caching(self, orchestrator):
-        """Test caching mechanism"""
+    async def test_caching(self, orchestrator):        """Test caching mechanism"""
         # metrics_collector = MetricsCollector() # Collector is internal
         monitor = SystemMonitor() # Correct indentation
         symbol_to_test = "SBIN.NS"
-        cache_client = await get_redis_client() # Get client to clear cache first
+        
+        # Handle both async and non-async Redis client
+        if asyncio.iscoroutinefunction(get_redis_client):
+            cache_client = await get_redis_client() # Get client to clear cache first
+        else:
+            cache_client = get_redis_client() # Get client to clear cache first
+            
         await cache_client.delete(f"analysis:{symbol_to_test}") # Clear potential stale cache
         # First call
         result1 = await orchestrator.analyze_symbol(
@@ -320,10 +330,11 @@ class TestSystemIntegration:
     async def test_metrics_collection(self, orchestrator):
         """Test metrics collection"""
         monitor = SystemMonitor()
-        symbol_to_test = "RELIANCE.NS"
-
-        # Ensure a fresh analysis by clearing cache for the symbol
-        cache_client = await get_redis_client()
+        symbol_to_test = "RELIANCE.NS"        # Ensure a fresh analysis by clearing cache for the symbol
+        if asyncio.iscoroutinefunction(get_redis_client):
+            cache_client = await get_redis_client()
+        else:
+            cache_client = get_redis_client()
         await cache_client.delete(f"analysis:{symbol_to_test}")
         logger.info(f"Cache cleared for {symbol_to_test} before metrics collection test.")
 

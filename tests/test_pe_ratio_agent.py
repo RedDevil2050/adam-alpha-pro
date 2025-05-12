@@ -48,8 +48,8 @@ async def test_pe_ratio_agent(
     mock_redis_instance = AsyncMock()
     mock_redis_instance.get = AsyncMock(return_value=None)  # Simulate cache miss
     mock_redis_instance.set = AsyncMock()
-    async def fake_get_redis(): return mock_redis_instance
-    mock_get_redis.side_effect = fake_get_redis
+    # Return the mock directly instead of a coroutine function
+    mock_get_redis.return_value = mock_redis_instance
 
     # 5. Mock Tracker
     mock_tracker_instance = AsyncMock()
@@ -63,7 +63,7 @@ async def test_pe_ratio_agent(
     result = await pe_run(symbol)
 
     # --- Verify Redis operations ---
-    mock_get_redis.assert_awaited_once()
+    mock_get_redis.assert_called_once()
     mock_redis_instance.get.assert_awaited_once()
     # Assert set is called because data is valid
     mock_redis_instance.set.assert_called_once() # Changed from assert_awaited_once()
