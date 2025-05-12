@@ -25,7 +25,7 @@ def mock_redis():
     # When awaited, it should return the actual_client_mock.
     mock_get_redis_function = AsyncMock(return_value=actual_client_mock)
     
-    with patch('backend.agents.automation.alert_engine_agent.get_redis_client', new=mock_get_redis_function):
+    with patch('backend.utils.cache_utils.get_redis_client', new=mock_get_redis_function): # Corrected patch target
         yield actual_client_mock # This is the client mock that the agent code will interact with
 
 # Remove the redundant @patch for get_redis_client from each test

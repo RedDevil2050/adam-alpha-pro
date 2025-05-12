@@ -8,9 +8,9 @@ from backend.agents.technical.supertrend_agent import run as st_run
 import datetime
 
 @pytest.mark.asyncio
-@patch('backend.agents.decorators.get_redis_client') # Correct patch target
+@patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock) # Corrected patch target & use AsyncMock
 @patch('backend.agents.decorators.get_tracker') # Patch tracker used by decorator
-async def test_supertrend_agent(mock_get_tracker, mock_get_redis, monkeypatch):
+async def test_supertrend_agent(mock_get_redis, mock_get_tracker, monkeypatch): # MODIFIED: Swapped mock_get_redis and mock_get_tracker
     # Mock data matching expected OHLCV structure
     dates = pd.to_datetime([datetime.date.today() - datetime.timedelta(days=x) for x in range(9, -1, -1)])
     prices = pd.DataFrame({
@@ -35,9 +35,8 @@ async def test_supertrend_agent(mock_get_tracker, mock_get_redis, monkeypatch):
     mock_redis_instance.set = AsyncMock()
 
     # Configure the mock for get_redis_client to return the instance correctly
-    async def fake_get_redis():
-        return mock_redis_instance
-    mock_get_redis.side_effect = fake_get_redis
+    # mock_get_redis is now an AsyncMock, set its return_value
+    mock_get_redis.return_value = mock_redis_instance
 
     # Mock tracker instance returned by get_tracker
     mock_tracker_instance = MagicMock()
@@ -50,7 +49,7 @@ async def test_supertrend_agent(mock_get_tracker, mock_get_redis, monkeypatch):
     # Verify mocks were called correctly
     mock_fetch.assert_called_once()
     mock_market_context.assert_called_once()
-    mock_get_redis.assert_awaited_once() # Verify the patch target was called
+    mock_get_redis.assert_awaited_once() # Verify the patch target was called and awaited
     mock_redis_instance.get.assert_awaited_once()
 
     # Set might not be called if serialization fails (as seen in original error log)

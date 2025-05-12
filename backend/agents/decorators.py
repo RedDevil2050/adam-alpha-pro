@@ -94,15 +94,21 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
             
             try:
                 # Get Redis client instance - always use the synchronous version in test mode
-                redis_client = get_redis_client()
+                redis_client = await get_redis_client() # MODIFIED: Added await
                 
                 # 1. Cache Check
                 
                 _raw_cache_val = None
-                if hasattr(redis_client.get, "__await__"): # Check if the 'get' method itself is awaitable
-                    _raw_cache_val = await redis_client.get(cache_key)
+                # Ensure redis_client is awaited if it's a coroutine object before accessing attributes
+                # This is a defensive check, assuming get_redis_client() now consistently returns an awaited client
+                # However, if redis_client itself could be a coroutine (e.g. if get_redis_client was not awaited properly outside)
+                # client_to_use = await redis_client if asyncio.iscoroutine(redis_client) else redis_client
+                client_to_use = redis_client # Assuming get_redis_client already returned an awaited client instance
+
+                if hasattr(client_to_use.get, "__await__"): # Check if the 'get' method itself is awaitable
+                    _raw_cache_val = await client_to_use.get(cache_key)
                 else: # 'get' method is synchronous (but might return a coroutine)
-                    _raw_cache_val = redis_client.get(cache_key)
+                    _raw_cache_val = client_to_use.get(cache_key)
 
                 _resolved_cache_val = None
                 if asyncio.iscoroutine(_raw_cache_val): # Resolve if the obtained value is a coroutine
