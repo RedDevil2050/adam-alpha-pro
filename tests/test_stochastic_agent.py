@@ -2,12 +2,14 @@ import pytest
 import pandas as pd
 import numpy as np
 import datetime
-from unittest.mock import AsyncMock, MagicMock, patch # Add patch to imports
-from backend.agents.technical.stochastic_agent import run as stoch_run
+from unittest.mock import AsyncMock, MagicMock, patch
+from backend.agents.technical.stochastic_agent import run as stoch_run 
 
 @pytest.mark.asyncio
-@patch('backend.agents.decorators.get_redis_client') # Correct patch target
-async def test_stochastic_agent(mock_get_redis, monkeypatch):
+# Patch get_redis_client where it's used by the stochastic_agent's run function
+@patch('backend.agents.decorators.get_redis_client') # New patch for the decorator's redis client
+@patch('backend.agents.technical.stochastic_agent.get_redis_client') # Existing patch for agent's direct call
+async def test_stochastic_agent(mock_get_redis_direct_agent, mock_get_redis_decorator, monkeypatch): # Order of mocks matches patches
     # Create realistic OHLCV data (need enough for window, default K=14, D=3)
     dates = pd.to_datetime([datetime.date(2025, 4, 30) - datetime.timedelta(days=x)
                             for x in range(20, -1, -1)])
@@ -27,15 +29,24 @@ async def test_stochastic_agent(mock_get_redis, monkeypatch):
     mock_fetch = AsyncMock(return_value=data_df)
     monkeypatch.setattr('backend.agents.technical.stochastic_agent.fetch_ohlcv_series', mock_fetch)
 
-    # Set up Redis mock instance and return value correctly
-    mock_redis_instance = AsyncMock()
-    mock_redis_instance.get = AsyncMock(return_value=None) # Simulate cache miss
-    mock_redis_instance.set = AsyncMock()
+    # Mock for the direct call in stochastic_agent.run()
+    # The existing 'mock_redis_instance' is now 'mock_redis_instance_agent'
+    mock_redis_instance_agent = AsyncMock()
+    # .get() and .set() on this instance are not called by the agent directly,
+    # as those lines are commented out in stochastic_agent.py.
+    # Mocking them is harmless but not strictly needed for current agent code.
+    mock_redis_instance_agent.get = AsyncMock(return_value=None)
+    mock_redis_instance_agent.set = AsyncMock()
 
-    # Configure the mock for get_redis_client to return the instance correctly
-    async def fake_get_redis():
-        return mock_redis_instance
-    mock_get_redis.side_effect = fake_get_redis
+    async def fake_get_redis_agent(): # was 'fake_get_redis'
+        return mock_redis_instance_agent
+    mock_get_redis_direct_agent.side_effect = fake_get_redis_agent # Was mock_get_redis_stoch_agent
+
+    # Mock for the get_redis_client call within the standard_agent_execution decorator
+    mock_redis_instance_decorator = AsyncMock()
+    mock_redis_instance_decorator.get = AsyncMock(return_value=None) # Simulate cache miss
+    mock_redis_instance_decorator.set = AsyncMock() # Decorator will attempt to set cache
+    mock_get_redis_decorator.return_value = mock_redis_instance_decorator
 
     # Mock tracker (optional)
     mock_tracker_update = AsyncMock()
@@ -84,7 +95,10 @@ async def test_stochastic_agent(mock_get_redis, monkeypatch):
 
     # Verify mocks were called
     mock_fetch.assert_called_once()
-    mock_get_redis.assert_awaited_once() # Verify the patch target was called
-    # Assert on the instance's methods directly
-    mock_redis_instance.get.assert_awaited_once()
-    mock_redis_instance.set.assert_awaited_once()
+
+    mock_get_redis_direct_agent.assert_awaited_once() # Assert direct call in agent
+
+    # Assert calls made by the decorator via its own redis client
+    mock_get_redis_decorator.assert_awaited_once()
+    mock_redis_instance_decorator.get.assert_awaited_once()
+    mock_redis_instance_decorator.set.assert_awaited_once()
