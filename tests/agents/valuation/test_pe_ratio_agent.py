@@ -23,8 +23,8 @@ def mock_get_redis_client():
     async def fake_async_get_redis_client(*args, **kwargs):
         return mock_redis_instance
 
-    # Patch where get_redis_client is imported in the pe_ratio_agent module
-    with patch("backend.agents.valuation.pe_ratio_agent.get_redis_client", new=fake_async_get_redis_client) as mock_func:
+    # Patch where get_redis_client is imported by the decorator
+    with patch("backend.agents.decorators.get_redis_client", new=fake_async_get_redis_client) as mock_func:
         yield mock_func
 
 # Mock settings
@@ -123,12 +123,10 @@ async def test_pe_ratio_overvalued(mock_fetch_price, mock_fetch_latest_eps, mock
     # Assert
     assert result["symbol"] == SYMBOL
     assert result["agent_name"] == agent_name
-    # Corrected assertion: Agent calculates percentile < 25% -> UNDERVALUED
-    assert result["verdict"] == "UNDERVALUED_REL_HIST"
+    assert result["verdict"] == "OVERVALUED_REL_HIST" # PE of 25 is high, percentile is high
     assert result["value"] == 25.0 # Current PE is 25
-    assert result["confidence"] > 0.6 # Dynamic confidence for undervalued (percentile is low)
-    # Corrected assertion: Percentile should be < 25% now
-    assert result["details"]["percentile_rank"] < mock_settings.agent_settings.pe_ratio.PERCENTILE_UNDERVALUED # PE of 25 is high, but hist PE is higher, so percentile is low
+    assert result["confidence"] > 0.6 # Dynamic confidence for overvalued (percentile is high)
+    assert result["details"]["percentile_rank"] >= mock_settings.agent_settings.pe_ratio.PERCENTILE_OVERVALUED # PE of 25 is high, percentile is high
     assert result["details"]["z_score"] is not None
     assert result["details"]["current_eps"] == round(high_eps, 2)
 
@@ -153,13 +151,10 @@ async def test_pe_ratio_fairly_valued(mock_fetch_price, mock_fetch_latest_eps, m
     # Assert
     assert result["symbol"] == SYMBOL
     assert result["agent_name"] == agent_name
-    # Corrected assertion: Agent calculates percentile < 25% -> UNDERVALUED
-    assert result["verdict"] == "UNDERVALUED_REL_HIST"
+    assert result["verdict"] == "FAIRLY_VALUED_REL_HIST" # PE of 12 is near historical mean, percentile is in fair range
     assert result["value"] == 12.0 # Current PE is 12
-    # Corrected assertion: Confidence should be > 0.6 for undervalued
-    assert result["confidence"] > 0.6 # PE of 12 is near historical mean, but still low percentile
-    # Corrected assertion: Percentile should be < 25% now
-    assert result["details"]["percentile_rank"] < mock_settings.agent_settings.pe_ratio.PERCENTILE_UNDERVALUED # PE of 12 is low relative to historical mean of ~12, percentile is low
+    assert result["confidence"] == 0.5 # Confidence for fairly valued
+    assert mock_settings.agent_settings.pe_ratio.PERCENTILE_UNDERVALUED <= result["details"]["percentile_rank"] < mock_settings.agent_settings.pe_ratio.PERCENTILE_OVERVALUED
     assert result["details"]["current_eps"] == round(fair_eps, 2)
 
 @pytest.mark.asyncio

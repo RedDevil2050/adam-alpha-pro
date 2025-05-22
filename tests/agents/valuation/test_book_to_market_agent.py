@@ -22,8 +22,8 @@ def mock_get_redis_client():
     async def fake_async_get_redis_client(*args, **kwargs):
         return mock_redis_instance
 
-    # Patch where get_redis_client is imported in the agent module
-    with patch("backend.agents.valuation.book_to_market_agent.get_redis_client", new=fake_async_get_redis_client) as mock_func:
+    # Patch where get_redis_client is imported by the decorator
+    with patch("backend.agents.decorators.get_redis_client", new=fake_async_get_redis_client) as mock_func:
         yield mock_func # Yield the function mock itself if needed, or the instance
 
 # Mock settings for test isolation

@@ -23,8 +23,8 @@ def mock_get_redis_client():
     async def fake_async_get_redis_client(*args, **kwargs):
         return mock_redis_instance
 
-    # Patch where get_redis_client is imported in the pb_ratio_agent module
-    with patch("backend.agents.valuation.pb_ratio_agent.get_redis_client", new=fake_async_get_redis_client) as mock_func:
+    # Patch where get_redis_client is imported by the decorator
+    with patch("backend.agents.decorators.get_redis_client", new=fake_async_get_redis_client) as mock_func:
         yield mock_func
 
 # Mock settings
@@ -90,18 +90,17 @@ async def test_pb_ratio_undervalued(mock_fetch_price, mock_fetch_bvps, mock_fetc
     # Assert
     assert result["symbol"] == SYMBOL
     assert result["agent_name"] == agent_name
-    # Agent calculates percentile ~76.8% -> OVERVALUED
-    assert result["verdict"] == "OVERVALUED_REL_HIST" # Corrected expected verdict
+    # Agent calculates percentile < 25% -> UNDERVALUED (since percentile_undervalued=25)
+    assert result["verdict"] == "UNDERVALUED_REL_HIST"
     assert result["value"] == 1.0
-    # Confidence for OVERVALUED with percentile ~76.8%
-    assert 0.6 <= result["confidence"] < 0.65 # Changed > to >= for confidence check
+    assert result["confidence"] > 0.6 # Confidence for UNDERVALUED
     assert result["details"]["current_pb_ratio"] == 1.0
     assert result["details"]["current_bvps"] == round(high_bvps, 2)
     assert result["details"]["current_price"] == CURRENT_PRICE
     assert result["details"]["historical_mean_pb"] is not None
     assert result["details"]["historical_std_dev_pb"] is not None
-    # Percentile should be >= 75% now
-    assert result["details"]["percentile_rank"] >= mock_settings.agent_settings.pb_ratio.PERCENTILE_OVERVALUED # Corrected percentile check
+    # Percentile should be < 25% now
+    assert result["details"]["percentile_rank"] < mock_settings.agent_settings.pb_ratio.PERCENTILE_UNDERVALUED
     assert result["details"]["z_score"] is not None
     assert result["details"]["data_source"] == "calculated_fundamental + historical_prices"
     assert result["details"]["config_used"]["historical_years"] == mock_settings.agent_settings.pb_ratio.HISTORICAL_YEARS
@@ -127,13 +126,12 @@ async def test_pb_ratio_overvalued(mock_fetch_price, mock_fetch_bvps, mock_fetch
     # Assert
     assert result["symbol"] == SYMBOL
     assert result["agent_name"] == agent_name
-    # Agent calculates percentile ~76.8% -> OVERVALUED
-    assert result["verdict"] == "OVERVALUED_REL_HIST" # Corrected expected verdict
+    # Agent calculates percentile > 75% -> OVERVALUED
+    assert result["verdict"] == "OVERVALUED_REL_HIST"
     assert result["value"] == 4.0
-    # Confidence for OVERVALUED with percentile ~76.8%
-    assert 0.6 <= result["confidence"] < 0.65 # Changed > to >= for confidence check
+    assert result["confidence"] > 0.6 # Confidence for OVERVALUED
     # Percentile should be >= 75% now
-    assert result["details"]["percentile_rank"] >= mock_settings.agent_settings.pb_ratio.PERCENTILE_OVERVALUED # Corrected percentile check
+    assert result["details"]["percentile_rank"] >= mock_settings.agent_settings.pb_ratio.PERCENTILE_OVERVALUED
     assert result["details"]["z_score"] is not None
 
 @pytest.mark.asyncio
@@ -157,13 +155,13 @@ async def test_pb_ratio_fairly_valued(mock_fetch_price, mock_fetch_bvps, mock_fe
     # Assert
     assert result["symbol"] == SYMBOL
     assert result["agent_name"] == agent_name
-    # Agent calculates percentile ~76.8% -> OVERVALUED
-    assert result["verdict"] == "OVERVALUED_REL_HIST" # Corrected expected verdict
+    # Agent calculates percentile between 25% and 75% -> FAIRLY_VALUED
+    assert result["verdict"] == "FAIRLY_VALUED_REL_HIST"
     assert result["value"] == 2.5
-    # Confidence for OVERVALUED with percentile ~76.8%
-    assert 0.6 <= result["confidence"] < 0.65 # Changed > to >= for confidence check
-    # Percentile should be >= 75% now
-    assert result["details"]["percentile_rank"] >= mock_settings.agent_settings.pb_ratio.PERCENTILE_OVERVALUED # Corrected percentile check
+    assert result["confidence"] == 0.5 # Confidence for FAIRLY_VALUED
+    # Percentile should be between 25% and 75%
+    assert mock_settings.agent_settings.pb_ratio.PERCENTILE_UNDERVALUED <= result["details"]["percentile_rank"] < mock_settings.agent_settings.pb_ratio.PERCENTILE_OVERVALUED
+    # ...existing code...
 
 @pytest.mark.asyncio
 @patch('backend.agents.valuation.pb_ratio_agent.get_settings')
