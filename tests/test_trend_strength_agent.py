@@ -9,9 +9,9 @@ import datetime
 import json # Added for json.dumps
 
 @pytest.mark.asyncio
-@patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock)  # MODIFIED: Use AsyncMock
-@patch('backend.agents.decorators.get_tracker')
-async def test_trend_strength_agent(mock_get_redis, mock_get_tracker, monkeypatch): # MODIFIED: Swapped mock_get_redis and mock_get_tracker
+@patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock)  # This mock is the second argument
+@patch('backend.agents.decorators.get_tracker') # This mock is the first argument
+async def test_trend_strength_agent(mock_get_tracker_arg, mock_get_redis_arg, monkeypatch): # CORRECTED: Parameter order and names
     # Create realistic OHLCV data with uptrend
     dates = pd.to_datetime([datetime.date(2025, 4, 30) - datetime.timedelta(days=x) for x in range(60, -1, -1)])
     data_df = pd.DataFrame({
@@ -36,12 +36,14 @@ async def test_trend_strength_agent(mock_get_redis, mock_get_tracker, monkeypatc
     mock_redis_instance.set = AsyncMock()
 
     # Configure the mock for get_redis_client to return the instance correctly
-    mock_get_redis.return_value = mock_redis_instance # MODIFIED: mock_get_redis is now AsyncMock
+    # mock_get_redis_arg is the AsyncMock for get_redis_client
+    mock_get_redis_arg.return_value = mock_redis_instance
 
     # Mock tracker instance returned by get_tracker
+    # mock_get_tracker_arg is the MagicMock for get_tracker
     mock_tracker_instance = MagicMock()
     mock_tracker_instance.update_agent_status = AsyncMock()
-    mock_get_tracker.return_value = mock_tracker_instance
+    mock_get_tracker_arg.return_value = mock_tracker_instance
 
     # Run the agent - pass agent_outputs
     result = await run('TEST', agent_outputs={})
@@ -49,7 +51,7 @@ async def test_trend_strength_agent(mock_get_redis, mock_get_tracker, monkeypatc
     # Verify mocks were called correctly
     mock_fetch.assert_called_once()
     mock_market_context.assert_called_once()
-    mock_get_redis.assert_awaited_once() # UNCOMMENTED and expecting AsyncMock behavior
+    mock_get_redis_arg.assert_awaited_once() # Verify the AsyncMock for get_redis_client was awaited
     mock_redis_instance.get.assert_awaited_once()
     
     try:
@@ -60,7 +62,7 @@ async def test_trend_strength_agent(mock_get_redis, mock_get_tracker, monkeypatc
         print("\nWarning: Result not JSON serializable in test_trend_strength_agent, set not awaited as expected.")
 
     # Verify tracker update was called
-    mock_get_tracker.assert_called_once() # UNCOMMENTED
+    mock_get_tracker_arg.assert_called_once() # Verify the MagicMock for get_tracker was called
     mock_tracker_instance.update_agent_status.assert_awaited_once() # UNCOMMENTED
 
     # Verify results

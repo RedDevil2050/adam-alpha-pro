@@ -11,6 +11,22 @@ from unittest.mock import patch, MagicMock, AsyncMock
 from backend.agents.valuation.pb_ratio_agent import run as pb_ratio_run, agent_name
 from backend.config.settings import Settings, AgentSettings, PbRatioAgentSettings
 
+# Mock for get_redis_client
+@pytest.fixture
+def mock_get_redis_client():
+    mock_redis_instance = AsyncMock()
+    mock_redis_instance.get = AsyncMock(return_value=None)
+    mock_redis_instance.set = AsyncMock(return_value=True)
+    mock_redis_instance.delete = AsyncMock(return_value=True)
+    mock_redis_instance.ping = AsyncMock(return_value=True)
+
+    async def fake_async_get_redis_client(*args, **kwargs):
+        return mock_redis_instance
+
+    # Patch where get_redis_client is imported in the pb_ratio_agent module
+    with patch("backend.agents.valuation.pb_ratio_agent.get_redis_client", new=fake_async_get_redis_client) as mock_func:
+        yield mock_func
+
 # Mock settings
 @pytest.fixture
 def mock_settings():
@@ -58,7 +74,7 @@ expected_z_score = (CURRENT_PB - expected_mean_hist_pb) / expected_std_hist_pb i
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_historical_price_series', new_callable=AsyncMock)
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_latest_bvps', new_callable=AsyncMock)
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_price_point', new_callable=AsyncMock)
-async def test_pb_ratio_undervalued(mock_fetch_price, mock_fetch_bvps, mock_fetch_hist, mock_get_settings, mock_settings):
+async def test_pb_ratio_undervalued(mock_fetch_price, mock_fetch_bvps, mock_fetch_hist, mock_get_settings, mock_settings, mock_get_redis_client):
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_price.return_value = {"latestPrice": CURRENT_PRICE}
@@ -95,7 +111,7 @@ async def test_pb_ratio_undervalued(mock_fetch_price, mock_fetch_bvps, mock_fetc
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_historical_price_series', new_callable=AsyncMock)
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_latest_bvps', new_callable=AsyncMock)
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_price_point', new_callable=AsyncMock)
-async def test_pb_ratio_overvalued(mock_fetch_price, mock_fetch_bvps, mock_fetch_hist, mock_get_settings, mock_settings):
+async def test_pb_ratio_overvalued(mock_fetch_price, mock_fetch_bvps, mock_fetch_hist, mock_get_settings, mock_settings, mock_get_redis_client):
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_price.return_value = {"latestPrice": CURRENT_PRICE}
@@ -125,7 +141,7 @@ async def test_pb_ratio_overvalued(mock_fetch_price, mock_fetch_bvps, mock_fetch
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_historical_price_series', new_callable=AsyncMock)
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_latest_bvps', new_callable=AsyncMock)
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_price_point', new_callable=AsyncMock)
-async def test_pb_ratio_fairly_valued(mock_fetch_price, mock_fetch_bvps, mock_fetch_hist, mock_get_settings, mock_settings):
+async def test_pb_ratio_fairly_valued(mock_fetch_price, mock_fetch_bvps, mock_fetch_hist, mock_get_settings, mock_settings, mock_get_redis_client):
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_price.return_value = {"latestPrice": CURRENT_PRICE}
@@ -154,7 +170,7 @@ async def test_pb_ratio_fairly_valued(mock_fetch_price, mock_fetch_bvps, mock_fe
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_historical_price_series', new_callable=AsyncMock)
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_latest_bvps', new_callable=AsyncMock)
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_price_point', new_callable=AsyncMock)
-async def test_pb_ratio_negative_or_zero_bv(mock_fetch_price, mock_fetch_bvps, mock_fetch_hist, mock_get_settings, mock_settings):
+async def test_pb_ratio_negative_or_zero_bv(mock_fetch_price, mock_fetch_bvps, mock_fetch_hist, mock_get_settings, mock_settings, mock_get_redis_client):
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_price.return_value = {"latestPrice": CURRENT_PRICE}
@@ -179,7 +195,7 @@ async def test_pb_ratio_negative_or_zero_bv(mock_fetch_price, mock_fetch_bvps, m
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_historical_price_series', new_callable=AsyncMock)
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_latest_bvps', new_callable=AsyncMock)
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_price_point', new_callable=AsyncMock)
-async def test_pb_ratio_no_data_price(mock_fetch_price, mock_fetch_bvps, mock_fetch_hist, mock_get_settings, mock_settings):
+async def test_pb_ratio_no_data_price(mock_fetch_price, mock_fetch_bvps, mock_fetch_hist, mock_get_settings, mock_settings, mock_get_redis_client):
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_price.return_value = None # Missing price
@@ -203,7 +219,7 @@ async def test_pb_ratio_no_data_price(mock_fetch_price, mock_fetch_bvps, mock_fe
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_historical_price_series', new_callable=AsyncMock)
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_latest_bvps', new_callable=AsyncMock)
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_price_point', new_callable=AsyncMock)
-async def test_pb_ratio_no_data_bvps(mock_fetch_price, mock_fetch_bvps, mock_fetch_hist, mock_get_settings, mock_settings):
+async def test_pb_ratio_no_data_bvps(mock_fetch_price, mock_fetch_bvps, mock_fetch_hist, mock_get_settings, mock_settings, mock_get_redis_client):
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_price.return_value = {"latestPrice": CURRENT_PRICE}
@@ -226,7 +242,7 @@ async def test_pb_ratio_no_data_bvps(mock_fetch_price, mock_fetch_bvps, mock_fet
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_historical_price_series', new_callable=AsyncMock)
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_latest_bvps', new_callable=AsyncMock)
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_price_point', new_callable=AsyncMock)
-async def test_pb_ratio_no_historical_data(mock_fetch_price, mock_fetch_bvps, mock_fetch_hist, mock_get_settings, mock_settings):
+async def test_pb_ratio_no_historical_data(mock_fetch_price, mock_fetch_bvps, mock_fetch_hist, mock_get_settings, mock_settings, mock_get_redis_client):
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_price.return_value = {"latestPrice": CURRENT_PRICE}
@@ -255,7 +271,7 @@ async def test_pb_ratio_no_historical_data(mock_fetch_price, mock_fetch_bvps, mo
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_historical_price_series', new_callable=AsyncMock)
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_latest_bvps', new_callable=AsyncMock)
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_price_point', new_callable=AsyncMock)
-async def test_pb_ratio_fetch_error(mock_fetch_price, mock_fetch_bvps, mock_fetch_hist, mock_get_settings, mock_settings):
+async def test_pb_ratio_fetch_error(mock_fetch_price, mock_fetch_bvps, mock_fetch_hist, mock_get_settings, mock_settings, mock_get_redis_client):
     # Arrange
     mock_get_settings.return_value = mock_settings
     error_message = "API limit reached"
@@ -281,7 +297,7 @@ async def test_pb_ratio_fetch_error(mock_fetch_price, mock_fetch_bvps, mock_fetc
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_historical_price_series', new_callable=AsyncMock)
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_latest_bvps', new_callable=AsyncMock)
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_price_point', new_callable=AsyncMock)
-async def test_pb_ratio_historical_calc_empty(mock_fetch_price, mock_fetch_bvps, mock_fetch_hist, mock_get_settings, mock_settings):
+async def test_pb_ratio_historical_calc_empty(mock_fetch_price, mock_fetch_bvps, mock_fetch_hist, mock_get_settings, mock_settings, mock_get_redis_client):
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_price.return_value = {"latestPrice": CURRENT_PRICE}
@@ -314,7 +330,7 @@ async def test_pb_ratio_historical_calc_empty(mock_fetch_price, mock_fetch_bvps,
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_historical_price_series', new_callable=AsyncMock)
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_latest_bvps', new_callable=AsyncMock)
 @patch('backend.agents.valuation.pb_ratio_agent.fetch_price_point', new_callable=AsyncMock)
-async def test_pb_ratio_invalid_hist_format(mock_fetch_price, mock_fetch_bvps, mock_fetch_hist, mock_get_settings, mock_settings):
+async def test_pb_ratio_invalid_hist_format(mock_fetch_price, mock_fetch_bvps, mock_fetch_hist, mock_get_settings, mock_settings, mock_get_redis_client):
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_price.return_value = {"latestPrice": CURRENT_PRICE}

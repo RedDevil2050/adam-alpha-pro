@@ -10,6 +10,22 @@ from unittest.mock import AsyncMock, patch, MagicMock
 from backend.agents.valuation.book_to_market_agent import run as btm_agent_run
 from backend.config.settings import BookToMarketAgentSettings
 
+# Mock for get_redis_client
+@pytest.fixture
+def mock_get_redis_client():
+    mock_redis_instance = AsyncMock()
+    mock_redis_instance.get = AsyncMock(return_value=None)
+    mock_redis_instance.set = AsyncMock(return_value=True)
+    mock_redis_instance.delete = AsyncMock(return_value=True)
+    mock_redis_instance.ping = AsyncMock(return_value=True)
+
+    async def fake_async_get_redis_client(*args, **kwargs):
+        return mock_redis_instance
+
+    # Patch where get_redis_client is imported in the agent module
+    with patch("backend.agents.valuation.book_to_market_agent.get_redis_client", new=fake_async_get_redis_client) as mock_func:
+        yield mock_func # Yield the function mock itself if needed, or the instance
+
 # Mock settings for test isolation
 @pytest.fixture
 def mock_settings():
@@ -44,7 +60,7 @@ def create_mock_price_series(mean_price=100.0, std_dev=10.0, days=500, book_valu
 
 @pytest.mark.asyncio
 @patch('backend.agents.valuation.book_to_market_agent.get_settings')
-async def test_btm_undervalued_with_historical_context(mock_get_settings, mock_settings):
+async def test_btm_undervalued_with_historical_context(mock_get_settings, mock_settings, mock_get_redis_client): # Added mock_get_redis_client
     """Test B/M agent returns UNDERVALUED_REL_HIST when current B/M is high relative to history"""
     mock_get_settings.return_value = mock_settings
     
@@ -79,7 +95,7 @@ async def test_btm_undervalued_with_historical_context(mock_get_settings, mock_s
 
 @pytest.mark.asyncio
 @patch('backend.agents.valuation.book_to_market_agent.get_settings')
-async def test_btm_overvalued_with_historical_context(mock_get_settings, mock_settings):
+async def test_btm_overvalued_with_historical_context(mock_get_settings, mock_settings, mock_get_redis_client): # Added mock_get_redis_client
     """Test B/M agent returns OVERVALUED_REL_HIST when current B/M is low relative to history"""
     mock_get_settings.return_value = mock_settings
     
@@ -114,7 +130,7 @@ async def test_btm_overvalued_with_historical_context(mock_get_settings, mock_se
 
 @pytest.mark.asyncio
 @patch('backend.agents.valuation.book_to_market_agent.get_settings')
-async def test_btm_fairly_valued_with_historical_context(mock_get_settings, mock_settings):
+async def test_btm_fairly_valued_with_historical_context(mock_get_settings, mock_settings, mock_get_redis_client): # Added mock_get_redis_client
     """Test B/M agent returns FAIRLY_VALUED_REL_HIST when current B/M is close to historical mean"""
     mock_get_settings.return_value = mock_settings
     
@@ -146,7 +162,7 @@ async def test_btm_fairly_valued_with_historical_context(mock_get_settings, mock
 
 @pytest.mark.asyncio
 @patch('backend.agents.valuation.book_to_market_agent.get_settings')
-async def test_btm_negative_book_value(mock_get_settings, mock_settings):
+async def test_btm_negative_book_value(mock_get_settings, mock_settings, mock_get_redis_client): # Added mock_get_redis_client
     """Test B/M agent returns NEGATIVE_OR_ZERO_BV when book value is negative or zero"""
     mock_get_settings.return_value = mock_settings
     
@@ -175,7 +191,7 @@ async def test_btm_negative_book_value(mock_get_settings, mock_settings):
 
 @pytest.mark.asyncio
 @patch('backend.agents.valuation.book_to_market_agent.get_settings')
-async def test_btm_missing_price_data(mock_get_settings, mock_settings):
+async def test_btm_missing_price_data(mock_get_settings, mock_settings, mock_get_redis_client): # Added mock_get_redis_client
     """Test B/M agent returns NO_DATA when price data is missing"""
     mock_get_settings.return_value = mock_settings
     
@@ -201,7 +217,7 @@ async def test_btm_missing_price_data(mock_get_settings, mock_settings):
 
 @pytest.mark.asyncio
 @patch('backend.agents.valuation.book_to_market_agent.get_settings')
-async def test_btm_missing_book_value(mock_get_settings, mock_settings):
+async def test_btm_missing_book_value(mock_get_settings, mock_settings, mock_get_redis_client): # Added mock_get_redis_client
     """Test B/M agent returns NO_DATA when book value is missing"""
     mock_get_settings.return_value = mock_settings
     
@@ -227,7 +243,7 @@ async def test_btm_missing_book_value(mock_get_settings, mock_settings):
 
 @pytest.mark.asyncio
 @patch('backend.agents.valuation.book_to_market_agent.get_settings')
-async def test_btm_no_historical_context(mock_get_settings, mock_settings):
+async def test_btm_no_historical_context(mock_get_settings, mock_settings, mock_get_redis_client): # Added mock_get_redis_client
     """Test B/M agent handles missing historical price data gracefully"""
     mock_get_settings.return_value = mock_settings
     

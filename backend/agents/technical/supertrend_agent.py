@@ -96,14 +96,14 @@ class SupertrendAgent(TechnicalAgent):
             return {
                 "symbol": symbol,
                 "verdict": verdict,
-                "confidence": confidence,
-                "value": round(current_supertrend, 2),
+                "confidence": float(confidence), # Ensure float
+                "value": float(round(current_supertrend, 2)), # Ensure float
                 "details": {
-                    "current_price": round(current_price, 2),
-                    "supertrend": round(current_supertrend, 2),
+                    "current_price": float(round(current_price, 2)), # Ensure float
+                    "supertrend": float(round(current_supertrend, 2)), # Ensure float
                     # Ensure boolean is standard Python bool
                     "is_uptrend": bool(is_uptrend),
-                    "atr": round(df["atr"].iloc[-1], 2),
+                    "atr": float(round(df["atr"].iloc[-1], 2)), # Ensure float
                     "market_regime": regime,
                 },
                 "error": None,

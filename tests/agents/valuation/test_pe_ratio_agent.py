@@ -11,6 +11,22 @@ from unittest.mock import patch, MagicMock, AsyncMock
 from backend.agents.valuation.pe_ratio_agent import run as pe_ratio_run, agent_name
 from backend.config.settings import Settings, AgentSettings, PeRatioAgentSettings
 
+# Mock for get_redis_client
+@pytest.fixture
+def mock_get_redis_client():
+    mock_redis_instance = AsyncMock()
+    mock_redis_instance.get = AsyncMock(return_value=None)
+    mock_redis_instance.set = AsyncMock(return_value=True)
+    mock_redis_instance.delete = AsyncMock(return_value=True)
+    mock_redis_instance.ping = AsyncMock(return_value=True)
+
+    async def fake_async_get_redis_client(*args, **kwargs):
+        return mock_redis_instance
+
+    # Patch where get_redis_client is imported in the pe_ratio_agent module
+    with patch("backend.agents.valuation.pe_ratio_agent.get_redis_client", new=fake_async_get_redis_client) as mock_func:
+        yield mock_func
+
 # Mock settings
 @pytest.fixture
 def mock_settings():
@@ -57,7 +73,7 @@ expected_z_score = (CURRENT_PE - expected_mean_hist_pe) / expected_std_hist_pe i
 # Corrected patch target from fetch_eps_data to fetch_latest_eps
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_latest_eps', new_callable=AsyncMock)
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_price_point', new_callable=AsyncMock)
-async def test_pe_ratio_undervalued(mock_fetch_price, mock_fetch_latest_eps, mock_fetch_hist, mock_get_settings, mock_settings):
+async def test_pe_ratio_undervalued(mock_fetch_price, mock_fetch_latest_eps, mock_fetch_hist, mock_get_settings, mock_settings, mock_get_redis_client):
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_price.return_value = {"price": CURRENT_PRICE}  # Corrected key
@@ -92,7 +108,7 @@ async def test_pe_ratio_undervalued(mock_fetch_price, mock_fetch_latest_eps, moc
 # Corrected patch target
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_latest_eps', new_callable=AsyncMock)
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_price_point', new_callable=AsyncMock)
-async def test_pe_ratio_overvalued(mock_fetch_price, mock_fetch_latest_eps, mock_fetch_hist, mock_get_settings, mock_settings):
+async def test_pe_ratio_overvalued(mock_fetch_price, mock_fetch_latest_eps, mock_fetch_hist, mock_get_settings, mock_settings, mock_get_redis_client):
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_price.return_value = {"price": CURRENT_PRICE}  # Corrected key
@@ -122,7 +138,7 @@ async def test_pe_ratio_overvalued(mock_fetch_price, mock_fetch_latest_eps, mock
 # Corrected patch target
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_latest_eps', new_callable=AsyncMock)
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_price_point', new_callable=AsyncMock)
-async def test_pe_ratio_fairly_valued(mock_fetch_price, mock_fetch_latest_eps, mock_fetch_hist, mock_get_settings, mock_settings):
+async def test_pe_ratio_fairly_valued(mock_fetch_price, mock_fetch_latest_eps, mock_fetch_hist, mock_get_settings, mock_settings, mock_get_redis_client):
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_price.return_value = {"price": CURRENT_PRICE}  # Corrected key
@@ -152,7 +168,7 @@ async def test_pe_ratio_fairly_valued(mock_fetch_price, mock_fetch_latest_eps, m
 # Corrected patch target
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_latest_eps', new_callable=AsyncMock)
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_price_point', new_callable=AsyncMock)
-async def test_pe_ratio_negative_earnings(mock_fetch_price, mock_fetch_latest_eps, mock_fetch_hist, mock_get_settings, mock_settings):
+async def test_pe_ratio_negative_earnings(mock_fetch_price, mock_fetch_latest_eps, mock_fetch_hist, mock_get_settings, mock_settings, mock_get_redis_client):
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_price.return_value = {"price": CURRENT_PRICE}  # Corrected key
@@ -177,7 +193,7 @@ async def test_pe_ratio_negative_earnings(mock_fetch_price, mock_fetch_latest_ep
 # Corrected patch target
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_latest_eps', new_callable=AsyncMock)
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_price_point', new_callable=AsyncMock)
-async def test_pe_ratio_no_data_price(mock_fetch_price, mock_fetch_latest_eps, mock_fetch_hist, mock_get_settings, mock_settings):
+async def test_pe_ratio_no_data_price(mock_fetch_price, mock_fetch_latest_eps, mock_fetch_hist, mock_get_settings, mock_settings, mock_get_redis_client):
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_price.return_value = None # Missing price - this test remains the same
@@ -201,7 +217,7 @@ async def test_pe_ratio_no_data_price(mock_fetch_price, mock_fetch_latest_eps, m
 # Corrected patch target
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_latest_eps', new_callable=AsyncMock)
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_price_point', new_callable=AsyncMock)
-async def test_pe_ratio_no_data_eps(mock_fetch_price, mock_fetch_latest_eps, mock_fetch_hist, mock_get_settings, mock_settings):
+async def test_pe_ratio_no_data_eps(mock_fetch_price, mock_fetch_latest_eps, mock_fetch_hist, mock_get_settings, mock_settings, mock_get_redis_client):
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_price.return_value = {"price": CURRENT_PRICE}  # Corrected key
@@ -225,7 +241,7 @@ async def test_pe_ratio_no_data_eps(mock_fetch_price, mock_fetch_latest_eps, moc
 # Corrected patch target
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_latest_eps', new_callable=AsyncMock)
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_price_point', new_callable=AsyncMock)
-async def test_pe_ratio_no_historical_data(mock_fetch_price, mock_fetch_latest_eps, mock_fetch_hist, mock_get_settings, mock_settings):
+async def test_pe_ratio_no_historical_data(mock_fetch_price, mock_fetch_latest_eps, mock_fetch_hist, mock_get_settings, mock_settings, mock_get_redis_client):
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_price.return_value = {"price": CURRENT_PRICE}  # Corrected key
@@ -254,7 +270,7 @@ async def test_pe_ratio_no_historical_data(mock_fetch_price, mock_fetch_latest_e
 # Corrected patch target
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_latest_eps', new_callable=AsyncMock)
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_price_point', new_callable=AsyncMock)
-async def test_pe_ratio_fetch_error(mock_fetch_price, mock_fetch_latest_eps, mock_fetch_hist, mock_get_settings, mock_settings):
+async def test_pe_ratio_fetch_error(mock_fetch_price, mock_fetch_latest_eps, mock_fetch_hist, mock_get_settings, mock_settings, mock_get_redis_client):
     # Arrange
     mock_get_settings.return_value = mock_settings
     error_message = "API limit reached"
@@ -279,7 +295,7 @@ async def test_pe_ratio_fetch_error(mock_fetch_price, mock_fetch_latest_eps, moc
 # Corrected patch target
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_latest_eps', new_callable=AsyncMock)
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_price_point', new_callable=AsyncMock)
-async def test_pe_ratio_historical_calc_empty(mock_fetch_price, mock_fetch_latest_eps, mock_fetch_hist, mock_get_settings, mock_settings):
+async def test_pe_ratio_historical_calc_empty(mock_fetch_price, mock_fetch_latest_eps, mock_fetch_hist, mock_get_settings, mock_settings, mock_get_redis_client):
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_price.return_value = {"price": CURRENT_PRICE}  # Corrected key
@@ -312,7 +328,7 @@ async def test_pe_ratio_historical_calc_empty(mock_fetch_price, mock_fetch_lates
 # Corrected patch target
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_latest_eps', new_callable=AsyncMock)
 @patch('backend.agents.valuation.pe_ratio_agent.fetch_price_point', new_callable=AsyncMock)
-async def test_pe_ratio_invalid_hist_format(mock_fetch_price, mock_fetch_latest_eps, mock_fetch_hist, mock_get_settings, mock_settings):
+async def test_pe_ratio_invalid_hist_format(mock_fetch_price, mock_fetch_latest_eps, mock_fetch_hist, mock_get_settings, mock_settings, mock_get_redis_client):
     # Arrange
     mock_get_settings.return_value = mock_settings
     mock_fetch_price.return_value = {"price": CURRENT_PRICE}  # Corrected key

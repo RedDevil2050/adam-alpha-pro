@@ -34,18 +34,22 @@
       "earnings_calendar_agent": "implemented",
       "insider_trade_agent": "implemented",
       "corporate_actions_agent": "implemented",
-      "share_buyback_agent": "implemented"
+      "share_buyback_agent": "implemented",
+      "earnings_date_agent": "implemented"
     },
     "automation": {
       "alert_engine_agent": "implemented",
-      "ask_alpha_agent": "implemented"
+      "ask_alpha_agent": "implemented",
+      "auto_watchlist_agent": "implemented"
     },
     "forecast": {
-      "price_forecast_agent": "implemented"
+      "price_forecast_agent": "implemented",
+      "earnings_forecast_agent": "implemented"
     },
     "sentiment": {
       "news_sentiment_agent": "implemented",
-      "social_sentiment_agent": "implemented"
+      "social_sentiment_agent": "implemented",
+      "news_volume_spike_agent": "implemented"
     },
     "esg": {
       "environmental_agent": "implemented",
@@ -56,7 +60,12 @@
       "theme_match_agent": "implemented",
       "peer_compare_agent": "implemented",
       "ask_adam_agent": "implemented"
+    },
+    "macro": {
+      "inflation_agent": "implemented",
+      "gdp_growth_agent": "implemented",
+      "interest_rate_agent": "implemented"
     }
   },
-  "last_updated": "2025-05-07T06:24:04.090158+00:00Z"
+  "last_updated": "2025-05-22T11:01:29.061856+00:00Z"
 }

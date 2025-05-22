@@ -8,9 +8,11 @@ from backend.agents.technical.supertrend_agent import run as st_run
 import datetime
 
 @pytest.mark.asyncio
-@patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock) # Corrected patch target & use AsyncMock
-@patch('backend.agents.decorators.get_tracker') # Patch tracker used by decorator
-async def test_supertrend_agent(mock_get_redis, mock_get_tracker, monkeypatch): # MODIFIED: Swapped mock_get_redis and mock_get_tracker
+@patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock) # This mock is the second argument
+@patch('backend.agents.decorators.get_tracker') # This mock is the first argument
+async def test_supertrend_agent(mock_get_tracker_arg, mock_get_redis_arg, monkeypatch): # CORRECTED: Parameter order and names
+    # mock_get_tracker_arg is for 'get_tracker' (MagicMock)
+    # mock_get_redis_arg is for 'get_redis_client' (AsyncMock)
     # Mock data matching expected OHLCV structure
     dates = pd.to_datetime([datetime.date.today() - datetime.timedelta(days=x) for x in range(9, -1, -1)])
     prices = pd.DataFrame({
@@ -35,36 +37,36 @@ async def test_supertrend_agent(mock_get_redis, mock_get_tracker, monkeypatch): 
     mock_redis_instance.set = AsyncMock()
 
     # Configure the mock for get_redis_client to return the instance correctly
-    # mock_get_redis is now an AsyncMock, set its return_value
-    mock_get_redis.return_value = mock_redis_instance
+    # mock_get_redis_arg is the AsyncMock for get_redis_client
+    mock_get_redis_arg.return_value = mock_redis_instance
 
     # Mock tracker instance returned by get_tracker
+    # mock_get_tracker_arg is the MagicMock for get_tracker
     mock_tracker_instance = MagicMock()
     mock_tracker_instance.update_agent_status = AsyncMock()
-    mock_get_tracker.return_value = mock_tracker_instance
+    mock_get_tracker_arg.return_value = mock_tracker_instance
 
     # Run the agent - pass agent_outputs explicitly
-    res = await st_run('TCS', agent_outputs={}) # Pass agent_outputs
+    res = await st_run('TCS', agent_outputs={})
 
     # Verify mocks were called correctly
     mock_fetch.assert_called_once()
     mock_market_context.assert_called_once()
-    mock_get_redis.assert_awaited_once() # Verify the patch target was called and awaited
+    mock_get_redis_arg.assert_awaited_once() # Verify the AsyncMock for get_redis_client was awaited
     mock_redis_instance.get.assert_awaited_once()
 
-    # Set might not be called if serialization fails (as seen in original error log)
-    # Check if the result could be serialized before asserting set was called
+    # Ensure the result is JSON serializable (this also confirms 'res' is a valid dict)
     import json
-    try:
-        json.dumps(res)
-        mock_redis_instance.set.assert_awaited_once()
-    except TypeError:
-        # If serialization fails, set wouldn't be called by the decorator
-        mock_redis_instance.set.assert_not_awaited()
-        print("\nWarning: Result not JSON serializable, set not awaited as expected.")
+    json.dumps(res) # If this fails, the test should fail here.
+
+    # After a cache miss and successful agent execution (implicit by json.dumps not failing),
+    # the standard_agent_execution decorator should cache the result.
+    mock_redis_instance.set.assert_awaited_once()
 
     # Verify tracker update was called
-    mock_get_tracker.assert_called_once()
+    mock_get_tracker_arg.assert_called_once() # Verify the MagicMock for get_tracker was called
+    # Ensure update_agent_status is awaited if the agent run was successful or a known non-caching error
+    # The decorator calls update_agent_status in most paths.
     mock_tracker_instance.update_agent_status.assert_awaited_once()
 
     # Verify results

@@ -34,7 +34,7 @@ def create_minimal_ohlcv(periods=30): # Increased periods for stable calculation
 # Patch dependencies
 @patch('backend.agents.technical.stochastic_oscillator_agent.datetime') # Add datetime patch
 @patch('backend.agents.technical.utils.tracker.update')
-@patch('backend.agents.technical.stochastic_oscillator_agent.get_redis_client')
+@patch('backend.agents.technical.stochastic_oscillator_agent.get_redis_client', new_callable=AsyncMock)
 @patch('backend.agents.technical.stochastic_oscillator_agent.fetch_ohlcv_series') # Correct patch target
 async def test_stochastic_oscillator_overbought_crossover(
     mock_fetch_ohlcv,
@@ -124,7 +124,7 @@ async def test_stochastic_oscillator_overbought_crossover(
 @pytest.mark.asyncio
 @patch('backend.agents.technical.stochastic_oscillator_agent.datetime') # Add datetime patch
 @patch('backend.agents.technical.utils.tracker.update') # Correct patch target
-@patch('backend.agents.technical.stochastic_oscillator_agent.get_redis_client')
+@patch('backend.agents.technical.stochastic_oscillator_agent.get_redis_client', new_callable=AsyncMock)
 @patch('backend.agents.technical.stochastic_oscillator_agent.fetch_ohlcv_series')
 async def test_stochastic_oscillator_oversold_crossover(
     mock_fetch_ohlcv,
@@ -245,7 +245,7 @@ async def test_stochastic_oscillator_oversold_crossover(
 @pytest.mark.asyncio
 @patch('backend.agents.technical.stochastic_oscillator_agent.datetime') # Add datetime patch
 @patch('backend.agents.technical.utils.tracker.update') # Correct patch target
-@patch('backend.agents.technical.stochastic_oscillator_agent.get_redis_client')
+@patch('backend.agents.technical.stochastic_oscillator_agent.get_redis_client', new_callable=AsyncMock)
 @patch('backend.agents.technical.stochastic_oscillator_agent.fetch_ohlcv_series')
 async def test_stochastic_oscillator_neutral(
     mock_fetch_ohlcv,

@@ -37,33 +37,37 @@ def pytest_configure(config):
 @pytest_asyncio.fixture(scope="session", autouse=True) # Use pytest_asyncio.fixture
 def mock_redis_client():
     """Globally mock redis_client for all tests with stateful behavior."""
-    with patch("backend.utils.cache_utils.get_redis_client") as mock_get_redis_client:
-        mock_instance = AsyncMock()
-        actual_cache = {}  # Simple dict to simulate cache storage
+    mock_instance = AsyncMock()  # This is the mock Redis client instance
+    actual_cache = {}  # Simple dict to simulate cache storage
 
-        async def mock_get(key):
-            # logger.debug(f"Mock Redis GET: key={key}, value={actual_cache.get(key, None)}")
-            return actual_cache.get(key, None)
+    async def mock_get(key):
+        # logger.debug(f"Mock Redis GET: key={key}, value={actual_cache.get(key, None)}")
+        return actual_cache.get(key, None)
 
-        async def mock_set(key, value, ex=None): # ex is for expiry
-            # logger.debug(f"Mock Redis SET: key={key}, value={value}, ex={ex}")
-            actual_cache[key] = value
-            return True
+    async def mock_set(key, value, ex=None): # ex is for expiry
+        # logger.debug(f"Mock Redis SET: key={key}, value={value}, ex={ex}")
+        actual_cache[key] = value
+        return True
 
-        async def mock_delete(key):
-            # logger.debug(f"Mock Redis DELETE: key={key}")
-            if key in actual_cache:
-                del actual_cache[key]
-                return 1
-            return 0
+    async def mock_delete(key):
+        # logger.debug(f"Mock Redis DELETE: key={key}")
+        if key in actual_cache:
+            del actual_cache[key]
+            return 1
+        return 0
 
-        mock_instance.get = AsyncMock(side_effect=mock_get)
-        mock_instance.set = AsyncMock(side_effect=mock_set)
-        mock_instance.delete = AsyncMock(side_effect=mock_delete)
-        mock_instance.ping = AsyncMock(return_value=True) # Mock ping as well
+    mock_instance.get = AsyncMock(side_effect=mock_get)
+    mock_instance.set = AsyncMock(side_effect=mock_set)
+    mock_instance.delete = AsyncMock(side_effect=mock_delete)
+    mock_instance.ping = AsyncMock(return_value=True) # Mock ping as well
 
-        # Make get_redis_client return the client directly instead of being a coroutine
-        # This way when the function is called without await, it won't cause warnings
-        mock_get_redis_client.return_value = mock_instance
+    # Define an actual async function to replace get_redis_client
+    async def fake_async_get_redis_client(*args, **kwargs):
+        return mock_instance
+
+    # Patch get_redis_client with our actual async function
+    # The target for the patch should be where 'get_redis_client' is looked up
+    # by the 'standard_agent_execution' decorator in 'backend.agents.decorators.py'.
+    with patch("backend.agents.decorators.get_redis_client", new=fake_async_get_redis_client):
         yield mock_instance
         actual_cache.clear() # Clear cache after session
