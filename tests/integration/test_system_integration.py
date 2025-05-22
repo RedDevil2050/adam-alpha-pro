@@ -207,6 +207,8 @@ class TestSystemIntegration:
         # metrics_collector = MetricsCollector() # Collector is internal
         monitor = SystemMonitor() # Correct indentation
         symbol_to_test = "SBIN.NS"
+        # Define specific categories for this test, as per previous fix strategy
+        test_categories = [CategoryType.VALUATION, CategoryType.TECHNICAL]
         
         # Handle both async and non-async Redis client
         if asyncio.iscoroutinefunction(get_redis_client):
@@ -214,18 +216,25 @@ class TestSystemIntegration:
         else:
             cache_client = get_redis_client() # Get client to clear cache first
             
-        await cache_client.delete(f"analysis:{symbol_to_test}") # Clear potential stale cache
+        # Correct cache key for deletion based on the specific categories used in this test
+        categories_str = ",".join(sorted([cat.value for cat in test_categories]))
+        cache_key_to_delete = f"analysis:{symbol_to_test}:{categories_str}"
+        await cache_client.delete(cache_key_to_delete)
+        logger.info(f"Cache cleared for {symbol_to_test} with key {cache_key_to_delete} for categories '{categories_str}' before caching test.")
+
         # First call
         result1 = await orchestrator.analyze_symbol(
             symbol=symbol_to_test,
-            monitor=monitor
+            monitor=monitor,
+            categories=test_categories # Pass the specific categories
             # metrics_collector=metrics_collector # Removed
         )
         # Second call should use cache
         # Use separate monitor if needed to isolate metrics, or reuse if appropriate
         result2 = await orchestrator.analyze_symbol(
             symbol=symbol_to_test,
-            monitor=monitor # Reusing monitor
+            monitor=monitor, # Reusing monitor
+            categories=test_categories # Pass the same specific categories
             # metrics_collector=metrics_collector # Removed
         )
         
@@ -336,12 +345,18 @@ class TestSystemIntegration:
             cache_client = await get_redis_client()
         else:
             cache_client = get_redis_client()
-        await cache_client.delete(f"analysis:{symbol_to_test}")
-        logger.info(f"Cache cleared for {symbol_to_test} before metrics collection test.")
+
+        # Correct cache key for deletion, assuming analyze_symbol defaults to all categories
+        # as no specific categories are passed to it in this test.
+        all_categories_str = ",".join(sorted([cat.value for cat in CategoryType]))
+        cache_key_to_delete = f"analysis:{symbol_to_test}:{all_categories_str}"
+        await cache_client.delete(cache_key_to_delete)
+        logger.info(f"Cache cleared for {symbol_to_test} with key {cache_key_to_delete} (all categories) before metrics collection test.")
 
         result = await orchestrator.analyze_symbol( # Call analyze_symbol
             symbol=symbol_to_test,
             monitor=monitor
+            # No categories specified, so orchestrator should use all default categories
         )
         # Get metrics from the result, as collector is internal
         metrics = result.get("execution_metrics", {}) # Access metrics from result
