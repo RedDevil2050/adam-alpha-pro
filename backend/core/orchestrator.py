@@ -33,9 +33,8 @@ class SystemOrchestrator:
         self.category_manager = CategoryManager()
         self.cache = cache_client
         self.category_dependencies: Dict[str, List[str]] = {}
-        # Initialize internal monitor and metrics collector for use in analyze_symbol
-        from backend.utils.system_monitor import SystemMonitor
-        from backend.utils.metrics_collector import MetricsCollector
+        # Initialize internal monitor and metrics collector
+        # These are now imported at the module level
         self.system_monitor = SystemMonitor()
         self.metrics_collector = MetricsCollector()
 

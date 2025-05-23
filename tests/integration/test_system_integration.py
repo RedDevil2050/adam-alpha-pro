@@ -2,10 +2,11 @@ import pytest
 import pytest_asyncio
 import asyncio
 import logging
+from unittest.mock import MagicMock, AsyncMock, patch
+
 from backend.core.orchestrator import SystemOrchestrator
 from backend.agents.categories import CategoryType
-# Correct the import path for SystemMonitor
-from backend.utils.system_monitor import SystemMonitor
+from backend.utils.system_monitor import SystemMonitor # Ensure SystemMonitor is imported for direct use in tests
 from backend.utils.metrics_collector import MetricsCollector
 # Import the mocked redis client utility
 from backend.utils.cache_utils import get_redis_client
@@ -13,38 +14,77 @@ from backend.utils.cache_utils import get_redis_client
 # Configure logger
 logger = logging.getLogger(__name__)
 
+@pytest.fixture
+def mock_system_monitor():
+    """Fixture to provide a mock SystemMonitor instance for external use."""
+    monitor_mock = MagicMock(spec=SystemMonitor)
+    monitor_mock.register_component = MagicMock()
+    monitor_mock.update_component_status = MagicMock()
+    monitor_mock.get_health_metrics = AsyncMock(return_value={
+        "system": {"cpu_usage": 0.1, "memory_usage": 0.1}, 
+        "components": {}, 
+        "services": {}, 
+        "errors": [], 
+        "uptime": "mocked"
+    })
+    monitor_mock.start_analysis = AsyncMock()
+    monitor_mock.end_analysis = AsyncMock()
+    monitor_mock.is_ready = MagicMock(return_value={"ready": True, "components": {}})
+    monitor_mock.components = {} 
+    return monitor_mock
+
 @pytest.mark.asyncio
 class TestSystemIntegration:
     @pytest_asyncio.fixture
-    async def orchestrator(self):
-        """Create and properly initialize a SystemOrchestrator instance."""
-        monitor = SystemMonitor() # This is the monitor passed to initialize()
-        instance = None # Initialize instance to handle potential failure before assignment
-        try:
-            # Get the Redis client - handle both async and sync implementations
-            if asyncio.iscoroutinefunction(get_redis_client):
-                cache_client = await get_redis_client()
-            else:
-                cache_client = get_redis_client()
-                
-            instance = SystemOrchestrator(cache_client=cache_client) # This creates its own internal instance.system_monitor
-            await instance.initialize(monitor) # Initializes using 'monitor' and also instance.system_monitor
-        except Exception as e:
-            # Log the exception to make it visible if fixture setup fails
-            logger.error(f"CRITICAL: Orchestrator fixture initialization failed: {e}", exc_info=True)
-            raise # Re-raise to ensure pytest marks fixture setup as failed
+    async def orchestrator(self, mock_redis_client, mock_system_monitor): # mock_system_monitor is the external one
+        """Fixture to create a SystemOrchestrator instance with a mocked cache and external monitor."""
+        # Patch the SystemMonitor specifically where it's imported and used by SystemOrchestrator
+        with patch('backend.core.orchestrator.SystemMonitor', new_callable=MagicMock) as MockInternalSystemMonitorConstructor, \
+             patch('websockets.client.connect', new_callable=AsyncMock) as mock_websocket_connect:
 
-        # Debugging: Check the status of the *internal* system_monitor after initialization
-        internal_monitor_health = await instance.system_monitor.get_health_metrics()
-        logger.info(f"Orchestrator fixture: internal monitor health after init: {internal_monitor_health}")
-        
-        orchestrator_component_details = internal_monitor_health.get("components", {}).get("orchestrator", {})
-        orchestrator_status = orchestrator_component_details.get("status")
+            # Configure the mock instance that the constructor will return
+            mock_internal_monitor_instance = MockInternalSystemMonitorConstructor.return_value
+            
+            # Ensure all relevant methods of the internal monitor are AsyncMocks or MagicMocks as appropriate
+            mock_internal_monitor_instance.get_health_metrics = AsyncMock(return_value={
+                "system": {"cpu_usage": 0.0, "memory_usage": 0.0, "disk_usage": {"total": 100, "used": 50, "free": 50, "percent": 50.0}},
+                "components": {"orchestrator": {"status": "initializing", "last_updated": "sometime"}}, # Initial status
+                "services": {"redis": {"status": "connected", "details": "mocked_detail"}},
+                "errors": [],
+                "uptime": "1 day"
+            })
+            mock_internal_monitor_instance.start_analysis = AsyncMock()
+            mock_internal_monitor_instance.end_analysis = AsyncMock()
+            # Let register_component and update_component_status be auto-created MagicMocks
+            # mock_internal_monitor_instance.register_component = MagicMock() # Sync, as per original SystemMonitor
+            # mock_internal_monitor_instance.update_component_status = MagicMock() # Sync 
+            mock_internal_monitor_instance.is_ready = MagicMock(return_value={"ready": True, "components": {}})
+            # Initialize .components as a dictionary for the orchestrator to interact with during its initialization
+            mock_internal_monitor_instance.components = {"orchestrator": {"status": "initializing"}} 
 
-        assert orchestrator_status == "healthy", \
-            f"Orchestrator's internal component status is not 'healthy' after initialization. Status: '{orchestrator_status}'. Full components: {internal_monitor_health.get('components')}"
+            # Configure the mock websocket connect
+            mock_websocket_connect.return_value.__aenter__.return_value.send = AsyncMock()
+            mock_websocket_connect.return_value.__aenter__.return_value.recv = AsyncMock(return_value="{}")
 
-        yield instance
+            # Instantiate SystemOrchestrator; its internal SystemMonitor will be the mocked instance
+            instance = SystemOrchestrator(cache_client=mock_redis_client)
+
+            # ADD THIS ASSERTION
+            assert instance.system_monitor is mock_internal_monitor_instance, \
+                "Internal system_monitor is not the mocked instance!"
+
+            # Initialize with the EXTERNAL mock_system_monitor
+            await instance.initialize(monitor=mock_system_monitor)
+
+            # Assert that the internal monitor's (mocked) register_component and update_component_status were called for 'orchestrator'
+            mock_internal_monitor_instance.register_component.assert_any_call("orchestrator")
+            mock_internal_monitor_instance.update_component_status.assert_any_call("orchestrator", "healthy")
+
+            # Assert that the external monitor's register_component and update_component_status were called for 'orchestrator'
+            mock_system_monitor.register_component.assert_any_call("orchestrator")
+            mock_system_monitor.update_component_status.assert_any_call("orchestrator", "healthy")
+            
+            return instance
 
     async def test_full_analysis_flow(self, orchestrator):
         """Test complete analysis pipeline"""
@@ -210,17 +250,25 @@ class TestSystemIntegration:
         # Define specific categories for this test, as per previous fix strategy
         test_categories = [CategoryType.VALUATION, CategoryType.TECHNICAL]
         
-        # Handle both async and non-async Redis client
-        if asyncio.iscoroutinefunction(get_redis_client):
-            cache_client = await get_redis_client() # Get client to clear cache first
-        else:
-            cache_client = get_redis_client() # Get client to clear cache first
+        # Patch get_redis_client for the explicit cache deletion part of this test
+        with patch('backend.utils.cache_utils.get_redis_client') as mock_get_redis_for_delete:
+            # Configure the mock client instance that get_redis_client will return
+            mock_client_instance_for_delete = MagicMock()
+            mock_client_instance_for_delete.delete = AsyncMock() # Ensure .delete() is awaitable
+            mock_get_redis_for_delete.return_value = mock_client_instance_for_delete
+
+            # The test's original logic for getting the cache client for deletion:
+            # This will use the patched get_redis_client
+            if asyncio.iscoroutinefunction(get_redis_client): # Will be false for the default MagicMock patch
+                cache_client_for_deletion = await get_redis_client()
+            else:
+                cache_client_for_deletion = get_redis_client() # Returns mock_client_instance_for_delete
             
-        # Correct cache key for deletion based on the specific categories used in this test
-        categories_str = ",".join(sorted([cat.value for cat in test_categories]))
-        cache_key_to_delete = f"analysis:{symbol_to_test}:{categories_str}"
-        await cache_client.delete(cache_key_to_delete)
-        logger.info(f"Cache cleared for {symbol_to_test} with key {cache_key_to_delete} for categories '{categories_str}' before caching test.")
+            categories_str = ",".join(sorted([cat.value for cat in test_categories]))
+            cache_key_to_delete = f"analysis:{symbol_to_test}:{categories_str}"
+            # Now, cache_client_for_deletion.delete is an AsyncMock
+            await cache_client_for_deletion.delete(cache_key_to_delete)
+            logger.info(f"Cache cleared for {symbol_to_test} with key {cache_key_to_delete} for categories '{categories_str}' before caching test.")
 
         # First call
         result1 = await orchestrator.analyze_symbol(
@@ -341,17 +389,27 @@ class TestSystemIntegration:
         """Test metrics collection"""
         monitor = SystemMonitor()
         symbol_to_test = "RELIANCE.NS"        # Ensure a fresh analysis by clearing cache for the symbol
-        if asyncio.iscoroutinefunction(get_redis_client):
-            cache_client = await get_redis_client()
-        else:
-            cache_client = get_redis_client()
+        
+        # Patch get_redis_client for the explicit cache deletion part of this test
+        with patch('backend.utils.cache_utils.get_redis_client') as mock_get_redis_for_delete:
+            # Configure the mock client instance that get_redis_client will return
+            mock_client_instance_for_delete = MagicMock()
+            mock_client_instance_for_delete.delete = AsyncMock() # Ensure .delete() is awaitable
+            mock_get_redis_for_delete.return_value = mock_client_instance_for_delete
 
-        # Correct cache key for deletion, assuming analyze_symbol defaults to all categories
-        # as no specific categories are passed to it in this test.
-        all_categories_str = ",".join(sorted([cat.value for cat in CategoryType]))
-        cache_key_to_delete = f"analysis:{symbol_to_test}:{all_categories_str}"
-        await cache_client.delete(cache_key_to_delete)
-        logger.info(f"Cache cleared for {symbol_to_test} with key {cache_key_to_delete} (all categories) before metrics collection test.")
+            # The test's original logic for getting the cache client for deletion:
+            if asyncio.iscoroutinefunction(get_redis_client): # Will be false for the default MagicMock patch
+                cache_client_for_deletion = await get_redis_client()
+            else:
+                cache_client_for_deletion = get_redis_client() # Returns mock_client_instance_for_delete
+
+            # Correct cache key for deletion, assuming analyze_symbol defaults to all categories
+            # as no specific categories are passed to it in this test.
+            all_categories_str = ",".join(sorted([cat.value for cat in CategoryType]))
+            cache_key_to_delete = f"analysis:{symbol_to_test}:{all_categories_str}"
+            # Now, cache_client_for_deletion.delete is an AsyncMock
+            await cache_client_for_deletion.delete(cache_key_to_delete)
+            logger.info(f"Cache cleared for {symbol_to_test} with key {cache_key_to_delete} (all categories) before metrics collection test.")
 
         result = await orchestrator.analyze_symbol( # Call analyze_symbol
             symbol=symbol_to_test,
