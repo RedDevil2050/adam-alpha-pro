@@ -1,25 +1,129 @@
-import sys, os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
+from unittest.mock import patch, AsyncMock
 import pytest
 import pandas as pd
-from unittest.mock import AsyncMock, patch # Ensure patch is imported
+from backend.core import app_settings
+from backend.agents.valuation.pe_ratio_agent import run as pe_run
 from backend.agents.technical.rsi_agent import run as rsi_run
 from backend.agents.technical.macd_agent import run as macd_run
-from backend.agents.valuation.pe_ratio_agent import run as pe_run
-from datetime import date, timedelta # Import date utilities
-import httpx # Import httpx for httpx_mock
-from pytest_httpx import httpx_mock # Explicitly import httpx_mock
-import pytest_httpx # Add this import
-from backend.config.settings import get_settings # ADDED: Import get_settings
-import backend.config.settings as app_settings # Import the settings module itself
 
-# Define default dates for mocks
+# Assuming these are the correct import paths based on the context
+# Assuming DEFAULT_START_DATE and DEFAULT_END_DATE are in data_provider or a constants file
+# For the sake of this example, let's assume they are in data_provider
+# If not, adjust the import path accordingly.
+# from backend.utils.data_provider import DEFAULT_START_DATE, DEFAULT_END_DATE
+# If they are not available, we might need to define them or mock them differently.
+# For now, let's assume they are imported if rsi_agent and macd_agent tests need them.
+# If these are not found, the tests for rsi_agent and macd_agent will fail at runtime.
+# We will mock them if necessary within the tests that use them if not globally available.
+from datetime import date, timedelta # For DEFAULT_START_DATE, DEFAULT_END_DATE if not imported
+DEFAULT_START_DATE = date.today() - timedelta(days=365)
 DEFAULT_END_DATE = date.today()
-DEFAULT_START_DATE = DEFAULT_END_DATE - timedelta(days=90)
 
-# Patch order: innermost decorator corresponds to the first argument after self/cls
+
 @patch('backend.agents.base.get_redis_client', new_callable=AsyncMock)      # For AgentBase.initialize
+@patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock) # For @cache_agent_result decorator
+@pytest.mark.asyncio
+async def test_pe_ratio_agent_no_price_data(
+    mock_decorator_get_redis_client,
+    mock_base_get_redis_client,
+    httpx_mock,
+    monkeypatch
+):
+    app_settings._settings = None
+    monkeypatch.setenv("ALPHA_VANTAGE_KEY", "demo")
+
+    mock_redis_instance = AsyncMock()
+    mock_redis_instance.get = AsyncMock(return_value=None)
+    mock_redis_instance.set = AsyncMock()
+    mock_base_get_redis_client.return_value = mock_redis_instance
+    mock_decorator_get_redis_client.return_value = mock_redis_instance
+
+    # Mock fetch_price_point to return None (no data)
+    mock_fetch_price = AsyncMock(return_value=None)
+    monkeypatch.setattr(
+        'backend.agents.valuation.pe_ratio_agent.fetch_price_point',
+        mock_fetch_price
+    )
+
+    # Mock fetch_latest_eps to return valid EPS (though it might not be called if price is missing first)
+    mock_fetch_eps_func = AsyncMock(return_value={"eps": 2.0})
+    monkeypatch.setattr(
+        'backend.agents.valuation.pe_ratio_agent.fetch_latest_eps',
+        mock_fetch_eps_func
+    )
+    
+    mock_hist_prices = AsyncMock(return_value=None)
+    monkeypatch.setattr(
+        'backend.agents.valuation.pe_ratio_agent.fetch_historical_price_series', 
+        mock_hist_prices
+    )
+
+    res = await pe_run('XYZ', {})
+
+    assert res.get('error') is None, f"Agent returned an error: {res.get('error')}"
+    assert res.get('verdict') == 'NO_DATA', \
+        f"Expected 'NO_DATA' verdict when price is missing, got {res.get('verdict')}"
+    assert 'value' not in res or res['value'] is None, \
+        f"P/E 'value' should be None or absent for NO_DATA, got {res.get('value')}"
+
+    mock_base_get_redis_client.assert_awaited_once()
+    mock_decorator_get_redis_client.assert_awaited_once()
+    mock_fetch_price.assert_awaited_once_with('XYZ')
+    # EPS fetch might not be called if price fetch fails first, depending on agent logic
+    # mock_fetch_eps_func.assert_not_awaited() # Or assert_awaited_once_with('XYZ') if it's always called
+
+
+@patch('backend.agents.base.get_redis_client', new_callable=AsyncMock)      # For AgentBase.initialize
+@patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock) # For @cache_agent_result decorator
+@pytest.mark.asyncio
+async def test_pe_ratio_agent_no_eps_data(
+    mock_decorator_get_redis_client,
+    mock_base_get_redis_client,
+    httpx_mock,
+    monkeypatch
+):
+    app_settings._settings = None
+    monkeypatch.setenv("ALPHA_VANTAGE_KEY", "demo")
+
+    mock_redis_instance = AsyncMock()
+    mock_redis_instance.get = AsyncMock(return_value=None)
+    mock_redis_instance.set = AsyncMock()
+    mock_base_get_redis_client.return_value = mock_redis_instance
+    mock_decorator_get_redis_client.return_value = mock_redis_instance
+
+    mock_fetch_price = AsyncMock(return_value={"price": 50.0})
+    monkeypatch.setattr(
+        'backend.agents.valuation.pe_ratio_agent.fetch_price_point',
+        mock_fetch_price
+    )
+
+    # Mock fetch_latest_eps to return None (no data)
+    mock_fetch_eps_func = AsyncMock(return_value=None)
+    monkeypatch.setattr(
+        'backend.agents.valuation.pe_ratio_agent.fetch_latest_eps',
+        mock_fetch_eps_func
+    )
+    
+    mock_hist_prices = AsyncMock(return_value=None)
+    monkeypatch.setattr(
+        'backend.agents.valuation.pe_ratio_agent.fetch_historical_price_series', 
+        mock_hist_prices
+    )
+
+    res = await pe_run('XYZ', {})
+
+    assert res.get('error') is None, f"Agent returned an error: {res.get('error')}"
+    assert res.get('verdict') == 'NO_DATA', \
+        f"Expected 'NO_DATA' verdict when EPS is missing, got {res.get('verdict')}"
+    assert 'value' not in res or res['value'] is None, \
+        f"P/E 'value' should be None or absent for NO_DATA, got {res.get('value')}"
+
+    mock_base_get_redis_client.assert_awaited_once()
+    mock_decorator_get_redis_client.assert_awaited_once()
+    mock_fetch_price.assert_awaited_once_with('XYZ')
+    mock_fetch_eps_func.assert_awaited_once_with('XYZ')
+
+
 @patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock) # For @cache_agent_result decorator
 @pytest.mark.asyncio
 async def test_rsi_agent_accuracy(
