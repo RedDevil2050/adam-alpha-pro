@@ -80,7 +80,7 @@ async def test_moving_average_agent(mock_agent_get_redis_client, mock_fetch_ohlc
 
     # Set should be called if the result is valid (not NO_DATA/ERROR)
     if res.get('verdict') not in ['NO_DATA', 'ERROR', None]:
-        mock_redis_instance.set.assert_awaited_once() # Called by the decorator's cache logic
+        assert mock_redis_instance.set.await_count == 2 # Expecting set to be called twice
     else:
         mock_redis_instance.set.assert_not_awaited()
 

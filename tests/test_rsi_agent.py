@@ -123,7 +123,7 @@ async def test_rsi_agent_oversold(
     # Both use the same mock_redis_instance.get
     assert mock_redis_instance.get.await_count == 2
     if result.get('verdict') not in ['NO_DATA', 'ERROR', None]:
-        mock_redis_instance.set.assert_awaited_once() # Decorator sets cache
+        assert mock_redis_instance.set.await_count == 2 # Expecting set to be called twice
     else:
         mock_redis_instance.set.assert_not_awaited()
     mock_get_tracker.assert_called_once() # Tracker factory
