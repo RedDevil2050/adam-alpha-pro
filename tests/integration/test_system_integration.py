@@ -258,21 +258,17 @@ class TestSystemIntegration:
         symbol_to_test = "SBIN.NS"
         # Define specific categories for this test, as per previous fix strategy
         test_categories = [CategoryType.VALUATION, CategoryType.TECHNICAL]
-
+    
         # Patch get_redis_client for the explicit cache deletion part of this test
         with patch('backend.utils.cache_utils.get_redis_client') as mock_get_redis_for_delete:
             # Configure the mock client instance that get_redis_client will return
             mock_client_instance_for_delete = AsyncMock() # Make the client instance itself an AsyncMock
-            mock_client_instance_for_delete.delete = AsyncMock() # Explicitly mock the delete method as AsyncMock
+            # mock_client_instance_for_delete.delete = AsyncMock() # This line is not strictly necessary if the parent is AsyncMock
             mock_get_redis_for_delete.return_value = mock_client_instance_for_delete
-
-            # The test's original logic for getting the cache client for deletion:
-            # This will use the patched get_redis_client
-            if asyncio.iscoroutinefunction(get_redis_client): 
-                cache_client_for_deletion = await get_redis_client()
-            else:
-                cache_client_for_deletion = get_redis_client() 
-
+    
+            # Get the client from the mock by calling the patched version
+            cache_client_for_deletion = mock_get_redis_for_delete()
+    
             categories_str = ",".join(sorted([cat.value for cat in test_categories]))
             cache_key_to_delete = f"analysis:{symbol_to_test}:{categories_str}"
             await cache_client_for_deletion.delete(cache_key_to_delete)
@@ -397,20 +393,17 @@ class TestSystemIntegration:
         """Test metrics collection"""
         monitor = SystemMonitor()
         symbol_to_test = "RELIANCE.NS"        # Ensure a fresh analysis by clearing cache for the symbol
-        
+    
         # Patch get_redis_client for the explicit cache deletion part of this test
         with patch('backend.utils.cache_utils.get_redis_client') as mock_get_redis_for_delete:
             # Configure the mock client instance that get_redis_client will return
             mock_client_instance_for_delete = AsyncMock() # Make the client instance itself an AsyncMock
-            mock_client_instance_for_delete.delete = AsyncMock() # Explicitly mock the delete method as AsyncMock
+            # mock_client_instance_for_delete.delete = AsyncMock() # This line is not strictly necessary if the parent is AsyncMock
             mock_get_redis_for_delete.return_value = mock_client_instance_for_delete
-
-            # The test's original logic for getting the cache client for deletion:
-            if asyncio.iscoroutinefunction(get_redis_client): 
-                cache_client_for_deletion = await get_redis_client()
-            else:
-                cache_client_for_deletion = get_redis_client() 
-
+    
+            # Get the client from the mock by calling the patched version
+            cache_client_for_deletion = mock_get_redis_for_delete()
+    
             # Correct cache key for deletion, assuming analyze_symbol defaults to all categories
             # as no specific categories are passed to it in this test.
             all_categories_str = ",".join(sorted([cat.value for cat in CategoryType]))
