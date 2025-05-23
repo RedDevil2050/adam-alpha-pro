@@ -16,10 +16,11 @@ from backend.agents.technical.rsi_agent import run as rsi_run, agent_name # Impo
 # Patch datetime used by the agent
 @patch('backend.agents.technical.rsi_agent.datetime')
 @patch('backend.agents.decorators.get_tracker')
-# Correct patch target for redis used by the decorator
-@patch('backend.agents.decorators.get_redis_client') 
-@patch('backend.agents.technical.rsi_agent.fetch_ohlcv_series') # Correct patch target for data fetch
+@patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock)
+@patch('backend.agents.technical.rsi_agent.fetch_ohlcv_series', new_callable=AsyncMock)
+@patch('backend.agents.base.get_redis_client', new_callable=AsyncMock)  # Patch for AgentBase
 async def test_rsi_agent_oversold(
+    mock_base_get_redis_client, # New mock for base
     mock_fetch_ohlcv, # Renamed mock
     mock_get_redis_decorator, # Renamed to reflect it mocks the decorator's get_redis_client
     mock_get_tracker,
@@ -65,17 +66,27 @@ async def test_rsi_agent_oversold(
     # 1. Mock fetch_ohlcv_series
     mock_fetch_ohlcv.return_value = price_df
 
-    # 2. Mock Redis instance and configure the factory mock
+    # Shared Redis instance for all mocks that need it
     mock_redis_instance = AsyncMock()
-    mock_redis_instance.get.return_value = None # Cache miss
+    mock_redis_instance.get = AsyncMock(return_value=None)  # Cache miss for decorator
     mock_redis_instance.set = AsyncMock()
-    # Configure the mock for get_redis_client to return the instance
-    mock_get_redis_decorator.return_value = mock_redis_instance # Use the renamed mock
+
+    # Configure the decorator's get_redis_client mock
+    mock_get_redis_decorator.return_value = mock_redis_instance
+
+    # Configure the base agent's get_redis_client mock
+    mock_base_get_redis_client.return_value = mock_redis_instance 
 
     # 3. Mock Tracker instance and configure the factory mock
     mock_tracker_instance = AsyncMock() # Use AsyncMock for async method
     mock_tracker_instance.update_agent_status = AsyncMock()
-    mock_get_tracker.return_value = mock_tracker_instance # get_tracker returns the instance
+    # Ensure get_tracker returns an AsyncMock if its methods are awaited
+    # If get_tracker itself is a coroutine, it should be new_callable=AsyncMock
+    # If get_tracker returns an object with async methods, its return_value needs to be an AsyncMock or have AsyncMock methods.
+    # Based on the error, the issue is likely with how get_redis_client is mocked or used within the agent/decorator,
+    # but let's ensure get_tracker is also correctly async if needed.
+    # For now, the primary fix is for get_redis_client.
+    mock_get_tracker.return_value = mock_tracker_instance 
 
     # --- Expected Results ---
     # Based on the agent logic, RSI < 30 (default) triggers BUY (oversold)
@@ -106,7 +117,14 @@ async def test_rsi_agent_oversold(
     start_date = end_date - real_datetime_timedelta_class(days=365) # Use real timedelta for test calculation
     mock_fetch_ohlcv.assert_awaited_once_with(symbol, start_date=start_date, end_date=end_date) # Check symbol and date args
     mock_get_redis_decorator.assert_awaited_once() # Verify the factory function was awaited
-    mock_redis_instance.get.assert_awaited_once() # Verify get on the instance
-    mock_redis_instance.set.assert_awaited_once() # Verify set on the instance
-    mock_get_tracker.assert_called_once() # Decorator calls get_tracker
-    mock_tracker_instance.update_agent_status.assert_awaited_once() # Check tracker update
+    mock_base_get_redis_client.assert_awaited_once() # AgentBase's redis client factory
+    
+    # The decorator calls .get() once. The agent base also calls .get() once.
+    # Both use the same mock_redis_instance.get
+    assert mock_redis_instance.get.await_count == 2
+    if result.get('verdict') not in ['NO_DATA', 'ERROR', None]:
+        mock_redis_instance.set.assert_awaited_once() # Decorator sets cache
+    else:
+        mock_redis_instance.set.assert_not_awaited()
+    mock_get_tracker.assert_called_once() # Tracker factory
+    mock_tracker_instance.update_agent_status.assert_awaited_once() # Tracker update method

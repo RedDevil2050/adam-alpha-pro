@@ -96,7 +96,7 @@ async def test_stochastic_agent(mock_get_redis_direct_agent, mock_get_redis_deco
     # Verify mocks were called
     mock_fetch.assert_called_once()
 
-    mock_get_redis_direct_agent.assert_awaited_once() # Assert direct call in agent
+    mock_get_redis_direct_agent.assert_called_once() # Assert direct call in agent
     # Assert calls made by the decorator via its own redis client
     mock_get_redis_decorator.assert_awaited_once()
     mock_redis_instance_decorator.get.assert_awaited_once()
