@@ -24,6 +24,10 @@ async def test_moving_average_agent(
     mock_decorator_redis,    # Corresponds to decorators.get_redis_client
     mock_decorator_tracker   # Corresponds to decorators.get_tracker
 ):
+    # --- Mock Agent Settings ---
+    # mock_agent_settings.LOOKBACK_DAYS_MULTIPLIER = 2 # Example: Use a different multiplier
+    # mock_agent_settings.ADDITIONAL_LOOKBACK_DAYS = 30 # Example: Use different additional days
+
     # --- Mock datetime ---
     real_datetime_date_class = datetime.date
     real_datetime_timedelta_class = datetime.timedelta
@@ -72,9 +76,8 @@ async def test_moving_average_agent(
     mock_fetch_ohlcv.assert_awaited_once() # Use assert_awaited_once for async mocks
     
     # Calculate expected dates for fetch_ohlcv_series call
-    # Assuming default settings: LOOKBACK_DAYS_MULTIPLIER = 1, ADDITIONAL_LOOKBACK_DAYS = 60
-    # These would ideally be read from agent settings or mocked if they vary.
-    expected_lookback_days = (1 * window) + 60 # 1*20 + 60 = 80
+    # The agent calculates start_date = end_date - timedelta(days=window * 2 + 60)
+    expected_lookback_days = window * 2 + 60
     expected_start_date = mock_today_date_object - real_datetime_timedelta_class(days=expected_lookback_days)
     expected_end_date = mock_today_date_object
 

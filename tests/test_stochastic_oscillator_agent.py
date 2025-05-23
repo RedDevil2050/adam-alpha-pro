@@ -122,7 +122,7 @@ async def test_stochastic_oscillator_scenarios(
     mock_decorator_tracker.return_value = mock_tracker_instance
 
     # --- Run Agent ---
-    result = await stoch_run(symbol, k_period=k_p, d_period=d_p, smooth_k=s_k)
+    result = await stoch_run(symbol, k_period=k_p, d_period=d_p, smoothing=s_k)
 
     # --- Assertions ---
     assert result is not None
