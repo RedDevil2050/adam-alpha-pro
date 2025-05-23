@@ -11,6 +11,8 @@ from backend.agents.technical.macd_agent import run as macd_run, MACDAgent # Imp
 agent_name = "macd_agent"
 
 @pytest.mark.asyncio
+@patch('backend.agents.base.get_redis_client', new_callable=AsyncMock)      # For AgentBase.initialize
+@patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock) # For @cache_agent_result decorator
 # Patch dependencies (innermost first)
 # Patch datetime used by the agent (for datetime.date.today(), timedelta, etc.)
 @patch('backend.agents.technical.macd_agent.datetime')
@@ -21,6 +23,8 @@ agent_name = "macd_agent"
 # Patch the pandas EWM calculation
 @patch('pandas.core.window.ewm.ExponentialMovingWindow.mean')
 async def test_macd_agent_buy_signal(
+    mock_decorator_get_redis_client, # Added for @cache_agent_result
+    mock_base_get_redis_client,      # Added for AgentBase
     mock_ewm_mean,
     mock_fetch_ohlcv,
     mock_get_market_context,
@@ -72,6 +76,13 @@ async def test_macd_agent_buy_signal(
     # 3. Mock get_market_context
     mock_get_market_context.return_value = {"regime": market_regime}
 
+    # Configure Redis Mocks (shared instance)
+    mock_redis_instance = AsyncMock()
+    mock_redis_instance.get = AsyncMock(return_value=None) # Simulate cache miss
+    mock_redis_instance.set = AsyncMock()
+    mock_decorator_get_redis_client.return_value = mock_redis_instance
+    mock_base_get_redis_client.return_value = mock_redis_instance
+
     # --- Expected Calculations ---
     # Based on mocked means: macd = 11.5 - 10.0 = 1.5, signal = 1.0, hist = 0.5
     # Since macd > signal and hist > 0 => verdict = BUY
@@ -95,7 +106,7 @@ async def test_macd_agent_buy_signal(
     # Check confidence was adjusted (likely > base 0.5 for HOLD)
     assert result['confidence'] > 0.5 
     assert result['value'] == pytest.approx(expected_macd_value) # Value is current_macd
-    assert result.get('error') is None
+    assert result.get('error') is None, f"Agent returned error: {result.get('error')}"
 
     # Check details
     assert 'details' in result
@@ -115,10 +126,25 @@ async def test_macd_agent_buy_signal(
     # iloc[-1] is called *after* subtraction in the agent code, so we don't verify it on the mocks directly.
     # Instead, we rely on the assertions on the final 'result' dictionary.
     mock_get_market_context.assert_awaited_once_with(symbol)
+    mock_decorator_get_redis_client.assert_awaited_once() # Verify decorator Redis mock
+    mock_base_get_redis_client.assert_awaited_once()      # Verify base Redis mock
+    assert mock_redis_instance.get.await_count >= 1 # Decorator might call get, base will call get
+    if result.get('verdict') not in ['NO_DATA', 'ERROR', None]:
+        assert mock_redis_instance.set.await_count >= 1 # Decorator might call set, base will call set
 
 @pytest.mark.asyncio
-async def test_macd_agent_schema():
+@patch('backend.agents.base.get_redis_client', new_callable=AsyncMock)      # For AgentBase.initialize
+@patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock) # For @cache_agent_result decorator
+async def test_macd_agent_schema(mock_decorator_get_redis_client, mock_base_get_redis_client):
     symbol = "INFY"
+
+    # Configure Redis Mocks
+    mock_redis_instance = AsyncMock()
+    mock_redis_instance.get = AsyncMock(return_value=None)
+    mock_redis_instance.set = AsyncMock()
+    mock_decorator_get_redis_client.return_value = mock_redis_instance
+    mock_base_get_redis_client.return_value = mock_redis_instance
+
     # Mock dependencies for schema test to avoid actual calculation/fetching
     with patch('backend.agents.technical.macd_agent.fetch_ohlcv_series', new_callable=AsyncMock) as mock_fetch, \
          patch.object(MACDAgent, 'get_market_context', new_callable=AsyncMock) as mock_context:
@@ -130,6 +156,7 @@ async def test_macd_agent_schema():
         result = await macd_run(symbol)
 
     assert isinstance(result, dict)
+    assert result.get('error') is None, f"Agent returned error: {result.get('error')}"
     assert "symbol" in result
     assert "verdict" in result
     assert "confidence" in result

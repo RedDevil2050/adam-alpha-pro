@@ -8,14 +8,16 @@ import datetime
 
 @pytest.mark.asyncio
 # Patch dependencies (innermost first)
+@patch('backend.agents.base.get_redis_client', new_callable=AsyncMock) # For AgentBase
+@patch('backend.agents.event.corporate_actions_agent.get_redis_client', new_callable=AsyncMock) # For decorator/agent-specific
 # Correct patch target: where tracker is LOOKED UP in the agent module
 @patch('backend.agents.event.corporate_actions_agent.tracker.update') 
-@patch('backend.agents.event.corporate_actions_agent.get_redis_client')
 @patch('backend.agents.event.corporate_actions_agent.fetch_corporate_actions')
 async def test_corporate_actions_agent_active(
     mock_fetch_actions, 
-    mock_get_redis, 
-    mock_tracker_update
+    mock_tracker_update, # Order adjusted
+    mock_agent_get_redis, # Corresponds to event.corporate_actions_agent.get_redis_client
+    mock_base_get_redis  # Corresponds to base.get_redis_client
 ):
     # --- Mock Configuration ---
     # 1. Mock fetch_corporate_actions to return multiple actions
@@ -33,12 +35,13 @@ async def test_corporate_actions_agent_active(
     
     # 2. Mock Redis
     mock_redis_instance = AsyncMock()
-    mock_redis_instance.get.return_value = None # Cache miss
+    mock_redis_instance.get = AsyncMock(return_value=None) # Cache miss
     mock_redis_instance.set = AsyncMock()
-    mock_get_redis.return_value = mock_redis_instance
+    mock_agent_get_redis.return_value = mock_redis_instance
+    mock_base_get_redis.return_value = mock_redis_instance
 
     # 3. Mock Tracker (already patched)
-    mock_tracker_update.return_value = None # Simple mock
+    # mock_tracker_update.return_value = None # Simple mock - already an arg
 
     # --- Run Agent ---
     res = await ca_run('TEST_SYMBOL')
@@ -49,7 +52,7 @@ async def test_corporate_actions_agent_active(
     assert res['verdict'] == expected_verdict
     assert res['confidence'] == pytest.approx(expected_score)
     assert res['value'] == expected_count # Value is the count of actions
-    assert res.get('error') is None
+    assert res.get('error') is None, f"Agent returned error: {res.get('error')}"
     
     # Check details
     assert 'details' in res
@@ -63,7 +66,9 @@ async def test_corporate_actions_agent_active(
 
     # --- Verify Mocks ---
     mock_fetch_actions.assert_awaited_once_with('TEST_SYMBOL')
-    mock_get_redis.assert_awaited_once()
-    mock_redis_instance.get.assert_awaited_once()
-    mock_redis_instance.set.assert_awaited_once() # Should cache on success
+    mock_agent_get_redis.assert_awaited_once()
+    mock_base_get_redis.assert_awaited_once()
+    assert mock_redis_instance.get.await_count >= 1 # Called by decorator and/or base
+    if res.get('verdict') not in ['NO_DATA', 'ERROR', None]:
+        assert mock_redis_instance.set.await_count >= 1 # Called by decorator and/or base
     mock_tracker_update.assert_called_once_with("event", agent_name, "implemented")
