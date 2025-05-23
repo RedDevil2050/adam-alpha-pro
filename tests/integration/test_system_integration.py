@@ -39,7 +39,7 @@ class TestSystemIntegration:
     async def orchestrator(self, mock_redis_client, mock_system_monitor): # mock_system_monitor is the external one
         """Fixture to create a SystemOrchestrator instance with a mocked cache and external monitor."""
         with patch('backend.core.orchestrator.SystemMonitor', new_callable=MagicMock) as MockInternalSystemMonitorConstructor, \
-             patch('websockets.client.connect', new_callable=AsyncMock) as mock_websocket_connect:
+             patch('websockets.asyncio.client.connect', new_callable=AsyncMock) as mock_websocket_connect:
 
             mock_internal_monitor_instance = MockInternalSystemMonitorConstructor.return_value
             
