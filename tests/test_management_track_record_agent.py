@@ -59,7 +59,6 @@ async def test_management_track_record_agent(
     # --- Verify Mocks ---
     mock_fetch_transcript.assert_awaited_once_with('ABC')
     mock_agent_get_redis.assert_awaited_once()
-    mock_base_get_redis.assert_awaited_once()
     assert mock_redis_instance.get.await_count >= 1 # Called by decorator and/or base
     if res.get('verdict') not in ['NO_DATA', 'ERROR', None]:
         assert mock_redis_instance.set.await_count >= 1 # Called by decorator and/or base

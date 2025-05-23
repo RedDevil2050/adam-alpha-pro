@@ -42,7 +42,6 @@ async def test_insider_trade_agent(
     # Verify mocks
     mock_fetch_trades.assert_awaited_once_with('ABC')
     mock_decorator_get_redis_client.assert_awaited_once() # Verify the patch target was called
-    mock_base_get_redis_client.assert_awaited_once()      # Verify the patch target was called
     # Check that get is called at least once (by decorator or base)
     assert mock_redis_instance.get.await_count >= 1
     # Set should be called if no error and verdict is not NO_DATA

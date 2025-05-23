@@ -9,13 +9,16 @@ import datetime
 import numpy as np # Import numpy if not already present
 
 @pytest.mark.asyncio
-@patch('backend.agents.decorators.get_tracker') # Outermost patch
+@patch('backend.agents.decorators.get_tracker') # Outermost patch 
 @patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock)
 @patch('backend.agents.technical.moving_average_agent.get_redis_client', new_callable=AsyncMock)
 @patch('backend.agents.technical.moving_average_agent.fetch_ohlcv_series', new_callable=AsyncMock)
-@patch('backend.agents.technical.moving_average_agent.datetime') # Innermost patch for datetime
+# Patch date and timedelta directly in the agent's module
+@patch('backend.agents.technical.moving_average_agent.date') 
+@patch('backend.agents.technical.moving_average_agent.timedelta')
 async def test_moving_average_agent(
-    mock_datetime_agent, # Corresponds to moving_average_agent.datetime
+    mock_timedelta_agent, # Corresponds to moving_average_agent.timedelta
+    mock_date_agent,      # Corresponds to moving_average_agent.date
     mock_fetch_ohlcv,    # Corresponds to moving_average_agent.fetch_ohlcv_series
     mock_agent_direct_redis, # Corresponds to moving_average_agent.get_redis_client
     mock_decorator_redis,    # Corresponds to decorators.get_redis_client
@@ -27,8 +30,9 @@ async def test_moving_average_agent(
     # Fixed date for reproducible test runs
     mock_today_date_object = real_datetime_date_class(2025, 7, 20)
 
-    mock_datetime_agent.date.today.return_value = mock_today_date_object
-    mock_datetime_agent.timedelta = real_datetime_timedelta_class # Allow agent to use real timedelta
+    mock_date_agent.today.return_value = mock_today_date_object
+    # Make the mocked timedelta behave like the real one for calculations
+    mock_timedelta_agent.side_effect = lambda days: real_datetime_timedelta_class(days=days)
 
     # Create realistic OHLCV data with uptrend (ensure enough data for window + 1)
     window = 20
