@@ -74,7 +74,7 @@ class SystemOrchestrator:
         analysis_id = f"{symbol}_{datetime.now().timestamp()}"
         start_time = time.perf_counter() # Record start time
         try:
-            self.system_monitor.start_analysis(analysis_id)
+            await self.system_monitor.start_analysis(analysis_id)
 
             # Check cache if not forced refresh
             if not force_refresh:
@@ -148,7 +148,7 @@ class SystemOrchestrator:
             # Cache the full successful response
             await self._cache_analysis(symbol, successful_response)
 
-            self.system_monitor.end_analysis(analysis_id, "success") # Use internal monitor
+            await self.system_monitor.end_analysis(analysis_id, "success") # Use internal monitor
             return successful_response
 
         except Exception as e:
@@ -157,7 +157,7 @@ class SystemOrchestrator:
             duration = end_time - start_time
             self.metrics_collector.record_response_time(duration) 
 
-            self.system_monitor.end_analysis(analysis_id, "error") # Use internal monitor
+            await self.system_monitor.end_analysis(analysis_id, "error") # Use internal monitor
             logger.error(f"System analysis failed for {symbol}: {e}", exc_info=True) # Add traceback
 
             # Fetch health metrics even on error
