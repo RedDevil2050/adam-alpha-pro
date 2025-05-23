@@ -3,8 +3,8 @@ from unittest.mock import AsyncMock, patch # Import patch
 from backend.agents.sentiment.news_sentiment_agent import run as ns_run
 
 @pytest.mark.asyncio
-@patch('backend.agents.sentiment.news_sentiment_agent.get_redis_client') # Patch redis
-@patch('backend.agents.sentiment.news_sentiment_agent.httpx.AsyncClient') # Patch http client
+@patch('backend.agents.sentiment.news_sentiment_agent.get_redis_client', new_callable=AsyncMock) # Patch redis
+@patch('backend.agents.sentiment.news_sentiment_agent.httpx.AsyncClient', new_callable=AsyncMock) # Patch http client
 @patch('backend.agents.sentiment.news_sentiment_agent.analyzer') # Patch analyzer where it's USED
 async def test_news_sentiment_agent(mock_analyzer, mock_async_client, mock_get_redis):
     # Configure httpx mock response

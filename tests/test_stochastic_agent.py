@@ -7,8 +7,8 @@ from backend.agents.technical.stochastic_agent import run as stoch_run
 
 @pytest.mark.asyncio
 # Patch get_redis_client where it's used by the stochastic_agent's run function
-@patch('backend.agents.decorators.get_redis_client') # New patch for the decorator's redis client
-@patch('backend.agents.technical.stochastic_agent.get_redis_client') # Existing patch for agent's direct call
+@patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock) # New patch for the decorator's redis client
+@patch('backend.agents.technical.stochastic_agent.get_redis_client', new_callable=AsyncMock) # Existing patch for agent's direct call
 async def test_stochastic_agent(mock_get_redis_direct_agent, mock_get_redis_decorator, monkeypatch): # Order of mocks matches patches
     # Create realistic OHLCV data (need enough for window, default K=14, D=3)
     dates = pd.to_datetime([datetime.date(2025, 4, 30) - datetime.timedelta(days=x)
@@ -97,7 +97,6 @@ async def test_stochastic_agent(mock_get_redis_direct_agent, mock_get_redis_deco
     mock_fetch.assert_called_once()
 
     mock_get_redis_direct_agent.assert_awaited_once() # Assert direct call in agent
-
     # Assert calls made by the decorator via its own redis client
     mock_get_redis_decorator.assert_awaited_once()
     mock_redis_instance_decorator.get.assert_awaited_once()

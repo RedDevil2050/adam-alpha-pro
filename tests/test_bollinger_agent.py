@@ -13,8 +13,8 @@ agent_name = "bollinger_agent"
 @pytest.mark.asyncio
 # Patch dependencies (innermost first)
 @patch('backend.agents.technical.bollinger_agent.tracker.update')
-@patch('backend.agents.technical.bollinger_agent.get_redis_client')
-@patch('backend.agents.technical.bollinger_agent.fetch_ohlcv_series')
+@patch('backend.agents.technical.bollinger_agent.get_redis_client', new_callable=AsyncMock)
+@patch('backend.agents.technical.bollinger_agent.fetch_ohlcv_series', new_callable=AsyncMock)
 # Mock pandas rolling calculations
 @patch('pandas.core.window.rolling.Rolling.mean') 
 @patch('pandas.core.window.rolling.Rolling.std') 

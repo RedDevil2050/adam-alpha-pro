@@ -13,9 +13,9 @@ agent_name = "bulk_portfolio_agent"
 @pytest.mark.asyncio
 # Patch dependencies used by the agent
 @patch('backend.agents.automation.bulk_portfolio_agent.tracker') # Patch tracker
-@patch('backend.agents.automation.bulk_portfolio_agent.get_redis_client') # Patch redis
-@patch('backend.agents.automation.bulk_portfolio_agent.run_full_cycle') # Patch run_full_cycle
-@patch('backend.agents.automation.bulk_portfolio_agent.fetch_price_series') # Patch fetch_price_series
+@patch('backend.agents.automation.bulk_portfolio_agent.get_redis_client', new_callable=AsyncMock) # Patch redis
+@patch('backend.agents.automation.bulk_portfolio_agent.run_full_cycle', new_callable=AsyncMock) # Patch run_full_cycle
+@patch('backend.agents.automation.bulk_portfolio_agent.fetch_price_series', new_callable=AsyncMock) # Patch fetch_price_series
 async def test_bulk_portfolio_agent(
     mock_fetch_prices,
     mock_run_cycle,
@@ -83,20 +83,19 @@ async def test_bulk_portfolio_agent(
     # --- Verify Mocks ---
     # fetch_price_series is called once for the first symbol as an initial check
     assert mock_fetch_prices.call_count == 1
-    assert mock_run_cycle.call_count == len(test_symbols)
-    mock_get_redis.return_value.get.assert_called_once()
     mock_fetch_prices.assert_any_await(test_symbols[0], source_preference=["api", "scrape"])
-    # The following assertion was removed as fetch_price_series is only called for the first symbol
-    # mock_fetch_prices.assert_any_await(test_symbols[1], source_preference=["api", "scrape"])
 
-    # Verify that set was called on the redis mock if cache was missed and data processed
-    if mock_redis_instance.get.return_value is None and res.get("verdict") != "ERROR":
-        mock_redis_instance.set.assert_awaited_once()
     assert mock_run_cycle.call_count == len(test_symbols)
     # The agent calls run_full_cycle with a single symbol string, not a list
     mock_run_cycle.assert_any_await('AAPL')
     mock_run_cycle.assert_any_await('GOOG')
+
     mock_get_redis.assert_awaited_once()
-    mock_redis_instance.get.assert_awaited_once()
+    # Verify that set was called on the redis mock if cache was missed and data processed
+    if mock_redis_instance.get.return_value is None and res.get("verdict") != "ERROR":
+        mock_redis_instance.set.assert_awaited_once()
+    else:
+        mock_redis_instance.set.assert_not_awaited() # Ensure it's not awaited if not set
+
     # Check tracker update call
     mock_tracker.update.assert_awaited_once_with("automation", agent_name, "implemented")

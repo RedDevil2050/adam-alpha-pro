@@ -9,8 +9,8 @@ import datetime
 import numpy as np # Import numpy if not already present
 
 @pytest.mark.asyncio
-@patch('backend.agents.decorators.get_redis_client')  # Patch redis client used by decorator
-@patch('backend.agents.technical.moving_average_agent.fetch_ohlcv_series') # Patch fetch_ohlcv_series where it's used
+@patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock)  # Patch redis client used by decorator
+@patch('backend.agents.technical.moving_average_agent.fetch_ohlcv_series', new_callable=AsyncMock) # Patch fetch_ohlcv_series where it's used
 async def test_moving_average_agent(mock_fetch, mock_get_redis, monkeypatch): # Mocks are passed in reverse order of decorators
     # Create realistic OHLCV data with uptrend (ensure enough data for window + 1)
     window = 20
@@ -56,6 +56,7 @@ async def test_moving_average_agent(mock_fetch, mock_get_redis, monkeypatch): # 
     assert call_kwargs.get('interval') == '1d'
 
     # Verify Redis operations were called
+    mock_get_redis.assert_awaited_once() # mock_get_redis is the factory, should be awaited
     mock_redis_instance.get.assert_awaited_once()
     # Set should be called if the result is valid (not NO_DATA/ERROR)
     if res.get('verdict') not in ['NO_DATA', 'ERROR', None]:

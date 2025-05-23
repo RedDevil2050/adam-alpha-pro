@@ -12,11 +12,11 @@ from backend.agents.automation.alert_engine_agent import run as alert_run, agent
 @pytest.mark.asyncio
 # Patch dependencies used by the agent and its decorators
 @patch('backend.agents.automation.alert_engine_agent.tracker.update')
-@patch('backend.agents.automation.alert_engine_agent.get_redis_client')
-@patch('backend.agents.automation.alert_engine_agent.corp_run')
-@patch('backend.agents.automation.alert_engine_agent.earnings_run')
-@patch('backend.agents.automation.alert_engine_agent.fetch_eps_data')
-@patch('backend.agents.automation.alert_engine_agent.fetch_price_series')
+@patch('backend.agents.automation.alert_engine_agent.get_redis_client', new_callable=AsyncMock)
+@patch('backend.agents.automation.alert_engine_agent.corp_run', new_callable=AsyncMock)
+@patch('backend.agents.automation.alert_engine_agent.earnings_run', new_callable=AsyncMock)
+@patch('backend.agents.automation.alert_engine_agent.fetch_eps_data', new_callable=AsyncMock)
+@patch('backend.agents.automation.alert_engine_agent.fetch_price_series', new_callable=AsyncMock)
 async def test_alert_engine_agent(
     mock_fetch_prices, 
     mock_fetch_eps, 

@@ -14,8 +14,8 @@ _original_pandas_rolling_mean = pd.core.window.rolling.Rolling.mean
 @pytest.mark.asyncio
 # Patch dependencies in the correct order (innermost first)
 @patch('backend.agents.technical.adx_agent.tracker.update')
-@patch('backend.agents.technical.adx_agent.get_redis_client')
-@patch('backend.agents.technical.adx_agent.fetch_ohlcv_series')
+@patch('backend.agents.technical.adx_agent.get_redis_client', new_callable=AsyncMock)
+@patch('backend.agents.technical.adx_agent.fetch_ohlcv_series', new_callable=AsyncMock)
 # Mock the final pandas calculation step to control the ADX value
 @patch('pandas.core.window.rolling.Rolling.mean', autospec=True) # Added autospec=True
 async def test_adx_agent_strong_trend(mock_pd_mean, mock_fetch, mock_get_redis, mock_tracker_update):
