@@ -10,6 +10,7 @@ from backend.agents.valuation.pe_ratio_agent import run as pe_run
 from datetime import date, timedelta # Import date utilities
 import httpx # Import httpx for httpx_mock
 from pytest_httpx import httpx_mock # Explicitly import httpx_mock
+import pytest_httpx # Add this import
 from backend.config.settings import get_settings # ADDED: Import get_settings
 import backend.config.settings as app_settings # Import the settings module itself
 
