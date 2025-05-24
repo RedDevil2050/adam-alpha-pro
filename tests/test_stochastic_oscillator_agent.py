@@ -66,13 +66,13 @@ def create_stochastic_data(periods=30, scenario="neutral", k_target=50, d_target
 @pytest.mark.parametrize(
     "test_id, k_p, d_p, s_k, market_regime_mock, data_scenario, expected_verdict_val, min_k, max_k, min_d, max_d, min_confidence_val",
     [
-        ("oversold_bull", 14, 3, 3, "BULL", "oversold_buy", "BUY", 5, 25, 5, 25, 0.8),
-        ("oversold_neutral", 14, 3, 3, "NEUTRAL", "oversold_buy", "BUY", 5, 25, 5, 25, 0.7),
-        ("oversold_bear", 14, 3, 3, "BEAR", "oversold_buy", "BUY", 5, 25, 5, 25, 0.6),
-        ("overbought_bull", 14, 3, 3, "BULL", "overbought_sell", "AVOID", 75, 95, 75, 95, 0.6),
-        ("overbought_neutral", 14, 3, 3, "NEUTRAL", "overbought_sell", "AVOID", 75, 95, 75, 95, 0.7),
-        ("overbought_bear", 20, 5, 5, "BEAR", "overbought_sell", "AVOID", 75, 95, 75, 95, 0.8),
-        ("neutral_hold", 14, 3, 3, "NEUTRAL", "neutral", "HOLD", 30, 70, 30, 70, 0.45),
+        ("oversold_bull", 14, 3, 3, "BULL", "oversold_buy", "BUY_OVERSOLD_CROSS", 5, 25, 5, 25, 0.8),
+        ("oversold_neutral", 14, 3, 3, "NEUTRAL", "oversold_buy", "BUY_OVERSOLD_CROSS", 5, 25, 5, 25, 0.7),
+        ("oversold_bear", 14, 3, 3, "BEAR", "oversold_buy", "BUY_OVERSOLD_CROSS", 5, 25, 5, 25, 0.6),
+        ("overbought_bull", 14, 3, 3, "BULL", "overbought_sell", "SELL_OVERBOUGHT_CROSS", 75, 95, 75, 95, 0.6),
+        ("overbought_neutral", 14, 3, 3, "NEUTRAL", "overbought_sell", "SELL_OVERBOUGHT_CROSS", 75, 95, 75, 95, 0.7),
+        ("overbought_bear", 20, 5, 5, "BEAR", "overbought_sell", "SELL_OVERBOUGHT_CROSS", 75, 95, 75, 95, 0.8),
+        ("neutral_hold", 14, 3, 3, "NEUTRAL", "neutral", "HOLD_NEUTRAL", 30, 70, 30, 70, 0.45),
     ]
 )
 # Patch dependencies in order of execution (innermost to outermost for args)
