@@ -130,6 +130,19 @@ async def test_stochastic_oscillator_scenarios(
     bound_real_execute = OriginalStochasticOscillatorAgent.execute.__get__(mock_agent_instance, OriginalStochasticOscillatorAgent)
     mock_agent_instance.execute = AsyncMock(side_effect=bound_real_execute)
 
+    # Bind the original _execute method
+    bound_real_private_execute = OriginalStochasticOscillatorAgent._execute.__get__(mock_agent_instance, OriginalStochasticOscillatorAgent)
+    mock_agent_instance._execute = AsyncMock(side_effect=bound_real_private_execute)
+
+    # Simplify mocking for _format_output as it's a simple pass-through
+    def format_output_mock_side_effect(symbol_arg, raw_result_arg):
+        return raw_result_arg
+    mock_agent_instance._format_output = MagicMock(side_effect=format_output_mock_side_effect)
+    
+    # Bind the original _generate_cache_key method
+    bound_real_generate_cache_key = OriginalStochasticOscillatorAgent._generate_cache_key.__get__(mock_agent_instance, OriginalStochasticOscillatorAgent)
+    mock_agent_instance._generate_cache_key = MagicMock(side_effect=bound_real_generate_cache_key)
+
     # Configure the factory to return our instance
     mock_agent_class_factory.return_value = mock_agent_instance
     
