@@ -12,11 +12,9 @@ agent_name = "factor_score_agent"
 @pytest.mark.asyncio
 # Patch the get_market_context method directly on the class prototype
 @patch.object(FactorScoreAgent, 'get_market_context', new_callable=AsyncMock)
-@patch('backend.agents.intelligence.factor_score_agent.get_redis_client', new_callable=AsyncMock) # Corrected path
-@patch('backend.agents.base.get_redis_client', new_callable=AsyncMock) # Added this line
+@patch('backend.agents.base.get_redis_client', new_callable=AsyncMock) 
 async def test_factor_score_agent_strong_bull(
-    mock_base_get_redis_client, # Added this
-    mock_agent_get_redis_client, 
+    mock_base_get_redis_client, 
     mock_get_market_context
 ):
     # --- Mock Configuration ---
