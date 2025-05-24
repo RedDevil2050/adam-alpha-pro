@@ -231,7 +231,9 @@ class TestSystemStress:
 
     async def test_memory_usage(self, orchestrator):
         """Test memory usage under load"""
-        initial_memory = orchestrator.system_monitor.get_memory_usage()['rss']
+        initial_health = await orchestrator.system_monitor.get_health_metrics()
+        initial_memory = initial_health['system']['memory_rss_bytes']
+        
         # Run a few analyses
         for i in range(3): # Reduced from 5 to 3 for faster test execution
             await orchestrator.analyze_symbol(f"STRESS{i}")
@@ -239,7 +241,8 @@ class TestSystemStress:
         # Allow some time for garbage collection if needed, though direct measurement is better
         # await asyncio.sleep(0.1) # Short delay
 
-        final_memory = orchestrator.system_monitor.get_memory_usage()['rss']
+        final_health = await orchestrator.system_monitor.get_health_metrics()
+        final_memory = final_health['system']['memory_rss_bytes']
         memory_increase = final_memory - initial_memory
 
         # Assert that memory increase is within an acceptable range

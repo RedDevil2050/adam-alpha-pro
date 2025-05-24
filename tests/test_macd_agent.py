@@ -100,7 +100,7 @@ async def test_macd_agent_buy_signal(
 
     # --- Assertions ---
     assert result['symbol'] == symbol
-    assert result['agent_name'] == 'MACDAgent' 
+    assert result['agent_name'] == agent_name # Corrected to use the module-level agent_name
     assert result['verdict'] == expected_verdict
     # Check confidence was adjusted (likely > base 0.5 for HOLD)
     assert result['confidence'] > 0.5 

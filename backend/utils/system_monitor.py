@@ -74,14 +74,18 @@ class SystemMonitor:
 
     async def get_health_metrics(self) -> Dict:
         """Provide system health metrics including CPU and memory."""
-        logger.debug("SystemMonitor: Getting health metrics (SIMPLIFIED FOR DEBUG)")
+        # logger.debug("SystemMonitor: Getting health metrics (SIMPLIFIED FOR DEBUG)")
+        # Actual CPU and Memory Usage
+        cpu_usage = psutil.cpu_percent(interval=None) # Non-blocking, gets overall CPU usage
+        memory_info = psutil.virtual_memory()
 
         return {
             "system": {
-                 "cpu_usage": 0.0, # Fixed value for debugging
-                 "memory_usage": 0.0 # Fixed value for debugging
+                 "cpu_usage": cpu_usage,
+                 "memory_usage": memory_info.percent, # Using percentage for consistency
+                 "memory_rss_bytes": psutil.Process().memory_info().rss # Actual RSS memory for the current process
             },
-            "components": self.components # self.components should be populated
+            "components": self.components
         }
 
     def _initialize_metrics(self):
