@@ -86,7 +86,7 @@ def create_stochastic_data(periods=30, scenario="neutral", k_target=50, d_target
     ]
 )
 # Patch dependencies in order of execution (innermost to outermost for args)
-@patch('backend.agents.technical.stochastic_oscillator_agent.datetime') # mock_datetime_in_agent
+@patch('backend.agents.base.datetime') # mock_datetime_in_agent (TARGET CHANGED HERE)
 @patch('backend.agents.technical.stochastic_oscillator_agent.StochasticOscillatorAgent') # mock_agent_class_factory
 @patch('backend.agents.base.get_redis_client', new_callable=AsyncMock)  # mock_base_get_redis_client (for AgentBase)
 @patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock) # mock_decorator_redis
