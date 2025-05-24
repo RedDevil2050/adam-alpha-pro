@@ -23,12 +23,12 @@ agent_name = "macd_agent"
 # Patch the pandas EWM calculation
 @patch('pandas.core.window.ewm.ExponentialMovingWindow.mean')
 async def test_macd_agent_buy_signal(
-    mock_decorator_get_redis_client, # Added for @cache_agent_result
-    mock_base_get_redis_client,      # Added for AgentBase
-    mock_ewm_mean,
-    mock_fetch_ohlcv,
-    mock_get_market_context,
-    mock_datetime_in_agent # This is the mock for 'backend.agents.technical.macd_agent.datetime'
+    mock_ewm_mean,                   # Corresponds to @patch('pandas.core.window.ewm.ExponentialMovingWindow.mean')
+    mock_fetch_ohlcv,                # Corresponds to @patch('backend.agents.technical.macd_agent.fetch_ohlcv_series')
+    mock_get_market_context,         # Corresponds to @patch.object(MACDAgent, 'get_market_context')
+    mock_datetime_in_agent,          # Corresponds to @patch('backend.agents.technical.macd_agent.datetime')
+    mock_decorator_get_redis_client, # Corresponds to @patch('backend.agents.decorators.get_redis_client', ...)
+    mock_base_get_redis_client       # Corresponds to @patch('backend.agents.base.get_redis_client', ...)
 ):
     # --- Mock Configuration ---
     symbol = "TEST_SYMBOL"

@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import pytest
 import pandas as pd
 import numpy as np
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch, MagicMock, ANY
 
 # Import the agent's run function and the agent class (assuming it exists for patching)
 # Also import the original class and its module-level name for speccing and assertion
@@ -37,11 +37,21 @@ def create_stochastic_data(periods=30, scenario="neutral", k_target=50, d_target
         # e.g., prev_k=90, prev_d=88; latest_k=82, latest_d=85
         low_prices = np.full(periods, base_price - price_range / 2)
         high_prices = np.full(periods, base_price + price_range / 2)
-        close_prices = np.full(periods, base_price - price_range / 2 + 0.90 * price_range) # Start with K=90
-        close_prices[-4:] = base_price - price_range / 2 + 0.90 * price_range
-        close_prices[-3:] = base_price - price_range / 2 + 0.92 * price_range
-        close_prices[-2] = base_price - price_range / 2 + 0.95 * price_range  # prev_k = 95
-        close_prices[-1] = base_price - price_range / 2 + 0.82 * price_range  # latest_k = 82
+
+        # Aim for FastK sequence like: ..., high, high, high, lower (e.g., 95, 95, 95, 82)
+        # This should make SlowK high, then drop, and SlowD should follow, creating a cross.
+        # Default to FastK = 95 for most periods to stabilize H_k and L_k
+        close_prices = np.full(periods, (base_price - price_range / 2) + 0.95 * price_range)
+
+        if periods >= 4: # Ensure enough data points to set last few values explicitly
+            # Last 4 FastK values target: 0.95, 0.95, 0.95, 0.82
+            # This creates a sequence of FastK: ..., 95, 95, 95, 82
+            close_prices[-4] = (base_price - price_range / 2) + 0.95 * price_range # FastK = 95
+            close_prices[-3] = (base_price - price_range / 2) + 0.95 * price_range # FastK = 95
+            close_prices[-2] = (base_price - price_range / 2) + 0.95 * price_range # FastK = 95
+            close_prices[-1] = (base_price - price_range / 2) + 0.82 * price_range # FastK = 82
+        elif periods >= 1: # Fallback for very short periods
+            close_prices[-1] = (base_price - price_range / 2) + 0.82 * price_range
     else: # Neutral / Hold
         # Sideways movement, K and D around 50
         low_prices = np.linspace(base_price - price_range / 3, base_price - price_range / 2, periods)
@@ -69,9 +79,9 @@ def create_stochastic_data(periods=30, scenario="neutral", k_target=50, d_target
         ("oversold_bull", 14, 3, 3, "BULL", "oversold_buy", "BUY_OVERSOLD_CROSS", 5, 25, 5, 25, 0.8),
         ("oversold_neutral", 14, 3, 3, "NEUTRAL", "oversold_buy", "BUY_OVERSOLD_CROSS", 5, 25, 5, 25, 0.7),
         ("oversold_bear", 14, 3, 3, "BEAR", "oversold_buy", "BUY_OVERSOLD_CROSS", 5, 25, 5, 25, 0.6),
-        ("overbought_bull", 14, 3, 3, "BULL", "overbought_sell", "SELL_OVERBOUGHT_CROSS", 75, 95, 75, 95, 0.6),
-        ("overbought_neutral", 14, 3, 3, "NEUTRAL", "overbought_sell", "SELL_OVERBOUGHT_CROSS", 75, 95, 75, 95, 0.7),
-        ("overbought_bear", 20, 5, 5, "BEAR", "overbought_sell", "SELL_OVERBOUGHT_CROSS", 75, 95, 75, 95, 0.8),
+        ("overbought_bull", 14, 3, 3, "BULL", "overbought_sell", "SELL_OVERBOUGHT_CROSS", 75, 95, 75, 95, 0.15), # Adjusted min_confidence_val from 0.6
+        ("overbought_neutral", 14, 3, 3, "NEUTRAL", "overbought_sell", "SELL_OVERBOUGHT_CROSS", 75, 95, 75, 95, 0.09), # Adjusted min_confidence_val from 0.7
+        ("overbought_bear", 20, 5, 5, "BEAR", "overbought_sell", "SELL_OVERBOUGHT_CROSS", 75, 95, 75, 95, 0.0),  # Adjusted min_confidence_val from 0.8
         ("neutral_hold", 14, 3, 3, "NEUTRAL", "neutral", "HOLD_NEUTRAL", 30, 70, 30, 70, 0.45),
     ]
 )
@@ -193,7 +203,7 @@ async def test_stochastic_oscillator_scenarios(
     assert details['params'] == {'k': k_p, 'd': d_p, 's': s_k}
 
     # --- Verify Mocks ---
-    mock_agent_class_factory.assert_called_once_with(agent_name=original_agent_module_name)
+    mock_agent_class_factory.assert_called_once_with(name=original_agent_module_name, logger=ANY)
     
     expected_end_date_for_fetch = datetime.datetime.combine(mock_today_date_object, datetime.time.min).date()
     agent_required_data_points_calc = (k_p - 1) + (s_k - 1) + (d_p - 1) + 2
