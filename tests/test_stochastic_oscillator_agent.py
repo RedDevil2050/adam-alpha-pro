@@ -157,12 +157,25 @@ async def test_stochastic_oscillator_scenarios(
     mock_agent_class_factory.return_value = mock_agent_instance
     
     # Mock datetime
-    real_datetime_date_class = datetime.date
-    real_datetime_timedelta_class = datetime.timedelta
-    mock_today_date_object = real_datetime_date_class(2025, 5, 2)
-    mock_datetime_in_agent.date.today.return_value = mock_today_date_object # If agent uses .date.today()
-    mock_datetime_in_agent.datetime.now.return_value = datetime.datetime.combine(mock_today_date_object, datetime.time.min) # Agent uses .now().date()
-    mock_datetime_in_agent.timedelta = real_datetime_timedelta_class
+    # Assuming 'import datetime' is at the top of the test file
+    # These are real datetime classes/objects from the test's context
+    real_date_class = datetime.date
+    real_datetime_class = datetime.datetime
+    real_timedelta_class = datetime.timedelta # Defined earlier
+
+    # This is the specific date object we want the agent to perceive as "today" or "now().date()"
+    mock_target_date_object = real_date_class(2025, 5, 2)
+
+    # If agent uses datetime.date.today()
+    mock_datetime_in_agent.date.today.return_value = mock_target_date_object
+
+    # If agent uses datetime.datetime.now().date()
+    mock_dt_now_returns = MagicMock(spec=real_datetime_class) # This mock will be returned by datetime.datetime.now()
+    mock_dt_now_returns.date.return_value = mock_target_date_object # Configure its .date() method to return our real target date
+    mock_datetime_in_agent.datetime.now.return_value = mock_dt_now_returns
+
+    # Ensure agent uses the real timedelta for calculations
+    mock_datetime_in_agent.timedelta = real_timedelta_class
 
     # Shared Redis for decorator and base
     mock_redis_instance = AsyncMock()
@@ -205,9 +218,10 @@ async def test_stochastic_oscillator_scenarios(
     # --- Verify Mocks ---
     mock_agent_class_factory.assert_called_once_with(name=original_agent_module_name, logger=ANY)
     
-    expected_end_date_for_fetch = datetime.datetime.combine(mock_today_date_object, datetime.time.min).date()
+    expected_end_date_for_fetch = mock_target_date_object # Agent should use this as the end date
     agent_required_data_points_calc = (k_p - 1) + (s_k - 1) + (d_p - 1) + 2
-    expected_start_date_for_fetch_agent = expected_end_date_for_fetch - real_datetime_timedelta_class(days=agent_required_data_points_calc + 60)
+    # Now real_timedelta_class is defined before use here
+    expected_start_date_for_fetch_agent = expected_end_date_for_fetch - real_timedelta_class(days=agent_required_data_points_calc + 60)
 
     mock_dp_instance.fetch_ohlcv_series.assert_awaited_once_with(
         symbol, 
