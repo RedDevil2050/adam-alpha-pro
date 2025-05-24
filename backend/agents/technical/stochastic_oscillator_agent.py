@@ -16,14 +16,14 @@ class StochasticOscillatorAgent(TechnicalAgent):
         Executes the agent's logic, including fetching data, calculating Stochastic Oscillator,
         and determining a verdict. Overrides AgentBase.execute to handle specific parameters.
         """
-        await self.initialize()
+        await self.initialize() # This should set self.cache from AgentBase
         agent_outputs = agent_outputs or {}
 
         # Check cache first
-        if self.redis_client:
+        if self.cache: # Use self.cache instead of self.redis_client
             # Pass extra args to _generate_cache_key through kwargs
             cache_key = self._generate_cache_key(symbol, agent_outputs, k_period=k_period, d_period=d_period, smoothing=smoothing)
-            cached_result = await self.redis_client.get(cache_key)
+            cached_result = await self.cache.get(cache_key) # Use self.cache
             if cached_result:
                 logger.debug(f"[{self.name}] Cache hit for {symbol} with key {cache_key}")
                 return json.loads(cached_result)
@@ -33,10 +33,10 @@ class StochasticOscillatorAgent(TechnicalAgent):
         
         formatted_result = self._format_output(symbol, raw_result)
         
-        if self.redis_client and formatted_result.get("verdict") not in ["NO_DATA", "ERROR", None]:
+        if self.cache and formatted_result.get("verdict") not in ["NO_DATA", "ERROR", None]: # Use self.cache
             # Regeneration of cache_key here is redundant if done above, but ensure consistency if logic changes
             cache_key_for_set = self._generate_cache_key(symbol, agent_outputs, k_period=k_period, d_period=d_period, smoothing=smoothing)
-            await self.redis_client.set(cache_key_for_set, json.dumps(formatted_result), ex=self.settings.agent_cache_ttl_seconds)
+            await self.cache.set(cache_key_for_set, json.dumps(formatted_result), ex=self.settings.agent_cache_ttl_seconds) # Use self.cache
             logger.debug(f"[{self.name}] Cached result for {symbol} with key {cache_key_for_set}")
             
         return formatted_result
@@ -45,8 +45,8 @@ class StochasticOscillatorAgent(TechnicalAgent):
         try:
             # Cache key generation
             cache_key = f"{agent_name}:{symbol}:{k_period}:{d_period}:{smoothing}"
-            # redis_client = await get_redis_client() # This is already part of self.redis_client from TechnicalAgent.initialize()
-            # Cache check - Handled by the execute method using self.redis_client and self._generate_cache_key
+            # redis_client = await get_redis_client() # This is already part of self.cache from TechnicalAgent.initialize()
+            # Cache check - Handled by the execute method using self.cache and self._generate_cache_key
 
             # Fetch market context
             market_context = None
