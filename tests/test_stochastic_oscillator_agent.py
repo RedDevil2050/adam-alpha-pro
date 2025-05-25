@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch, ANY # Added ANY
 import pytest
 
 # Assuming these are the correct paths for your project structure
-from backend.agents.technical.stochastic_oscillator_agent import StochasticOscillatorAgent as OriginalStochasticOscillatorAgent, stoch_run as actual_stoch_run_decorated_function
+from backend.agents.technical.stochastic_oscillator_agent import StochasticOscillatorAgent as OriginalStochasticOscillatorAgent, run as actual_stoch_run_decorated_function # Changed stoch_run to run
 from backend.common.data_models import TimeSeriesData, DataPoint, Verdict, Context, AgentSettings # Consolidated imports
 from backend.common.enums import VerdictType, MarketRegime # Consolidated imports
 from backend.data_providers.base import DataProviderBase # Assuming this is the base class for data providers
