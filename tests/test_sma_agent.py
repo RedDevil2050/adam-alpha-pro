@@ -12,7 +12,7 @@ agent_name = "sma_agent"
 
 @pytest.mark.asyncio
 # Patch dependencies (innermost first, so args are in this order)
-@patch('backend.agents.technical.sma_agent.fetch_price_series', new_callable=AsyncMock)
+@patch('backend.utils.data_provider.fetch_price_series', new_callable=AsyncMock) # Corrected patch target
 @patch('backend.agents.base.get_redis_client', new_callable=AsyncMock) # Added for AgentBase
 @patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock) # Decorator dependency
 @patch('backend.agents.decorators.get_tracker') # Decorator dependency

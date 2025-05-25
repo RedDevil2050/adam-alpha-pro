@@ -6,13 +6,13 @@ import pandas as pd
 import numpy as np
 import datetime
 from unittest.mock import AsyncMock, patch, MagicMock
-from backend.agents.technical.macd_agent import run as macd_run, MACDAgent # Import run and the class
-
-agent_name = "macd_agent"
+from backend.agents.technical.macd_agent import MACDAgent, run as macd_run, agent_name # Import agent_name
+from backend.models import AgentSettings # Import AgentSettings for spec
 
 @pytest.mark.asyncio
+@patch('backend.models.AgentSettings') # Added patch for AgentSettings
 @patch('backend.agents.base.get_redis_client', new_callable=AsyncMock)      # For AgentBase.initialize
-@patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock) # For @cache_agent_result decorator
+@patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock) # For @standard_agent_execution decorator
 # Patch dependencies (innermost first)
 # Patch datetime used by the agent (for datetime.date.today(), timedelta, etc.)
 @patch('backend.agents.technical.macd_agent.datetime')
@@ -23,6 +23,7 @@ agent_name = "macd_agent"
 # Patch the pandas EWM calculation
 @patch('pandas.core.window.ewm.ExponentialMovingWindow.mean')
 async def test_macd_agent_buy_signal(
+    mock_agent_settings_class,       # New mock for AgentSettings class
     mock_ewm_mean,                   # Corresponds to @patch('pandas.core.window.ewm.ExponentialMovingWindow.mean')
     mock_fetch_ohlcv,                # Corresponds to @patch('backend.agents.technical.macd_agent.fetch_ohlcv_series')
     mock_get_market_context,         # Corresponds to @patch.object(MACDAgent, 'get_market_context')
@@ -30,6 +31,30 @@ async def test_macd_agent_buy_signal(
     mock_decorator_get_redis_client, # Corresponds to @patch('backend.agents.decorators.get_redis_client', ...)
     mock_base_get_redis_client       # Corresponds to @patch('backend.agents.base.get_redis_client', ...)
 ):
+    # --- Mock AgentSettings ---
+    # This function will be called when AgentSettings() is instantiated
+    # The run function likely takes agent_settings as an argument or creates it.
+    # We need to ensure that the AgentSettings instance used has caching enabled.
+    mock_settings_instance = MagicMock(spec=AgentSettings)
+    mock_settings_instance.agent_name = agent_name 
+    mock_settings_instance.agent_cache_enabled = True # Ensure caching is enabled
+    mock_settings_instance.agent_cache_ttl_seconds = 3600
+    mock_settings_instance.agent_cache_db_index = 0
+    # Add other default settings that MACDAgent might expect or that are part of AgentSettings
+    mock_settings_instance.macd_short_period = 12
+    mock_settings_instance.macd_long_period = 26
+    mock_settings_instance.macd_signal_period = 9
+    # If AgentSettings has a method to get a specific setting, mock that too if needed
+    def get_setting_side_effect(key, default=None):
+        return getattr(mock_settings_instance, key, default)
+    mock_settings_instance.get_setting = MagicMock(side_effect=get_setting_side_effect)
+    
+    # If the run function instantiates AgentSettings, mock_agent_settings_class.return_value should be set.
+    # If the run function expects an AgentSettings object to be passed in, then we will pass this mock_settings_instance.
+    # For now, let's assume macd_run might instantiate it or receive it.
+    # If macd_run instantiates AgentSettings itself:
+    mock_agent_settings_class.return_value = mock_settings_instance 
+
     # --- Mock Configuration ---
     symbol = "TEST_SYMBOL"
     market_regime = "BULL"
@@ -96,7 +121,11 @@ async def test_macd_agent_buy_signal(
 
     # --- Run Agent ---
     # The run function creates an instance, so patching the class method works.
-    result = await macd_run(symbol)
+    # We need to ensure it uses an AgentSettings instance with caching enabled.
+    # If macd_run accepts agent_settings as a parameter:
+    # result = await macd_run(symbol, agent_settings=mock_settings_instance)
+    # If it doesn't, and relies on creating one internally, the mock_agent_settings_class.return_value will be used.
+    result = await macd_run(symbol) # Assuming internal creation or default
 
     # --- Assertions ---
     assert result['symbol'] == symbol

@@ -12,7 +12,6 @@ import numpy as np # Import numpy if not already present
 @patch('backend.agents.decorators.get_tracker') # Outermost patch 
 @patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock)
 @patch('backend.agents.base.get_redis_client', new_callable=AsyncMock) # New patch for AgentBase's redis client
-@patch('backend.agents.technical.moving_average_agent.get_redis_client', new_callable=AsyncMock)
 @patch('backend.agents.technical.moving_average_agent.fetch_ohlcv_series', new_callable=AsyncMock)
 # Patch date and timedelta directly in the agent's module
 @patch('backend.agents.technical.moving_average_agent.date') 
@@ -21,7 +20,6 @@ async def test_moving_average_agent(
     mock_timedelta_agent, # Corresponds to moving_average_agent.timedelta
     mock_date_agent,      # Corresponds to moving_average_agent.date
     mock_fetch_ohlcv,    # Corresponds to moving_average_agent.fetch_ohlcv_series
-    mock_agent_direct_redis, # Corresponds to moving_average_agent.get_redis_client
     mock_base_redis_client,  # New: Corresponds to base.get_redis_client
     mock_decorator_redis,    # Corresponds to decorators.get_redis_client
     mock_decorator_tracker   # Corresponds to decorators.get_tracker
@@ -63,9 +61,6 @@ async def test_moving_average_agent(
     # Configure the decorator's get_redis_client mock to return the shared instance
     mock_decorator_redis.return_value = mock_redis_instance
     
-    # Configure the agent's direct get_redis_client mock to return the shared instance
-    mock_agent_direct_redis.return_value = mock_redis_instance
-
     # Configure the base agent's get_redis_client mock to return the shared instance
     mock_base_redis_client.return_value = mock_redis_instance
 
@@ -95,7 +90,6 @@ async def test_moving_average_agent(
 
     # Verify Redis operations were called
     mock_decorator_redis.assert_awaited_once()
-    mock_agent_direct_redis.assert_awaited_once() # This asserts a call from moving_average_agent module scope
     mock_base_redis_client.assert_awaited_once() # AgentBase.initialize calls this
     
     # mock_redis_instance.get is called by the decorator and potentially by the agent if not using the decorator's result
@@ -105,11 +99,11 @@ async def test_moving_average_agent(
     # The decorator calls .get() for caching.
     # The agent itself also calls get_redis_client() and then .get() on that client.
     # Thus, two calls to mock_redis_instance.get are expected.
-    assert mock_redis_instance.get.await_count == 2
+    assert mock_redis_instance.get.await_count == 2 # Expecting two: one from decorator, one from AgentBase logic
 
     # Set should be called if the result is valid (not NO_DATA/ERROR)
     if res.get('verdict') not in ['NO_DATA', 'ERROR', None]:
-        assert mock_redis_instance.set.await_count == 2 # Expecting set to be called twice
+        assert mock_redis_instance.set.await_count == 1 # Decorator handles caching the final result.
     else:
         mock_redis_instance.set.assert_not_awaited()
 
