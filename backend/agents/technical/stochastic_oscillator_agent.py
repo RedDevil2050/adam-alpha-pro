@@ -116,7 +116,7 @@ class StochasticOscillatorAgent(TechnicalAgent):
             # Handle cases where high_max might be equal to low_min (e.g., flat price action)
             denominator = df_copy['high_max'] - df_copy['low_min']
             df_copy.loc[:, 'fast_k'] = 100 * ((df_copy["close"] - df_copy['low_min']) / denominator.replace(0, np.nan))
-            df_copy['fast_k'].fillna(50, inplace=True) # If denominator was 0, K is often set to 50
+            df_copy.loc[:, 'fast_k'] = df_copy['fast_k'].fillna(50) # If denominator was 0, K is often set to 50
 
             # Slow %K (smoothed Fast %K using the 'smoothing' parameter)
             df_copy.loc[:, 'k_series'] = df_copy['fast_k'].rolling(window=smoothing, min_periods=smoothing).mean()

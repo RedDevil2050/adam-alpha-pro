@@ -169,15 +169,13 @@ async def test_stochastic_oscillator_scenarios(
 
     # mock_datetime_module_in_agent is the mock for '...agent.datetime'
     # This object represents whatever 'datetime' is in the agent's namespace.
-    # Configure it as if it's the datetime module.
-
-    # If agent uses datetime.date.today()
+    # Configure it as if it's the datetime module.    # If agent uses datetime.date.today()
     mock_datetime_module_in_agent.date.today.return_value = mock_target_date_object
 
-    # If agent uses datetime.datetime.now()
+    # If agent uses datetime.now() (the agent uses datetime.now().date())
     mock_now_instance = MagicMock(spec=real_datetime_datetime_class) # This is what datetime.now() would return
     mock_now_instance.date.return_value = mock_target_date_object # So that .now().date() works
-    mock_datetime_module_in_agent.datetime.now.return_value = mock_now_instance
+    mock_datetime_module_in_agent.now.return_value = mock_now_instance
 
     # Ensure timedelta is available on the mocked datetime module for agent use like `datetime.timedelta`
     mock_datetime_module_in_agent.timedelta = real_timedelta_class
