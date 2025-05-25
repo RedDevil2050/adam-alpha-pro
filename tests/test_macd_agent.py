@@ -7,7 +7,7 @@ import numpy as np
 import datetime
 from unittest.mock import AsyncMock, patch, MagicMock
 from backend.agents.technical.macd_agent import MACDAgent, run as macd_run, agent_name # Import agent_name
-from backend.models import AgentSettings # Import AgentSettings for spec
+from backend.config.settings import AgentSettings # Import AgentSettings for spec
 
 @pytest.mark.asyncio
 @patch('backend.models.AgentSettings') # Added patch for AgentSettings

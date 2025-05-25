@@ -1,4 +1,4 @@
-from backend.agents.base.category_bases import TechnicalAgent # Corrected import
+from backend.agents.base.category_bases import TechnicalAgentBase # Corrected import
 from backend.models.common_models import VerdictType # Import VerdictType for string constants
 from backend.config.settings import AgentSettings # For type hinting in run fn
 from backend.data.providers.base_provider import BaseDataProvider # For type hinting in run fn
@@ -15,7 +15,7 @@ from backend.agents.decorators import standard_agent_execution
 AGENT_NAME = "stochastic_oscillator_agent" # Use constant convention
 
 
-class StochasticOscillatorAgent(TechnicalAgent):
+class StochasticOscillatorAgent(TechnicalAgentBase):
     # __init__ is inherited from TechnicalAgent, which calls AgentBase.__init__
     # AgentBase.__init__(self, name, settings, logger, cache_client, data_provider, market_context_provider)
 
