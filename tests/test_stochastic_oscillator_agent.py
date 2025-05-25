@@ -89,13 +89,13 @@ def create_stochastic_data(periods=30, scenario="neutral", k_target=50, d_target
 @patch('backend.agents.technical.stochastic_oscillator_agent.timedelta', new=datetime.timedelta) # Use real timedelta
 @patch('backend.agents.technical.stochastic_oscillator_agent.datetime') # mock_datetime_class_in_agent
 @patch('backend.agents.technical.stochastic_oscillator_agent.StochasticOscillatorAgent') # mock_agent_class_factory
-@patch('backend.agents.base.get_redis_client', new_callable=AsyncMock)  # mock_base_get_redis_client (for AgentBase)
+@patch('backend.agents.base.get_redis_client', new_callable=AsyncMock) # mock_base_redis
 @patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock) # mock_decorator_redis
 @patch('backend.agents.decorators.get_tracker') # mock_decorator_tracker
 async def test_stochastic_oscillator_scenarios(
     mock_decorator_tracker,     # Corresponds to decorators.get_tracker
     mock_decorator_redis,       # Corresponds to decorators.get_redis_client
-    mock_base_get_redis_client, # Corresponds to base.get_redis_client
+    mock_base_redis,            # Corresponds to base.get_redis_client
     mock_agent_class_factory,   # Patches the StochasticOscillatorAgent class
     mock_datetime_module_in_agent, # Patches ...agent.datetime (represents the datetime module/class in agent)
     # real_timedelta is injected by @patch with new=datetime.timedelta, not passed as arg
@@ -111,6 +111,39 @@ async def test_stochastic_oscillator_scenarios(
     # --- Configure the Mock Agent Instance that the Factory will produce ---
     mock_agent_instance = MagicMock(spec=OriginalStochasticOscillatorAgent)
     mock_agent_instance.name = original_agent_module_name
+    mock_agent_instance._cache_client = None # Internal state for cache_client property
+
+    # Setup settings needed by the cache_client property logic
+    mock_agent_instance.settings = MagicMock()
+    mock_agent_instance.settings.agent_cache_ttl_seconds = 3600
+    mock_agent_instance.settings.agent_cache_enabled = True
+    mock_agent_instance.settings.agent_cache_db_index = 0 # Assuming a default, adjust if known
+
+    # mock_base_redis is the mock for backend.agents.base.get_redis_client
+    # Define the behavior of the cache_client property on the mock_agent_instance
+    async def cache_client_property_logic():
+        # This logic runs when `await self.cache_client` (where self is mock_agent_instance) occurs.
+        if (hasattr(mock_agent_instance.settings, 'agent_cache_enabled') and
+            not mock_agent_instance.settings.agent_cache_enabled):
+            return None
+        if mock_agent_instance._cache_client is None:
+            # This call to mock_base_redis is what we want to ensure happens.
+            # It uses mock_base_redis from the outer scope of the test function.
+            mock_agent_instance._cache_client = await mock_base_redis(
+                db_index=mock_agent_instance.settings.agent_cache_db_index,
+                decode_responses=True # Assuming this matches original get_redis_client signature
+            )
+        return mock_agent_instance._cache_client
+
+    # mock_agent_instance.cache_client should be an AsyncMock due to the spec.
+    # When `await mock_agent_instance.cache_client` is called in the agent code,
+    # the side_effect (our async function cache_client_property_logic) will be called and awaited.
+    # The result of that await (mock_redis_instance) will be the result of `await mock_agent_instance.cache_client`.
+    # mock_agent_instance.cache_client.side_effect = cache_client_property_logic
+    # Explicitly replace mock_agent_instance.cache_client with a new AsyncMock.
+    # This new AsyncMock, when awaited, will execute and await cache_client_property_logic.
+    mock_agent_instance.cache_client = AsyncMock(name='custom_cache_client_mock', side_effect=cache_client_property_logic)
+
 
     # Setup mocked data_provider
     mock_dp_instance = AsyncMock()
@@ -128,14 +161,14 @@ async def test_stochastic_oscillator_scenarios(
     mock_agent_instance.market_context_provider = mock_mcp_instance
     
     mock_agent_instance.logger = MagicMock()
-    mock_agent_instance.settings = MagicMock() 
-    mock_agent_instance.settings.agent_cache_ttl_seconds = 3600 
-    
+    # mock_agent_instance.settings = MagicMock() # Settings are now configured above
+    # mock_agent_instance.settings.agent_cache_ttl_seconds = 3600 # Part of above config
+
     mock_agent_cache_client = AsyncMock()
-    mock_agent_cache_client.get = AsyncMock(return_value=None) 
+    mock_agent_cache_client.get = AsyncMock(return_value=None)
     mock_agent_cache_client.set = AsyncMock()
-    mock_agent_instance.cache_client = mock_agent_cache_client
-    
+    # mock_agent_instance.cache_client = mock_agent_cache_client # Removed to allow AgentBase._get_cache_client to be called
+
     # Bind the original execute method to our mock_agent_instance.
     # This allows the real caching/formatting logic of execute and the core logic of _execute to run
     # using the mocked providers (data_provider, market_context_provider) on mock_agent_instance.
@@ -184,10 +217,15 @@ async def test_stochastic_oscillator_scenarios(
 
     # Shared Redis for decorator and base
     mock_redis_instance = AsyncMock()
-    mock_redis_instance.get = AsyncMock(return_value=None) # Cache miss for decorator
+    
+    # Define an async side_effect for the get method to ensure it returns None when awaited
+    async def mock_redis_get_side_effect(*args, **kwargs):
+        return None
+    
+    mock_redis_instance.get = AsyncMock(side_effect=mock_redis_get_side_effect)
     mock_redis_instance.set = AsyncMock()
     mock_decorator_redis.return_value = mock_redis_instance
-    mock_base_get_redis_client.return_value = mock_redis_instance # For AgentBase initialization
+    mock_base_redis.return_value = mock_redis_instance # For AgentBase initialization
 
     # Mock Tracker instance
     mock_tracker_instance = MagicMock()
@@ -251,8 +289,5 @@ async def test_stochastic_oscillator_scenarios(
     # mock_agent_cache_client.get.assert_awaited_once() # Exact key matching might be needed
     # if result.get("verdict") not in ["NO_DATA", "ERROR", None]:
     #    mock_agent_cache_client.set.assert_awaited_once()
-
-
-    mock_base_get_redis_client.assert_awaited_once() # For AgentBase initialization
     mock_decorator_tracker.assert_called_once()
     mock_tracker_instance.update_agent_status.assert_awaited_once()

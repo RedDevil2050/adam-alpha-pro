@@ -2,6 +2,7 @@ from backend.agents.technical.base import TechnicalAgent
 from backend.utils.data_provider import fetch_ohlcv_series
 # from backend.utils.cache_utils import get_redis_client # Not directly needed if using self.cache
 from backend.agents.technical.utils import tracker
+from backend.agents.decorators import standard_agent_execution  # Import decorator
 from datetime import datetime, timedelta # Added imports
 import pandas as pd
 from loguru import logger
@@ -282,6 +283,7 @@ class StochasticOscillatorAgent(TechnicalAgent):
         return f"{self.name}:{symbol}:{param_string}"
 
 
+@standard_agent_execution(agent_name=agent_name, category="technical")
 async def run(symbol: str, agent_outputs: dict = {}, k_period: int = 14, d_period: int = 3, smoothing: int = 3) -> dict:
     # In a real scenario, dependencies like data_provider, cache_client, settings
     # would be instantiated and passed to the agent's constructor.
