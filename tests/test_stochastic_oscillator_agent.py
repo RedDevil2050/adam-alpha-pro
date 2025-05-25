@@ -86,7 +86,9 @@ def create_stochastic_data(periods=30, scenario="neutral", k_target=50, d_target
     ]
 )
 # Patch dependencies in order of execution (innermost to outermost for args)
-@patch('backend.agents.base.datetime') # mock_datetime_in_agent (TARGET CHANGED HERE)
+@patch('backend.agents.technical.stochastic_oscillator_agent.timedelta', new=datetime.timedelta) # Use real timedelta
+@patch('backend.agents.technical.stochastic_oscillator_agent.date') # mock_date_class_in_agent
+@patch('backend.agents.technical.stochastic_oscillator_agent.datetime') # mock_datetime_class_in_agent
 @patch('backend.agents.technical.stochastic_oscillator_agent.StochasticOscillatorAgent') # mock_agent_class_factory
 @patch('backend.agents.base.get_redis_client', new_callable=AsyncMock)  # mock_base_get_redis_client (for AgentBase)
 @patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock) # mock_decorator_redis
@@ -96,7 +98,9 @@ async def test_stochastic_oscillator_scenarios(
     mock_decorator_redis,    # Corresponds to decorators.get_redis_client
     mock_base_get_redis_client, # Corresponds to base.get_redis_client
     mock_agent_class_factory, # Patches the StochasticOscillatorAgent class
-    mock_datetime_in_agent, # Corresponds to stochastic_oscillator_agent.datetime
+    mock_datetime_class_in_agent, # Patches ...agent.datetime (likely datetime.datetime class)
+    mock_date_class_in_agent,     # Patches ...agent.date (likely datetime.date class)
+    # real_timedelta is injected by @patch with new=datetime.timedelta, not passed as arg
     test_id, k_p, d_p, s_k, market_regime_mock, data_scenario, expected_verdict_val, min_k, max_k, min_d, max_d, min_confidence_val
 ):
     # --- Mock Configuration ---
@@ -157,25 +161,28 @@ async def test_stochastic_oscillator_scenarios(
     mock_agent_class_factory.return_value = mock_agent_instance
     
     # Mock datetime
-    # Assuming 'import datetime' is at the top of the test file
     # These are real datetime classes/objects from the test's context
-    real_date_class = datetime.date
-    real_datetime_class = datetime.datetime
-    real_timedelta_class = datetime.timedelta # Defined earlier
+    # real_date_class is already datetime.date from top of file import
+    # real_datetime_class is already datetime.datetime from top of file import
+    real_timedelta_class = datetime.timedelta # This is the real one
 
     # This is the specific date object we want the agent to perceive as "today" or "now().date()"
-    mock_target_date_object = real_date_class(2025, 5, 2)
+    mock_target_date_object = datetime.date(2025, 5, 2)
 
-    # If agent uses datetime.date.today()
-    mock_datetime_in_agent.date.today.return_value = mock_target_date_object
+    # If agent uses imported 'date.today()' (where 'date' is from 'from datetime import date')
+    mock_date_class_in_agent.today.return_value = mock_target_date_object
 
-    # If agent uses datetime.datetime.now().date()
-    mock_dt_now_returns = MagicMock(spec=real_datetime_class) # This mock will be returned by datetime.datetime.now()
-    mock_dt_now_returns.date.return_value = mock_target_date_object # Configure its .date() method to return our real target date
-    mock_datetime_in_agent.datetime.now.return_value = mock_dt_now_returns
+    # If agent uses imported 'datetime.now().date()' (where 'datetime' is from 'from datetime import datetime')
+    # mock_datetime_class_in_agent is the mock for the datetime.datetime class
+    # mock_datetime_class_in_agent.now is the mock for the now() method
+    mock_dt_now_returns = MagicMock(spec=datetime.datetime) # spec with real datetime.datetime
+    mock_datetime_class_in_agent.now.return_value = mock_dt_now_returns
+    
+    # mock_dt_now_returns is what datetime.now() returns (an instance mock)
+    # Configure its date() method to return the target date object
+    mock_dt_now_returns.date.return_value = mock_target_date_object
 
-    # Ensure agent uses the real timedelta for calculations
-    mock_datetime_in_agent.timedelta = real_timedelta_class
+    # timedelta is already patched to use the real datetime.timedelta via `new=datetime.timedelta`
 
     # Shared Redis for decorator and base
     mock_redis_instance = AsyncMock()
