@@ -314,16 +314,16 @@ class Settings(BaseSettings):
     )
 
 # Global cached settings instance
-_cached_settings: Optional[Settings] = None
+# _cached_settings: Optional[Settings] = None # Removed
+settings: Settings = Settings() # Instantiate and type hint settings
 
 def get_settings() -> Settings:
     """
-    Retrieves the cached global settings.
-    Initializes settings on first call.
+    Retrieves the global settings instance.
     """
-    global _cached_settings
-    if _cached_settings is None:
-        _cached_settings = Settings()
-        # Optional: Log for debugging, ensure logger is configured
-        # logger.info(f"Settings initialized. Effective is_testing: {_cached_settings.is_testing}, DATABASE_URL: '{_cached_settings.DATABASE_URL}'")
-    return _cached_settings
+    # global _cached_settings # Removed
+    # if _cached_settings is None: # Removed
+    #     _cached_settings = Settings() # Removed
+    #     # Optional: Log for debugging, ensure logger is configured
+    #     # logger.info(f"Settings initialized. Effective is_testing: {_cached_settings.is_testing}, DATABASE_URL: '{_cached_settings.DATABASE_URL}'")
+    return settings # Return the globally instantiated settings object
