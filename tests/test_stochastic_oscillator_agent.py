@@ -5,8 +5,10 @@ import pytest
 
 # Assuming these are the correct paths for your project structure
 from backend.agents.technical.stochastic_oscillator_agent import StochasticOscillatorAgent as OriginalStochasticOscillatorAgent, run as actual_stoch_run_decorated_function # Changed stoch_run to run
-from backend.models import TimeSeriesData, DataPoint, Verdict, Context, AgentSettings # Corrected import path
-from backend.models import VerdictType, MarketRegime 
+from backend.models.common_models import TimeSeriesData, DataPoint, Verdict # Corrected import path
+from backend.market.context import MarketContext as Context # Corrected import path for Context
+from backend.config.settings import AgentSettings # Moved AgentSettings import
+from backend.models.common_models import VerdictType, MarketRegime # Corrected import path for MarketRegime
 from backend.data.providers.base_provider import BaseDataProvider as DataProviderBase # Corrected import for DataProviderBase
 
 original_agent_module_name = OriginalStochasticOscillatorAgent.name

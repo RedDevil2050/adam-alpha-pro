@@ -53,9 +53,9 @@ class Verdict:
 
 # MarketRegime is now string-based as observed. If an Enum is still needed for other purposes,
 # it could be defined here, but the stochastic agent will use string values.
-# class MarketRegime(Enum):
-#     BULLISH = "BULL" # Or "BULLISH"
-#     BEARISH = "BEAR" # Or "BEARISH"
-#     NEUTRAL = "NEUTRAL"
-#     VOLATILE = "VOLATILE"
-#     UNKNOWN = "UNKNOWN"
+class MarketRegime(Enum):
+    BULLISH = "BULL" # Or "BULLISH"
+    BEARISH = "BEAR" # Or "BEARISH"
+    NEUTRAL = "NEUTRAL"
+    VOLATILE = "VOLATILE"
+    UNKNOWN = "UNKNOWN"
