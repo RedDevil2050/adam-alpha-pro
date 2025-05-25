@@ -87,19 +87,17 @@ def create_stochastic_data(periods=30, scenario="neutral", k_target=50, d_target
 )
 # Patch dependencies in order of execution (innermost to outermost for args)
 @patch('backend.agents.technical.stochastic_oscillator_agent.timedelta', new=datetime.timedelta) # Use real timedelta
-@patch('backend.agents.technical.stochastic_oscillator_agent.date') # mock_date_class_in_agent
 @patch('backend.agents.technical.stochastic_oscillator_agent.datetime') # mock_datetime_class_in_agent
 @patch('backend.agents.technical.stochastic_oscillator_agent.StochasticOscillatorAgent') # mock_agent_class_factory
 @patch('backend.agents.base.get_redis_client', new_callable=AsyncMock)  # mock_base_get_redis_client (for AgentBase)
 @patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock) # mock_decorator_redis
 @patch('backend.agents.decorators.get_tracker') # mock_decorator_tracker
 async def test_stochastic_oscillator_scenarios(
-    mock_decorator_tracker,   # Corresponds to decorators.get_tracker
-    mock_decorator_redis,    # Corresponds to decorators.get_redis_client
+    mock_decorator_tracker,     # Corresponds to decorators.get_tracker
+    mock_decorator_redis,       # Corresponds to decorators.get_redis_client
     mock_base_get_redis_client, # Corresponds to base.get_redis_client
-    mock_agent_class_factory, # Patches the StochasticOscillatorAgent class
-    mock_datetime_class_in_agent, # Patches ...agent.datetime (likely datetime.datetime class)
-    mock_date_class_in_agent,     # Patches ...agent.date (likely datetime.date class)
+    mock_agent_class_factory,   # Patches the StochasticOscillatorAgent class
+    mock_datetime_module_in_agent, # Patches ...agent.datetime (represents the datetime module/class in agent)
     # real_timedelta is injected by @patch with new=datetime.timedelta, not passed as arg
     test_id, k_p, d_p, s_k, market_regime_mock, data_scenario, expected_verdict_val, min_k, max_k, min_d, max_d, min_confidence_val
 ):
@@ -162,25 +160,27 @@ async def test_stochastic_oscillator_scenarios(
     
     # Mock datetime
     # These are real datetime classes/objects from the test's context
-    # real_date_class is already datetime.date from top of file import
-    # real_datetime_class is already datetime.datetime from top of file import
+    real_datetime_date_class = datetime.date
+    real_datetime_datetime_class = datetime.datetime
     real_timedelta_class = datetime.timedelta # This is the real one
 
     # This is the specific date object we want the agent to perceive as "today" or "now().date()"
-    mock_target_date_object = datetime.date(2025, 5, 2)
+    mock_target_date_object = real_datetime_date_class(2025, 5, 2)
 
-    # If agent uses imported 'date.today()' (where 'date' is from 'from datetime import date')
-    mock_date_class_in_agent.today.return_value = mock_target_date_object
+    # mock_datetime_module_in_agent is the mock for '...agent.datetime'
+    # This object represents whatever 'datetime' is in the agent's namespace.
+    # Configure it as if it's the datetime module.
 
-    # If agent uses imported 'datetime.now().date()' (where 'datetime' is from 'from datetime import datetime')
-    # mock_datetime_class_in_agent is the mock for the datetime.datetime class
-    # mock_datetime_class_in_agent.now is the mock for the now() method
-    mock_dt_now_returns = MagicMock(spec=datetime.datetime) # spec with real datetime.datetime
-    mock_datetime_class_in_agent.now.return_value = mock_dt_now_returns
-    
-    # mock_dt_now_returns is what datetime.now() returns (an instance mock)
-    # Configure its date() method to return the target date object
-    mock_dt_now_returns.date.return_value = mock_target_date_object
+    # If agent uses datetime.date.today()
+    mock_datetime_module_in_agent.date.today.return_value = mock_target_date_object
+
+    # If agent uses datetime.datetime.now()
+    mock_now_instance = MagicMock(spec=real_datetime_datetime_class) # This is what datetime.now() would return
+    mock_now_instance.date.return_value = mock_target_date_object # So that .now().date() works
+    mock_datetime_module_in_agent.datetime.now.return_value = mock_now_instance
+
+    # Ensure timedelta is available on the mocked datetime module for agent use like `datetime.timedelta`
+    mock_datetime_module_in_agent.timedelta = real_timedelta_class
 
     # timedelta is already patched to use the real datetime.timedelta via `new=datetime.timedelta`
 
