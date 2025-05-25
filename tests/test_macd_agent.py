@@ -12,7 +12,7 @@ from backend.config.settings import AgentSettings # Import AgentSettings for spe
 @pytest.mark.asyncio
 @patch('backend.models.AgentSettings') # Added patch for AgentSettings
 @patch('backend.agents.base.get_redis_client', new_callable=AsyncMock)      # For AgentBase.initialize
-@patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock) # For @standard_agent_execution decorator
+@patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock) # For @standard_agent_execution decorator (if any, seems not used by execute)
 # Patch dependencies (innermost first)
 # Patch datetime used by the agent (for datetime.date.today(), timedelta, etc.)
 @patch('backend.agents.technical.macd_agent.datetime')
@@ -154,11 +154,18 @@ async def test_macd_agent_buy_signal(
     # iloc[-1] is called *after* subtraction in the agent code, so we don't verify it on the mocks directly.
     # Instead, we rely on the assertions on the final 'result' dictionary.
     mock_get_market_context.assert_awaited_once_with(symbol)
-    mock_decorator_get_redis_client.assert_awaited_once() # Verify decorator Redis mock
-    mock_base_get_redis_client.assert_awaited_once()      # Verify base Redis mock
-    assert mock_redis_instance.get.await_count >= 1 # Decorator might call get, base will call get
+    # mock_decorator_get_redis_client.assert_awaited_once() # This mock is likely not called as AgentBase handles its own cache
+    mock_base_get_redis_client.assert_awaited_once()      # Verify base Redis mock (called by AgentBase.initialize)
+    
+    # AgentBase.execute calls self.cache.get() once after self.cache is initialized.
+    # self.cache is set by mock_base_get_redis_client.return_value = mock_redis_instance
+    assert mock_redis_instance.get.await_count == 1 
+    
     if result.get('verdict') not in ['NO_DATA', 'ERROR', None]:
-        assert mock_redis_instance.set.await_count >= 1 # Decorator might call set, base will call set
+        # AgentBase.execute calls self.cache.set() once if result is valid
+        assert mock_redis_instance.set.await_count == 1 
+    else:
+        mock_redis_instance.set.assert_not_awaited()
 
 @pytest.mark.asyncio
 @patch('backend.agents.base.get_redis_client', new_callable=AsyncMock)      # For AgentBase.initialize

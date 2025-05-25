@@ -263,6 +263,13 @@ class ValuationAgentSettings(BaseSettings):
 class AgentSettings(BaseSettings):
     """Container for all agent-specific settings"""
 
+    # Added fields to support common agent configurations passed during initialization
+    agent_name: Optional[str] = Field(default=None, description="Name of the agent")
+    agent_cache_enabled: bool = Field(default=True, description="Whether caching is enabled for the agent")
+    agent_cache_ttl_seconds: int = Field(default=3600, description="Cache TTL in seconds for the agent")
+    agent_cache_db_index: int = Field(default=0, description="Redis DB index for agent cache")
+    agent_data_lookback_period: Optional[int] = Field(default=None, description="Default data lookback period for the agent")
+
     beta: BetaAgentSettings = BetaAgentSettings()
     # Add other agent settings here as needed
     pe_ratio: PeRatioAgentSettings = PeRatioAgentSettings()
@@ -282,167 +289,41 @@ class AgentSettings(BaseSettings):
     market_regime: dict = Field(default_factory=lambda: {"thresholds": {"bull": 0.7, "bear": 0.3}}) # Modified to use Field and default_factory
     sector_pe_averages: Dict[str, float] = Field(default_factory=dict, json_schema_extra={"env":"SECTOR_PE_AVERAGES"}) # Added
 
+    # If AgentSettings needs its own model_config (e.g., for env_prefix for the new fields),
+    # it can be added here. For example:
+    # model_config = SettingsConfigDict(env_prefix='ZION_AGENT_DEFAULT_')
+    # For now, assuming BaseSettings provides suitable defaults or these are set programmatically
 
+
+# --- Main Application Settings ---
 class Settings(BaseSettings):
-    """Main settings class"""
-
-    ENV: str = Field(default="development", json_schema_extra={"env":"ENV"})
-    DEBUG: bool = Field(default=True, json_schema_extra={"env":"DEBUG"})
-    HOST: str = Field(default="0.0.0.0", json_schema_extra={"env":"HOST"})
-    PORT: int = Field(default=8000, json_schema_extra={"env":"PORT"})
-    # Update ALLOWED_ORIGINS to include the specific URL of the lovable frontend
-    ALLOWED_ORIGINS: List[str] = Field(default=["http://lovable-frontend-url.com"], json_schema_extra={"env":"ALLOWED_ORIGINS"})
-
-    # Nested settings
-    api_keys: APIKeys = APIKeys()
-    data_provider: DataProviderSettings = DataProviderSettings()
-    logging: LoggingSettings = LoggingSettings()
-    security: SecuritySettings = SecuritySettings()
-    database: DatabaseSettings = DatabaseSettings()
-    agent_settings: AgentSettings = AgentSettings()  # Ensure this line exists
-
-    agent_cache_ttl: int = Field(default=3600, description="Default cache TTL for agents in seconds")
-    news_api_key: str = Field(default="test-news-api-key", json_schema_extra={"env":"NEWS_API_KEY"})
-
-    @property
-    def is_production(self) -> bool:
-        return self.ENV.lower() == "production"
-
-    @property
-    def is_development(self) -> bool:
-        return self.ENV.lower() == "development"
-
-    @property
-    def is_testing(self) -> bool:
-        return self.ENV.lower() == "testing"
-
-    @property
-    def DATABASE_URL(self) -> str:
-        """Backward compatibility property for database URL"""
-        return self.database.URL
+    """Global application settings"""
+    is_testing: bool = Field(default=False, description="Set to true when running tests. Controls DB setup, etc.", json_schema_extra={"env": "IS_TESTING"})
+    DATABASE_URL: str = Field(default="sqlite+aiosqlite:///./default_app.db", description="Default database URL, should be async for production.", json_schema_extra={"env": "DATABASE_URL"})
     
-    @property
-    def REDIS_HOST(self) -> str:
-        """Extract Redis host from REDIS_URL for backward compatibility"""
-        redis_url = getattr(self, 'REDIS_URL', 'redis://localhost:6379/0')
-        # Simple parsing - this could be improved for complex URLs
-        if '://' in redis_url:
-            parts = redis_url.split('://', 1)[1].split(':')
-            return parts[0]
-        return 'localhost'
-        
-    @property
-    def REDIS_PORT(self) -> int:
-        """Extract Redis port from REDIS_URL for backward compatibility"""
-        redis_url = getattr(self, 'REDIS_URL', 'redis://localhost:6379/0')
-        # Simple parsing - this could be improved for complex URLs
-        if '://' in redis_url:
-            parts = redis_url.split('://', 1)[1].split(':')
-            if len(parts) > 1:
-                port_part = parts[1].split('/')[0]
-                try:
-                    return int(port_part)
-                except ValueError:
-                    pass
-        return 6379
-
-    @property
-    def twitter_bearer_token(self) -> Optional[str]:
-        """Get Twitter Bearer Token from APIKeys settings."""
-        if self.api_keys:
-            return self.api_keys.TWITTER_BEARER_TOKEN
-        return None
-
-    @property
-    def sector_pe_averages(self) -> Dict[str, float]:
-        """Get Sector PE Averages from AgentSettings."""
-        if self.agent_settings:
-            return self.agent_settings.sector_pe_averages
-        return {}
-
-    @property
-    def REDIS_URL(self) -> str:
-        """Get Redis URL from various possible sources"""
-        return "redis://redis:6379"
-
-    def get_api_key(self, provider: str) -> Optional[str]:
-        provider = provider.upper()
-        if hasattr(self.api_keys, f"{provider}_KEY"):
-            return getattr(self.api_keys, f"{provider}_KEY")
-        return None
-
-    # Ensure JWT_SECRET_KEY is always initialized in the Settings class
-    @property
-    def JWT_SECRET_KEY(self) -> str:
-        return self.security.JWT_SECRET_KEY or "default-jwt-secret-key"
-
-    @property
-    def JWT_ALGORITHM(self) -> str:
-        return self.security.ALGORITHM or "HS256"
+    # You can compose other specific settings classes here if needed, for example:
+    api_keys: APIKeys = APIKeys()
+    data_provider: DataProviderSettings = DataProviderSettings() # Changed data_provider_settings to data_provider
+    logging: LoggingSettings = LoggingSettings() # Changed logging_settings to logging
+    security: SecuritySettings = SecuritySettings() # Changed security_settings to security
+    agent_settings: AgentSettings = AgentSettings() # Changed agent_specific_settings to agent_settings
 
     model_config = SettingsConfigDict(
-        env_file=".env", 
-        case_sensitive=True,
-        extra="allow"  # Allow extra fields without validation errors
+        env_file=".env",    # Load .env file
+        extra="ignore"      # Ignore extra fields that might come from environment
     )
 
-
-# Global settings instance
-_settings = None
-
-# Create a singleton instance for backward compatibility
-settings = None  # Initialize to None, will be set by get_settings()
-
+# Global cached settings instance
+_cached_settings: Optional[Settings] = None
 
 def get_settings() -> Settings:
-    """Get settings singleton instance"""
-    global _settings, settings  # Also update the settings export
-    if _settings is None:
-        try:
-            if os.getenv("ENV") == "testing" or os.getenv("PYTEST_CURRENT_TEST"):
-                _settings = Settings(
-                    ENV="testing",
-                    DEBUG=True,
-                    # Ensure SecuritySettings includes the necessary fields for testing
-                    security=SecuritySettings(
-                        JWT_SECRET_KEY="secure-test-jwt-secret-for-testing-environment-only",
-                        ACCESS_TOKEN_EXPIRE_MINUTES=60 # Add the missing field here for test env
-                    ),
-                    api_keys=APIKeys(), # Ensure APIKeys is initialized
-                    database=DatabaseSettings(
-                        URL="sqlite:///./test.db"
-                    ),
-                    # Initialize other nested settings if needed for tests
-                    data_provider=DataProviderSettings(),
-                    logging=LoggingSettings(),
-                    agent_settings=AgentSettings(),
-                    ALLOWED_ORIGINS=["*"] # Ensure it's set for testing too
-                )
-                logger.debug("Test settings initialized successfully")
-            else:
-                _settings = Settings()
-                logger.debug("Settings initialized successfully")
-
-            settings = _settings
-        except Exception as e:
-            logger.error(f"Error initializing settings: {str(e)}")
-            # Fallback settings should also ideally include all necessary fields
-            _settings = Settings(
-                ENV="development",
-                DEBUG=True,
-                api_keys=APIKeys(),
-                security=SecuritySettings(
-                    JWT_SECRET_KEY="temporary-jwt-secret-for-development-only",
-                    ACCESS_TOKEN_EXPIRE_MINUTES=60 # Add here too for safety
-                ),
-                database=DatabaseSettings(
-                    URL="sqlite:///./default.db"
-                ),
-                data_provider=DataProviderSettings(),
-                logging=LoggingSettings(),
-                agent_settings=AgentSettings(),
-                ALLOWED_ORIGINS=["*"] # And here for fallback
-            )
-            settings = _settings
-            logger.warning("Using default settings due to initialization error")
-    return _settings
+    """
+    Retrieves the cached global settings.
+    Initializes settings on first call.
+    """
+    global _cached_settings
+    if _cached_settings is None:
+        _cached_settings = Settings()
+        # Optional: Log for debugging, ensure logger is configured
+        # logger.info(f"Settings initialized. Effective is_testing: {_cached_settings.is_testing}, DATABASE_URL: '{_cached_settings.DATABASE_URL}'")
+    return _cached_settings

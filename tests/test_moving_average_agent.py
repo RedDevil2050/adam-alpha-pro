@@ -11,7 +11,7 @@ import numpy as np # Import numpy if not already present
 @pytest.mark.asyncio
 @patch('backend.agents.decorators.get_tracker') # Outermost patch 
 @patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock)
-@patch('backend.agents.base.get_redis_client', new_callable=AsyncMock) # New patch for AgentBase's redis client
+@patch('backend.agents.technical.moving_average_agent.get_redis_client', new_callable=AsyncMock) # Corrected patch target for AgentBase's redis client
 @patch('backend.agents.technical.moving_average_agent.fetch_ohlcv_series', new_callable=AsyncMock)
 # Patch date and timedelta directly in the agent's module
 @patch('backend.agents.technical.moving_average_agent.date') 
@@ -20,7 +20,7 @@ async def test_moving_average_agent(
     mock_timedelta_agent, # Corresponds to moving_average_agent.timedelta
     mock_date_agent,      # Corresponds to moving_average_agent.date
     mock_fetch_ohlcv,    # Corresponds to moving_average_agent.fetch_ohlcv_series
-    mock_base_redis_client,  # New: Corresponds to base.get_redis_client
+    mock_agent_redis_client,  # Renamed: Corresponds to moving_average_agent.get_redis_client
     mock_decorator_redis,    # Corresponds to decorators.get_redis_client
     mock_decorator_tracker   # Corresponds to decorators.get_tracker
 ):
@@ -62,7 +62,7 @@ async def test_moving_average_agent(
     mock_decorator_redis.return_value = mock_redis_instance
     
     # Configure the base agent's get_redis_client mock to return the shared instance
-    mock_base_redis_client.return_value = mock_redis_instance
+    mock_agent_redis_client.return_value = mock_redis_instance
 
     # Mock tracker instance returned by the decorator's get_tracker
     mock_tracker_instance = MagicMock() # Use MagicMock for synchronous get_tracker
@@ -90,7 +90,7 @@ async def test_moving_average_agent(
 
     # Verify Redis operations were called
     mock_decorator_redis.assert_awaited_once()
-    mock_base_redis_client.assert_awaited_once() # AgentBase.initialize calls this
+    mock_agent_redis_client.assert_awaited_once() # AgentBase.initialize calls this
     
     # mock_redis_instance.get is called by the decorator and potentially by the agent if not using the decorator's result
     # If the agent uses its own redis_client instance to call .get(), and the decorator also calls .get(),
