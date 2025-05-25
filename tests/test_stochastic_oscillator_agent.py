@@ -4,14 +4,14 @@ from unittest.mock import AsyncMock, MagicMock, patch, ANY # Added ANY
 import pytest
 
 # Assuming these are the correct paths for your project structure
-from backend.agents.technical.stochastic_oscillator_agent import StochasticOscillatorAgent as OriginalStochasticOscillatorAgent, run as actual_stoch_run_decorated_function # Changed stoch_run to run
+from backend.agents.technical.stochastic_oscillator_agent import StochasticOscillatorAgent as OriginalStochasticOscillatorAgent, run as actual_stoch_run_decorated_function, AGENT_NAME # Changed stoch_run to run
 from backend.models.common_models import TimeSeriesData, DataPoint, Verdict # Corrected import path
 from backend.market.context import MarketContext as Context # Corrected import path for Context
 from backend.config.settings import AgentSettings # Moved AgentSettings import
 from backend.models.common_models import VerdictType, MarketRegime # Corrected import path for MarketRegime
 from backend.data.providers.base_provider import BaseDataProvider as DataProviderBase # Corrected import for DataProviderBase
 
-original_agent_module_name = OriginalStochasticOscillatorAgent.name
+original_agent_module_name = AGENT_NAME
 
 # Dummy helper function for creating test data - replace with your actual data generation if needed
 async def create_stochastic_data(symbol, num_points, scenario, k_p, s_k, d_p):
