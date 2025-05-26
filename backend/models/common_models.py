@@ -38,11 +38,11 @@ class TimeSeriesData:
 
 @dataclass
 class Verdict:
-    agent_name: str
-    verdict_type: VerdictType
+    verdict: VerdictType # Ensures field is 'verdict'
     confidence: float
+    agent_name: Optional[str] = None
     details: Dict[str, Any] = field(default_factory=dict)
-    value: Optional[Any] = None # For specific value like K-D difference, or raw score
+    value: Optional[Any] = None
     # score: Optional[float] = None # Raw score before calibration, if needed
 
 # Placeholder for AgentContext if it's truly a distinct model.
@@ -54,8 +54,8 @@ class Verdict:
 # MarketRegime is now string-based as observed. If an Enum is still needed for other purposes,
 # it could be defined here, but the stochastic agent will use string values.
 class MarketRegime(Enum):
-    BULLISH = "BULL" # Or "BULLISH"
-    BEARISH = "BEAR" # Or "BEARISH"
+    BULL = "BULLISH" # Ensures key is 'BULL'
+    BEAR = "BEARISH" # Ensures key is 'BEAR'
     NEUTRAL = "NEUTRAL"
     VOLATILE = "VOLATILE"
     UNKNOWN = "UNKNOWN"
