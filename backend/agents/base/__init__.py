@@ -11,7 +11,7 @@ class AgentBase(ABC):
     def __init__(self):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.cache = None
-        self.ttl = settings.agent_cache_ttl
+        self.ttl = settings.agent_settings.agent_cache_ttl_seconds
         self.context = {}
         self.metrics = {"calls": 0, "errors": 0, "avg_latency": 0}
         

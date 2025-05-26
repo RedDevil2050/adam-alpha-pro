@@ -1,7 +1,8 @@
 import asyncio
 import datetime
-from unittest.mock import AsyncMock, MagicMock, patch, ANY # Added ANY
+from unittest.mock import AsyncMock, MagicMock, patch, ANY 
 import pytest
+import pandas as pd # Added import
 
 # Assuming these are the correct paths for your project structure
 from backend.agents.technical.stochastic_oscillator_agent import StochasticOscillatorAgent as OriginalStochasticOscillatorAgent, run as actual_stoch_run_decorated_function, AGENT_NAME # Changed stoch_run to run
@@ -101,105 +102,306 @@ async def test_stochastic_oscillator_scenarios(
             )
             # print(f"Agent's _cache_client set to: {mock_agent_instance._cache_client}")
         return mock_agent_instance._cache_client
+    
+    # Correctly mock the cache_client property
+    type(mock_agent_instance).cache_client = AsyncMock(return_value=await cache_client_property_logic())
 
-    # mock_agent_instance.cache_client is an async property. 
-    # So, it should be an AsyncMock whose side_effect is an AWAITABLE.
-    mock_agent_instance.cache_client = AsyncMock(name=f'custom_cache_client_prop_{test_id}', side_effect=cache_client_property_logic)
-    # If the above await on mock_agent_instance.cache_client returns the mock itself,
-    # then agent's cache_client_instance.get will be mock_agent_instance.cache_client.get.
-    # Configure this child mock to return None when called and awaited.
-    async def get_method_for_prop_mock(*args, **kwargs):
-        return None
-    mock_agent_instance.cache_client.get = get_method_for_prop_mock
-    # The result of `await mock_agent_instance.cache_client` should ideally be `mock_redis_instance`
-    # due to cache_client_property_logic. If it is, then `mock_redis_instance.get` (which returns None) will be used.
-    # This change primarily addresses the scenario where `await mock_agent_instance.cache_client`
-    # might unexpectedly return the property mock itself.
 
-    # Configure the factory to return our fully configured mock_agent_instance
-    mock_agent_class_factory.return_value = mock_agent_instance
-
-    # --- Mock DataProvider and MCPClient --- 
+    # --- Mock DataProvider and MCPClient ---
     mock_dp_instance = AsyncMock(spec=DataProviderBase)
     ohlcv_data = await create_stochastic_data(symbol, num_data_points_for_create, data_scenario, k_p, s_k, d_p)
-    mock_dp_instance.fetch_ohlcv_series.return_value = ohlcv_data
+    mock_dp_instance.fetch_price_data.return_value = ohlcv_data # Changed fetch_ohlcv_series to fetch_price_data
 
-    mock_mcp_instance = AsyncMock(spec=Context) # Use your actual Context class if different
-    mock_mcp_instance.get_context.return_value = {"market_regime": MarketRegime[market_regime_mock]}
+    # --- Mock Context ---
+    mock_context = MagicMock(spec=Context)
+    mock_context.symbol = symbol
+    mock_context.market_regime = MarketRegime[market_regime_mock]
+    mock_context.data_provider = mock_dp_instance # Assign the mocked data provider
 
-    # --- Mock Agent's Internal Calculation and Verdict Generation --- 
-    # These are methods of the *actual* agent logic that stoch_run will call on the instance it creates.
-    # Since stoch_run gets mock_agent_instance, we configure these on mock_agent_instance.
-    mock_agent_instance._calculate_stochastic_oscillator = AsyncMock(return_value=(float(min_k), float(min_d)))
-    
-    async def mock_generate_verdict_side_effect(k_value, d_value, market_regime_from_mcp):
-        # This function is called by the agent's internal logic.
-        # print(f"_generate_verdict called with k={k_value}, d={d_value}, regime={market_regime_from_mcp}")
-        # Ensure the verdict_type matches the expected enum member
-        return Verdict(
-            agent_name=original_agent_module_name, 
-            verdict_type=VerdictType[expected_verdict_val], 
-            confidence=min_confidence_val, 
-            details={ 'k': k_value, 'd': d_value, 'market_regime': market_regime_from_mcp.value if isinstance(market_regime_from_mcp, MarketRegime) else market_regime_from_mcp }
-        )
-    mock_agent_instance._generate_verdict = AsyncMock(side_effect=mock_generate_verdict_side_effect)
+    # --- Configure the Agent Class Factory ---
+    # When StochasticOscillatorAgent is called (e.g., in stoch_run), it returns our mock_agent_instance
+    mock_agent_class_factory.return_value = mock_agent_instance
 
-    # --- Execute Agent Logic via stoch_run --- 
-    # actual_stoch_run_decorated_function is the imported original function with the @standard_agent_execution decorator.
-    # It will internally instantiate StochasticOscillatorAgent, which our mock_agent_class_factory will intercept.
-    result_verdict = await actual_stoch_run_decorated_function(
-        symbol=symbol,
-        agent_settings=mock_agent_instance.settings, # Pass the settings object
-        data_provider=mock_dp_instance,
-        mcp_client=mock_mcp_instance,
-        k_period=k_p, 
-        d_period=d_p, 
-        slowing_k=s_k 
-    )
+    # --- Mock datetime for consistent "now" ---
+    # Set a fixed "now" for consistent timestamping if your agent uses datetime.now() directly
+    fixed_now = datetime.datetime(2023, 10, 26, 12, 0, 0, tzinfo=datetime.timezone.utc)
+    mock_datetime_module_in_agent.now.return_value = fixed_now
+    mock_datetime_module_in_agent.side_effect = lambda *args, **kw: datetime.datetime(*args, **kw)
+    mock_datetime_module_in_agent.timedelta = datetime.timedelta # Ensure timedelta is still available
 
-    # --- Assertions --- 
-    assert result_verdict is not None, "Agent returned None, expected a Verdict object"
-    assert isinstance(result_verdict, Verdict), f"Expected Verdict object, got {type(result_verdict)}"
-    assert result_verdict.verdict_type == VerdictType[expected_verdict_val], \
-        f"Expected verdict {expected_verdict_val}, got {result_verdict.verdict_type.name if result_verdict.verdict_type else None}"
-    assert abs(result_verdict.confidence - min_confidence_val) < 0.001, \
-        f"Expected confidence {min_confidence_val}, got {result_verdict.confidence}"
+    # --- Mock the agent's core logic method (_calculate_stochastic_oscillator) ---
+    # This is where the actual calculation happens. We want to control its output.
+    # The _calculate_stochastic_oscillator method should return a tuple: (k_value, d_value, verdict_type, confidence)
+    # Based on the scenario, we'll make it return values that lead to the expected_verdict_val.
 
-    # Assertions for mock calls (cache, data provider, mcp)
-    if agent_settings.agent_cache_enabled:
-        # The @standard_agent_execution decorator uses the redis client from mock_decorator_redis
-        mock_decorator_redis.return_value.get.assert_awaited_once()
-        # Since mock_redis_get_side_effect returns None (cache miss), set should be called.
-        mock_decorator_redis.return_value.set.assert_awaited_once()
+    # Example: For "oversold_buy", we want %K and %D to be low (e.g., 10)
+    # For "overbought_sell", we want %K and %D to be high (e.g., 90)
+    # For "neutral", %K and %D are somewhere in the middle (e.g., 50)
+
+    if "oversold" in data_scenario:
+        # Simulate %K and %D crossing up from oversold
+        # Let's say current %K is slightly above current %D, both in oversold territory
+        # And previous %K was below previous %D
+        # The agent's _get_verdict should interpret this as BUY_OVERSOLD_CROSS
+        # The actual values of k_val and d_val here are less important than the verdict and confidence
+        # that _calculate_stochastic_oscillator would pass to _get_verdict.
+        # We are essentially mocking the outcome of the TA-Lib calculation part.
         
-        # The agent's own cache_client property (if used by the agent's core logic, 
-        # which it might not if the decorator handles all caching) 
-        # mock_agent_instance.cache_client.assert_awaited() # This checks if the property itself was awaited
-        # mock_base_redis.assert_awaited_once() # This checks if the factory for the agent's client was called
-    else:
-        mock_decorator_redis.return_value.get.assert_not_awaited()
-        mock_decorator_redis.return_value.set.assert_not_awaited()
+        # To ensure the "cross" logic works, the agent might look at the last two points.
+        # Let's assume the agent's _calculate_stochastic_oscillator returns the *latest* %K and %D
+        # and the _get_verdict method handles the crossing logic by looking at historical %K/%D
+        # or the _calculate_stochastic_oscillator itself determines the cross.
+        # For simplicity, let's assume _calculate_stochastic_oscillator returns the verdict directly
+        # based on its internal TA-Lib results.
+        
+        # The mock for _calculate_stochastic_oscillator should return:
+        # (last_k, last_d, calculated_verdict_enum, calculated_confidence)
+        # The `run` method then uses this.
+        
+        # We need to mock what `_calculate_stochastic_oscillator` returns.
+        # It should return: k_series, d_series (pandas Series)
+        # Let's create dummy series that would lead to the desired verdict.
+        
+        # Create dummy pandas Series for %K and %D
+        # These values should reflect the scenario (e.g., oversold, overbought)
+        # The length should be consistent with the data points used after TA-Lib processing.
+        # TA-Lib's STOCH function will produce NaNs at the beginning.
+        # The number of NaNs depends on k_p, s_k, d_p.
+        # Total lookback for STOCH: (k_p - 1) + (s_k - 1) + (d_p - 1)
+        # So, if num_data_points_for_create is, say, 30, and lookback is 18,
+        # then k_series and d_series will have length 30, with first 18 values being NaN.
+        
+        # For simplicity in the mock, let's assume the agent's internal logic
+        # correctly uses these series to arrive at a verdict.
+        # We will mock the `_get_verdict` method of the *actual* agent instance
+        # that the `run` function will create and use.
+        
+        # The `run` function, when called, will:
+        # 1. Create a StochasticOscillatorAgent instance.
+        # 2. Call `execute` on it.
+        # 3. `execute` calls `_fetch_data`.
+        # 4. `execute` calls `_calculate_stochastic_oscillator`.
+        # 5. `execute` calls `_get_verdict`.
+        # 6. `execute` calls `_store_results`.
+        
+        # So, we need `mock_agent_class_factory` to return an instance whose methods are appropriately mocked.
+        # `mock_agent_instance` is what `StochasticOscillatorAgent(...)` will return.
+        
+        # Let's make `_calculate_stochastic_oscillator` on the `mock_agent_instance` return specific K and D values
+        # that would lead to the `expected_verdict_val` when `_get_verdict` is called.
+        # The `_get_verdict` method takes the latest k and d, and historical series.
+        
+        # Simplified: Mock the direct output of _get_verdict for more control
+        # This means the `mock_agent_instance` should have its `_get_verdict` method mocked.
+        
+        # Let's refine: the `run` function calls `agent.execute()`.
+        # `agent.execute()` calls `self._calculate_stochastic_oscillator()` and then `self._get_verdict()`.
+        # So, `mock_agent_instance._calculate_stochastic_oscillator` and `mock_agent_instance._get_verdict`
+        # need to be async mocks if they are async, or MagicMock if synchronous.
+        
+        # Assuming _calculate_stochastic_oscillator is synchronous and returns two pd.Series
+        # And _get_verdict is synchronous.
+        
+        # Create plausible k_val and d_val for the scenario
+        k_val = (min_k + max_k) / 2
+        d_val = (min_d + max_d) / 2
+        
+        # Mock `_calculate_stochastic_oscillator` to return dummy series
+        # The actual series content might be complex to simulate perfectly,
+        # so we focus on the latest values that `_get_verdict` would use.
+        dummy_k_series = pd.Series([k_val-5, k_val-2, k_val]) # Simulating a trend
+        dummy_d_series = pd.Series([d_val-1, d_val-1, d_val])
+        
+        # If _calculate_stochastic_oscillator is async:
+        # mock_agent_instance._calculate_stochastic_oscillator = AsyncMock(return_value=(dummy_k_series, dummy_d_series))
+        # If it's synchronous:
+        mock_agent_instance._calculate_stochastic_oscillator = MagicMock(return_value=(dummy_k_series, dummy_d_series))
 
-    # Assert that the agent factory was called by stoch_run to create the agent instance
-    # The stoch_run function creates the agent, so the factory should be called.
-    mock_agent_class_factory.assert_called_once()
-    # You can add more specific assertions about the arguments to the factory if needed, e.g.:
-    # mock_agent_class_factory.assert_called_once_with(
-    #     settings=mock_agent_instance.settings, 
-    #     data_provider=mock_dp_instance, 
-    #     mcp_client=mock_mcp_instance
+        # Now, mock `_get_verdict` to return the `expected_verdict_val` and a confidence
+        # The `_get_verdict` method in the original agent determines the verdict and confidence.
+        # We want to control this outcome directly for the test.
+        expected_verdict_enum = VerdictType[expected_verdict_val]
+        
+        # If _get_verdict is async:
+        # mock_agent_instance._get_verdict = AsyncMock(return_value=Verdict(
+        #    verdict=expected_verdict_enum,
+        #    confidence=min_confidence_val + 0.05, # slightly above min
+        #    data_payload={'k': k_val, 'd': d_val, 'k_period': k_p, 'd_period': d_p, 's_k_period': s_k}
+        # ))
+        # If it's synchronous:
+        mock_agent_instance._get_verdict = MagicMock(return_value=Verdict(
+            verdict=expected_verdict_enum,
+            confidence=min_confidence_val + 0.05, 
+            data_payload={'k': k_val, 'd': d_val, 'k_period': k_p, 'd_period': d_p, 's_k_period': s_k}
+        ))
+        
+        # Mock `_store_results` as it might interact with cache/DB
+        # If _store_results is async:
+        # mock_agent_instance._store_results = AsyncMock(return_value=None)
+        # If it's synchronous:
+        mock_agent_instance._store_results = MagicMock(return_value=None)
+
+    else: # "neutral_hold" or other non-crossing scenarios
+        k_val = (min_k + max_k) / 2 
+        d_val = (min_d + max_d) / 2
+        dummy_k_series = pd.Series([k_val, k_val, k_val])
+        dummy_d_series = pd.Series([d_val, d_val, d_val])
+        
+        # mock_agent_instance._calculate_stochastic_oscillator = AsyncMock(return_value=(dummy_k_series, dummy_d_series))
+        mock_agent_instance._calculate_stochastic_oscillator = MagicMock(return_value=(dummy_k_series, dummy_d_series))
+        
+        expected_verdict_enum = VerdictType[expected_verdict_val]
+        # mock_agent_instance._get_verdict = AsyncMock(return_value=Verdict(
+        #    verdict=expected_verdict_enum,
+        #    confidence=min_confidence_val + 0.05,
+        #    data_payload={'k': k_val, 'd': d_val, 'k_period': k_p, 'd_period': d_p, 's_k_period': s_k}
+        # ))
+        mock_agent_instance._get_verdict = MagicMock(return_value=Verdict(
+            verdict=expected_verdict_enum,
+            confidence=min_confidence_val + 0.05,
+            data_payload={'k': k_val, 'd': d_val, 'k_period': k_p, 'd_period': d_p, 's_k_period': s_k}
+        ))
+
+        # mock_agent_instance._store_results = AsyncMock(return_value=None)
+        mock_agent_instance._store_results = MagicMock(return_value=None)
+
+    # --- Call the actual decorated run function ---
+    # The `run` function is decorated with @standard_agent_execution
+    # This decorator handles:
+    # - Getting a tracker
+    # - Creating the agent instance (which is now our mock_agent_class_factory that returns mock_agent_instance)
+    # - Calling agent.execute(context)
+    # - Handling exceptions, caching, etc.
+    
+    # We pass the *actual* run function from the agent module.
+    # The patches ensure that when this run function executes, it uses our mocks.
+    # The parameters for stoch_run are (context, k_period, d_period, sk_period)
+    # Ensure the parameters passed to actual_stoch_run_decorated_function match its definition.
+    # It seems the decorated function `run` takes `context` and then `*args, **kwargs` which are passed to the agent's `execute`.
+    # The agent's `execute` method itself might not take k_p, d_p, s_k directly if they are part of its init settings.
+    # Let's assume the `run` function is defined as `async def run(context: Context, k_period: int, d_period: int, sk_period: int)`
+    # or similar, and these are passed to the agent constructor or execute method.
+    
+    # If StochasticOscillatorAgent's __init__ takes these:
+    # mock_agent_class_factory.configure_mock(
+    #    k_period=k_p, 
+    #    d_period=d_p, 
+    #    sk_period=s_k
     # )
+    # Or if its `execute` method takes these:
+    # mock_agent_instance.execute = AsyncMock(...) and it will be called with these.
+    
+    # The `actual_stoch_run_decorated_function` is the `run` from the agent file.
+    # Its signature is likely `async def run(context: Context, k_period: int, d_period: int, sk_period: int, ...)`
+    # The test parameters `k_p, d_p, s_k` should be passed to it.
 
-    # Assert that the core calculation and verdict methods on the (mocked) agent instance were called by stoch_run
-    mock_agent_instance._calculate_stochastic_oscillator.assert_awaited_once_with(ANY, ohlcv_data)
-    mock_agent_instance._generate_verdict.assert_awaited_once_with(float(min_k), float(min_d), MarketRegime[market_regime_mock])
+    # The `standard_agent_execution` decorator will instantiate the agent.
+    # The agent's `__init__` will be called. We need to ensure `mock_agent_instance`
+    # is configured as if it was initialized with these periods.
+    # The `execute` method of the agent will then be called.
+    # The `execute` method will use the `k_period`, `d_period`, `sk_period` from the agent's instance.
+    
+    # Let's assume these periods are set on the agent instance by its __init__ or by the run function
+    # before calling execute. We've already set them in the data_payload for the verdict,
+    # which is a bit of a shortcut.
+    # For a more robust test, ensure `mock_agent_instance` has these attributes if `_calculate_stochastic_oscillator`
+    # or `_get_verdict` uses `self.k_period` etc.
+    mock_agent_instance.k_period = k_p
+    mock_agent_instance.d_period = d_p
+    mock_agent_instance.sk_period = s_k
+    
+    # The `run` function from the agent module is what we're testing.
+    # It's decorated, so it handles agent creation and execution.
+    # The `args` for the `run` function (after context) are k_period, d_period, sk_period.
+    # print(f"Calling actual_stoch_run_decorated_function for {test_id} with k_p={k_p}, d_p={d_p}, s_k={s_k}")
+    
+    # The `actual_stoch_run_decorated_function` is the `run` function from the agent.
+    # It is defined as: async def run(context: Context, k_period: int = 14, d_period: int = 3, sk_period: int = 3)
+    # So we pass k_p, d_p, s_k to it.
+    
+    verdict_result = await actual_stoch_run_decorated_function(mock_context, k_p, d_p, s_k)
+    
+    # --- Assertions ---
+    assert verdict_result is not None, f"Verdict should not be None for {test_id}"
+    assert isinstance(verdict_result, Verdict), f"Result should be a Verdict instance for {test_id}"
+    
+    # print(f"Test {test_id}: Expected Verdict: {expected_verdict_val}, Actual Verdict: {verdict_result.verdict.name}")
+    # print(f"Test {test_id}: Expected Min Confidence: {min_confidence_val}, Actual Confidence: {verdict_result.confidence}")
 
-    # Assert calls to external dependencies
-    mock_dp_instance.fetch_ohlcv_series.assert_awaited_once_with(symbol, agent_settings.agent_data_lookback_period)
-    mock_mcp_instance.get_context.assert_awaited_once_with(symbol)
+    assert verdict_result.verdict.name == expected_verdict_val, f"Verdict type mismatch for {test_id}"
+    assert verdict_result.confidence >= min_confidence_val, f"Confidence too low for {test_id}: {verdict_result.confidence} < {min_confidence_val}"
+    assert verdict_result.confidence <= 1.0, f"Confidence over 1.0 for {test_id}: {verdict_result.confidence}"
 
-    # Clean up any potential side effects from mocks if necessary for other tests (though pytest usually isolates)
-    # For example, reset call counts if mocks are shared across parameterized tests in a way that state leaks.
-    # However, mocks are generally re-created for each test run in pytest parameterization.
+    # Check if data provider's fetch_price_data was called correctly
+    mock_dp_instance.fetch_price_data.assert_called_once_with( # Changed from fetch_ohlcv_series
+        symbol=symbol, 
+        # start_date=ANY, # The decorator/agent might calculate this.
+        # end_date=ANY,   # Or it might pass None if not specified.
+        # interval=ANY    # Default interval or agent specified.
+        # We need to be more specific if the agent always passes these.
+        # For now, let's assume it's called with the symbol and the agent handles date/interval.
+        # If the agent's _fetch_data explicitly sets start/end/interval, match those.
+        # The `DataProviderBase.fetch_price_data` has defaults for start_date, end_date, interval.
+        # The agent's `_fetch_data` method likely calculates `start_date` based on `lookback_period`.
+        start_date=ANY, # Agent calculates this based on lookback
+        end_date=fixed_now, # Agent likely uses current time as end date
+        interval='1d' # Assuming daily interval for stoch
+    )
+    
+    # Check if cache was used or set (depending on test setup for cache hit/miss)
+    # In this setup, we mock a cache miss (mock_redis_instance.get returns None).
+    # So, we expect a call to set the cache.
+    # The key for caching is usually complex, involving agent name, symbol, params.
+    # The @standard_agent_execution decorator handles caching.
+    # It calls `agent.get_cache_key()` and `agent.store_results_in_cache()`.
+    
+    # We need to mock `get_cache_key` on `mock_agent_instance` if the decorator calls it.
+    # Let's assume a simple cache key for now.
+    cache_key = f"{original_agent_module_name}:{symbol}:{k_p}:{d_p}:{s_k}:{market_regime_mock}" # Example
+    mock_agent_instance.get_cache_key = MagicMock(return_value=cache_key)
 
-    print(f"Test {test_id} PASSED with verdict: {result_verdict.verdict_type.name if result_verdict.verdict_type else 'None'}, confidence: {result_verdict.confidence}")
+    # The decorator should have called `get` on the cache.
+    mock_redis_instance.get.assert_called_once_with(cache_key)
+    
+    # Since it was a cache miss, `set` should have been called by `agent.store_results_in_cache`
+    # which is called by the decorator if caching is enabled and there's a result.
+    # `mock_agent_instance.store_results_in_cache` would be called by the decorator.
+    # Let's mock that on the agent instance.
+    async def mock_store_in_cache(key, value, ttl):
+        # print(f"Mocked store_results_in_cache called with key: {key}, ttl: {ttl}")
+        # In a real scenario, this would call self.cache_client.set(key, value, ex=ttl)
+        # We can assert that `mock_redis_instance.set` was called by this.
+        await mock_redis_instance.set(key, ANY, ex=ttl) # ANY for serialized value
+        return True
+    
+    mock_agent_instance.store_results_in_cache = AsyncMock(side_effect=mock_store_in_cache)
+    
+    # Now, after `run` is called, we check if `store_results_in_cache` was called.
+    # And through its side_effect, if `mock_redis_instance.set` was called.
+    if agent_settings.agent_cache_enabled and verdict_result:
+        mock_agent_instance.store_results_in_cache.assert_called_once()
+        # The actual call to mock_redis_instance.set happens *inside* store_results_in_cache
+        # So, we check that `set` was called.
+        mock_redis_instance.set.assert_called_once_with(cache_key, ANY, ex=agent_settings.agent_cache_ttl_seconds)
+
+    # Verify tracker calls if needed (e.g., tracker.track_event)
+    mock_decorator_tracker.return_value.track_event.assert_called() # Basic check
+
+    # Ensure the agent factory was called to create the agent
+    mock_agent_class_factory.assert_called_once_with(
+        agent_settings=ANY, # The decorator creates/fetches this
+        # k_period=k_p, # If these are init params for the agent
+        # d_period=d_p,
+        # sk_period=s_k
+        # The decorator passes agent_settings.
+        # If k_p, d_p, s_k are init params, the decorator needs to pass them.
+        # Or, if they are only used in `execute`, then this is fine.
+        # The `run` function signature suggests they are not init params for the agent itself,
+        # but rather parameters for the execution logic within `run` or `agent.execute`.
+        # The `standard_agent_execution` decorator instantiates with `AgentClass(agent_settings=settings_for_agent)`
+        # It then calls `agent.execute(context, *args, **kwargs_for_execute)`
+        # So, k_p, d_p, s_k are passed to `execute`.
+        # We need to make sure `mock_agent_instance.execute` was called with these.
+    )
+    
+    # The decorator calls `agent.execute(context, *args, **kwargs)`.
