@@ -43,6 +43,7 @@ class Verdict:
     agent_name: Optional[str] = None
     details: Dict[str, Any] = field(default_factory=dict)
     value: Optional[Any] = None
+    data_payload: Optional[Dict[str, Any]] = field(default_factory=dict) # Added data_payload field
     # score: Optional[float] = None # Raw score before calibration, if needed
 
 # Placeholder for AgentContext if it's truly a distinct model.

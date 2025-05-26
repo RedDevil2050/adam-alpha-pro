@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 from decimal import Decimal
 from pydantic import BaseModel
+from backend.models.common_models import Verdict, VerdictType # Import VerdictType
 
 # Helper function for robust JSON serialization
 def robust_json_serializer(obj):
@@ -145,24 +146,56 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
                 # Attempt to execute the agent function
                 try:
                     # Execute the function first
-                    executed_func_result = func(*args, **kwargs)
+                    
+                    # Make a copy of kwargs to modify, so we don't alter the original dict
+                    # if it's used elsewhere, and to allow popping 'market_context_provider'.
+                    _func_kwargs = kwargs.copy()
+                    _market_provider = _func_kwargs.pop('market_context_provider', None)
+
+                    executed_func_result = func(*args,
+                                        cache_client=client_to_use,  # Use defined client_to_use
+                                        logger_instance=logger,      # Use imported logger
+                                        market_context_provider=_market_provider, # Use extracted value
+                                        **_func_kwargs) # Pass remaining kwargs
                     # Then, check if the result is a coroutine and await it if so
                     if asyncio.iscoroutine(executed_func_result):
                         result = await executed_func_result
                     else:
                         result = executed_func_result
 
-                    # Ensure agent_name is in the result before returning/caching
-                    if result and "agent_name" not in result:
+                    # Ensure agent_name is in the result (if it's a Verdict object or dict)
+                    if result and isinstance(result, Verdict):
+                        if result.agent_name is None:
+                            result.agent_name = agent_name
+                        # Convert Verdict to dict for caching and further dict-based operations
+                        # This is a key change: the decorator will now work with a dict internally
+                        # after the agent's core logic returns a Verdict object.
+                        # We use robust_json_serializer to prepare for JSON, then json.loads to get a clean dict.
+                        result_for_cache_and_dict_ops = json.loads(json.dumps(result, default=robust_json_serializer))
+                    elif result and isinstance(result, dict) and "agent_name" not in result:
                         result["agent_name"] = agent_name
+                        result_for_cache_and_dict_ops = result # Already a dict
+                    elif result is None:
+                        result_for_cache_and_dict_ops = None
+                    else: # Not a Verdict or dict, or already has agent_name if dict
+                        # This case might need specific handling if other types are expected.
+                        # For now, assume if not Verdict or dict, it's an error or unhandled.
+                        # If it's a simple type, it won't have 'verdict' or 'agent_name'.
+                        # Let's assume for now that if it's not None, Verdict, or dict,
+                        # it will likely fail subsequent checks or be an error.
+                        # If the agent can return other valid types, this logic needs expansion.
+                        logger.warning(f"Agent {agent_name} returned unexpected type: {type(result)}. Proceeding, but caching/tracking might be affected.")
+                        result_for_cache_and_dict_ops = result # Pass through, but dict operations will fail
 
                     # If execution successful, cache the result
-                    if result is not None and redis_client:
+                    if result_for_cache_and_dict_ops is not None and redis_client:
                         # 3. Cache Result (only on success/valid data)
-                        if result and result.get("verdict") not in ["ERROR", "NO_DATA", None]:
+                        # Now use result_for_cache_and_dict_ops for dict operations
+                        if isinstance(result_for_cache_and_dict_ops, dict) and \
+                           result_for_cache_and_dict_ops.get("verdict") not in [VerdictType.ERROR.value, VerdictType.NO_DATA.value, None]:
                             try:
                                 # Handle both sync and async set methods
-                                cache_data = json.dumps(result, default=robust_json_serializer)
+                                cache_data = json.dumps(result_for_cache_and_dict_ops, default=robust_json_serializer)
                                 
                                 # Call the method, then check if the result is awaitable
                                 set_operation_result = redis_client.set(cache_key, cache_data, ex=cache_ttl)
@@ -177,20 +210,26 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
                         try:
                             tracker_instance = get_tracker()
                             status = "error"  # Default to error
-                            if result and result.get("verdict") not in ["ERROR", "NO_DATA", None]:
+                            current_verdict_val = None
+                            if isinstance(result_for_cache_and_dict_ops, dict):
+                                current_verdict_val = result_for_cache_and_dict_ops.get("verdict")
+
+                            if current_verdict_val not in [VerdictType.ERROR.value, VerdictType.NO_DATA.value, None]:
                                 status = "success"
-                            elif result and result.get("verdict") == "NO_DATA":
+                            elif current_verdict_val == VerdictType.NO_DATA.value:
                                 status = "no_data"
 
                             current_symbol = symbol
-                            if result and "symbol" in result:
-                                current_symbol = result["symbol"]
+                            if isinstance(result_for_cache_and_dict_ops, dict) and "symbol" in result_for_cache_and_dict_ops:
+                                current_symbol = result_for_cache_and_dict_ops["symbol"]
+                            elif isinstance(result, Verdict) and result.details and "symbol" in result.details: # Fallback if symbol is in Verdict.details
+                                current_symbol = result.details["symbol"]
 
                             if current_symbol and hasattr(tracker_instance, "update_agent_status"):
                                 # Handle both sync and async tracker methods
                                 # Call the method, then check if the result is awaitable
                                 update_status_result = tracker_instance.update_agent_status(
-                                    category, agent_name, current_symbol, status, result
+                                    category, agent_name, current_symbol, status, result_for_cache_and_dict_ops # Pass the dict version
                                 )
                                 if inspect.isawaitable(update_status_result):
                                     await update_status_result
@@ -206,7 +245,9 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
                         except Exception as tracker_err:
                             logger.warning(f"Failed to update tracker for {agent_name} ({symbol}): {tracker_err}")
 
-                    return result # Return potentially modified result
+                    # IMPORTANT: Return the original 'result' (which could be a Verdict object)
+                    # not 'result_for_cache_and_dict_ops', unless the decorator's contract is to always return a dict.
+                    return result
 
                 except Exception as e:
                     # 5. Standard Error Handling
