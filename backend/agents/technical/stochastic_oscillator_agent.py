@@ -1,14 +1,13 @@
 from backend.agents.base.category_bases import TechnicalAgentBase # Corrected import
-from backend.models.common_models import VerdictType # Import VerdictType for string constants
+from backend.models.common_models import VerdictType, MarketRegime # Import MarketRegime
 from backend.config.settings import AgentSettings # For type hinting in run fn
 from backend.data.providers.base_provider import BaseDataProvider # For type hinting in run fn
 
 from datetime import datetime, timedelta
-import pandas as pd
 from loguru import logger # Keep for the run function if it uses it directly
-import json
-import numpy as np
 from typing import Any, Dict # Added Dict for type hinting
+import json # Added for JSONDecodeError
+import numpy as np # Added for np.nan
 
 from backend.agents.decorators import standard_agent_execution
 
@@ -36,9 +35,9 @@ class StochasticOscillatorAgent(TechnicalAgentBase):
                 try:
                     cached_result = json.loads(cached_result_str)
                     self.logger.debug(f"[{self.name}] Cache hit for {symbol} with key {cache_key}")
-                    return cached_result
+                    return cached_result # Return the cached result
                 except json.JSONDecodeError:
-                    self.logger.warning(f"[{self.name}] Failed to decode cached JSON for {cache_key}. Refetching.")
+                    self.logger.warning(f"[{self.name}] Failed to decode cached JSON for {symbol}. Key: {cache_key}")
             else:
                 self.logger.debug(f"[{self.name}] Cache miss for {symbol} with key {cache_key}")
 
@@ -60,10 +59,14 @@ class StochasticOscillatorAgent(TechnicalAgentBase):
         try:
             # Fetch market context using AgentBase's method
             market_context_data = await self.get_market_context(symbol)
-            current_market_regime = market_context_data.get("regime", "UNKNOWN").upper() # Ensure "BULL", "BEAR" etc.
+            
+            # Revised regime handling:
+            raw_regime_value_from_context = str(market_context_data.get("regime", MarketRegime.UNKNOWN.value)).upper()
+            # raw_regime_value_from_context will be like "BULLISH", "BEARISH", etc.
+
             volatility_factor = market_context_data.get("volatility_factor", 1.0)
             
-            self.logger.debug(f"[{self.name}] Market context for {symbol}: Regime='{current_market_regime}', VolatilityFactor={volatility_factor}")
+            self.logger.debug(f"[{self.name}] Market context for {symbol}: RegimeValue='{raw_regime_value_from_context}', VolatilityFactor={volatility_factor}")
 
             current_params = {"k": k_period, "d": d_period, "s": smoothing}
 
@@ -84,34 +87,32 @@ class StochasticOscillatorAgent(TechnicalAgentBase):
                 return self._error_response(
                     symbol,
                     f"Insufficient OHLCV data (need {required_data_points}, got {len(df) if df is not None else 0})",
-                    details={"params": current_params, "market_regime": current_market_regime}
+                    details={"params": current_params, "market_regime": raw_regime_value_from_context} # Use the processed string value
                 )
 
             if not all(col in df.columns for col in ['high', 'low', 'close']):
                 self.logger.error(f"[{self.name}] Missing required OHLC columns in data for {symbol}.")
-                return self._error_response(symbol, "Missing OHLC columns.", details={"params": current_params, "market_regime": current_market_regime})
+                return self._error_response(symbol, "Missing required OHLC columns.", details={"params": current_params, "market_regime": raw_regime_value_from_context})
+
 
             df_copy = df.copy()
             df_copy.loc[:, 'low_min'] = df_copy["low"].rolling(window=k_period, min_periods=k_period).min()
             df_copy.loc[:, 'high_max'] = df_copy["high"].rolling(window=k_period, min_periods=k_period).max()
             
             denominator = df_copy['high_max'] - df_copy['low_min']
-            df_copy.loc[:, 'fast_k'] = 100 * ((df_copy["close"] - df_copy['low_min']) / denominator.replace(0, np.nan))
+            df_copy.loc[:, 'fast_k'] = 100 * ((df_copy["close"] - df_copy['low_min']) / denominator.replace(0, np.nan)) # Use np.nan
             df_copy.loc[:, 'fast_k'] = df_copy['fast_k'].fillna(50)
 
             df_copy.loc[:, 'k_series'] = df_copy['fast_k'].rolling(window=smoothing, min_periods=smoothing).mean()
             df_copy.loc[:, 'd_series'] = df_copy['k_series'].rolling(window=d_period, min_periods=d_period).mean()
 
             if df_copy['k_series'].iloc[-2:].isna().any() or df_copy['d_series'].iloc[-2:].isna().any():
-                self.logger.warning(f"[{self.name}] NaN values in K or D series for {symbol} after rolling.")
-                return self._error_response(
-                    symbol,
-                    "NaN values in K or D series after rolling, likely due to gaps in data.",
-                    details={"params": current_params, "market_regime": current_market_regime}
-                )
+                self.logger.warning(f"[{self.name}] NaN values in k_series or d_series for {symbol} before selecting latest/prev.")
+                return self._error_response(symbol, "NaN in K or D series.", details={"params": current_params, "market_regime": raw_regime_value_from_context})
+                pass # Placeholder
 
-            latest_k, latest_d = float(df_copy['k_series'].iloc[-1]), float(df_copy['d_series'].iloc[-1])
-            prev_k, prev_d = float(df_copy['k_series'].iloc[-2]), float(df_copy['d_series'].iloc[-2])
+            latest_k, latest_d = df_copy['k_series'].iloc[-1], df_copy['d_series'].iloc[-1] # Assuming this was intended
+            prev_k, prev_d = df_copy['k_series'].iloc[-2], df_copy['d_series'].iloc[-2] # Assuming this was intended
 
             # Access stochastic-specific settings from self.settings.stochastic_oscillator
             # Ensure StochasticOscillatorSettings is part of AgentSettings and passed correctly.
@@ -126,78 +127,72 @@ class StochasticOscillatorAgent(TechnicalAgentBase):
 
             bull_adjustment = stoch_settings.get("bull_market_oversold_adjustment", 5)
             bear_adjustment = stoch_settings.get("bear_market_oversold_adjustment", -5) # e.g. -5 to lower threshold
-            volatility_sensitivity = stoch_settings.get("volatility_threshold_sensitivity", 0.2)
+            volatility_sensitivity = stoch_settings.get("volatility_threshold_sensitivity", 0.2) # Not used yet
 
 
-            if current_market_regime == "BULL":
+            # Compare with uppercased enum *values*
+            if raw_regime_value_from_context == MarketRegime.BULL.value.upper(): # e.g., "BULLISH"
                 oversold_threshold += bull_adjustment
-            elif current_market_regime == "BEAR":
-                oversold_threshold += bear_adjustment 
+            elif raw_regime_value_from_context == MarketRegime.BEAR.value.upper(): # e.g., "BEARISH"
+                 oversold_threshold += bear_adjustment
             
             if volatility_factor != 1.0:
-                oversold_adjustment_factor = (volatility_factor - 1.0) * volatility_sensitivity
-                overbought_adjustment_factor = (volatility_factor - 1.0) * volatility_sensitivity
-                oversold_threshold = base_oversold * (1 - oversold_adjustment_factor)
-                overbought_threshold = base_overbought * (1 + overbought_adjustment_factor)
-
-            oversold_threshold = max(5.0, min(40.0, oversold_threshold))
-            overbought_threshold = min(95.0, max(60.0, overbought_threshold))
-            if oversold_threshold >= overbought_threshold: # Safety reset
-                oversold_threshold = float(base_oversold)
-                overbought_threshold = float(base_overbought)
+                # Example: Adjust thresholds based on volatility
+                threshold_range_adjustment = (overbought_threshold - oversold_threshold) * (volatility_factor - 1.0) * volatility_sensitivity
+                oversold_threshold -= threshold_range_adjustment / 2
+                overbought_threshold += threshold_range_adjustment / 2
+            
+            oversold_threshold = max(5.0, min(40.0, oversold_threshold)) # Clamp after adjustments
+            overbought_threshold = min(95.0, max(60.0, overbought_threshold)) # Clamp after adjustments
+            if oversold_threshold >= overbought_threshold:                
+                self.logger.warning(f"[{self.name}] Oversold threshold ({oversold_threshold}) >= overbought threshold ({overbought_threshold}) for {symbol}. Clamping.")
+                oversold_threshold = min(oversold_threshold, overbought_threshold - 1) # Ensure separation
             
             verdict_str = VerdictType.HOLD_NEUTRAL.value 
-            base_signal_strength = 0.5
+            base_signal_strength = 0.5 # Neutral confidence
 
-            if prev_k <= prev_d and latest_k > latest_d: # Bullish Crossover
-                if latest_k < oversold_threshold + 10:
+            # Crossover logic
+            if prev_k <= prev_d and latest_k > latest_d: # Bullish crossover (%K crosses above %D)
+                if latest_k < oversold_threshold + 10 : # Crossover from oversold or near oversold
                     verdict_str = VerdictType.BUY_OVERSOLD_CROSS.value
-                    base_signal_strength = 0.80
-                    if latest_k < oversold_threshold:
-                        base_signal_strength = min(1.0, base_signal_strength + 0.10)
-                elif latest_k < 50:
-                    verdict_str = VerdictType.BUY_CROSS_BELOW_50.value
+                    base_signal_strength = 0.75 # Higher confidence for oversold buy
+                else: # General bullish crossover
+                    verdict_str = VerdictType.BUY.value 
                     base_signal_strength = 0.65
-                else:
-                    verdict_str = VerdictType.HOLD_BULLISH_CROSS_UPPER.value
-                    base_signal_strength = 0.55
-            elif prev_k >= prev_d and latest_k < latest_d: # Bearish Crossover
-                if latest_k > overbought_threshold - 10:
+            elif prev_k >= prev_d and latest_k < latest_d: # Bearish crossover (%K crosses below %D)
+                if latest_k > overbought_threshold - 10: # Crossover from overbought or near overbought
                     verdict_str = VerdictType.SELL_OVERBOUGHT_CROSS.value
-                    base_signal_strength = 0.20
-                    if latest_k > overbought_threshold:
-                        base_signal_strength = max(0.0, base_signal_strength - 0.10)
-                elif latest_k > 50:
-                    verdict_str = VerdictType.SELL_CROSS_ABOVE_50.value
+                    base_signal_strength = 0.25 # Lower confidence for overbought sell (0 to 1 scale, 0.5 is neutral)
+                else: # General bearish crossover
+                    verdict_str = VerdictType.SELL.value
                     base_signal_strength = 0.35
-                else:
-                    verdict_str = VerdictType.HOLD_BEARISH_CROSS_LOWER.value
-                    base_signal_strength = 0.45
             
             final_confidence = base_signal_strength
             
-            bull_bull_confidence_boost = stoch_settings.get("bull_market_bullish_signal_boost", 0.1)
-            bull_bear_confidence_dampen_factor = stoch_settings.get("bull_market_bearish_signal_dampen_factor", 0.15) 
-            bear_bear_confidence_boost = stoch_settings.get("bear_market_bearish_signal_boost", -0.1) 
-            bear_bull_confidence_dampen_factor = stoch_settings.get("bear_market_bullish_signal_dampen_factor", 0.85)
+            # Regime-based confidence adjustment
+            bull_bull_confidence_boost = stoch_settings.get("bull_market_bullish_signal_boost", 0.1) # Additive
+            bull_bear_confidence_dampen_factor = stoch_settings.get("bull_market_bearish_signal_dampen_factor", 0.8) # Multiplicative
+            bear_bear_confidence_boost = stoch_settings.get("bear_market_bearish_signal_boost", 0.1) # Additive to sell strength (i.e., makes it closer to 0 or 1)
+            bear_bull_confidence_dampen_factor = stoch_settings.get("bear_market_bullish_signal_dampen_factor", 0.8) # Multiplicative
 
-
-            if final_confidence > 0.5: # Bullish signal
-                if current_market_regime == "BULL":
+            if verdict_str in [VerdictType.BUY.value, VerdictType.BUY_OVERSOLD_CROSS.value]: # Bullish signal
+                if raw_regime_value_from_context == MarketRegime.BULL.value.upper():
                     final_confidence = min(1.0, final_confidence + bull_bull_confidence_boost)
-                elif current_market_regime == "BEAR":
-                    final_confidence = final_confidence * bear_bull_confidence_dampen_factor
-            elif final_confidence < 0.5: # Bearish signal
-                if current_market_regime == "BEAR":
-                    final_confidence = max(0.0, final_confidence + bear_bear_confidence_boost) 
-                elif current_market_regime == "BULL":
-                    final_confidence = final_confidence + (0.5 - final_confidence) * bull_bear_confidence_dampen_factor
+                elif raw_regime_value_from_context == MarketRegime.BEAR.value.upper():
+                    final_confidence *= bear_bull_confidence_dampen_factor 
+            elif verdict_str in [VerdictType.SELL.value, VerdictType.SELL_OVERBOUGHT_CROSS.value]: # Bearish signal
+                # For bearish signals, confidence is typically 1 - strength.
+                # Or, if base_signal_strength is already < 0.5 for sell, adjust it towards 0.
+                if raw_regime_value_from_context == MarketRegime.BEAR.value.upper():
+                    final_confidence = max(0.0, final_confidence - bear_bear_confidence_boost) # Making it a stronger sell (closer to 0)
+                elif raw_regime_value_from_context == MarketRegime.BULL.value.upper():
+                    final_confidence *= (1 + (1-bull_bear_confidence_dampen_factor)) # Dampen sell in bull market (closer to 0.5)
+
 
             return {
-                # "symbol": symbol, # Added by _format_output
                 "verdict": verdict_str, 
                 "confidence": round(final_confidence, 4),
-                "value": round(latest_k - latest_d, 4),
+                "value": round(latest_k - latest_d, 4), # K-D difference
                 "details": {
                     "k": round(latest_k, 4),
                     "d": round(latest_d, 4),
@@ -206,19 +201,18 @@ class StochasticOscillatorAgent(TechnicalAgentBase):
                     "oversold_threshold_used": round(oversold_threshold, 2),
                     "overbought_threshold_used": round(overbought_threshold, 2),
                     "params": current_params,
-                    "market_regime_detected": current_market_regime,
+                    "market_regime_detected": raw_regime_value_from_context,
                     "volatility_factor_used": volatility_factor
                 },
-                "score": round(base_signal_strength, 4), # Raw score before regime adjustment
-                # "agent_name": self.name, # Added by _format_output
+                "score": round(base_signal_strength, 4), # Raw signal strength before regime adjustment
             }
         except Exception as e:
             self.logger.error(f"Error in {self.name} for {symbol}: {e}", exc_info=True)
-            cmr_for_error = "UNKNOWN"
-            if 'current_market_regime' in locals():
-                cmr_for_error = current_market_regime
+            cmr_for_error = MarketRegime.UNKNOWN.value.upper() 
+            if 'raw_regime_value_from_context' in locals() and raw_regime_value_from_context:
+                cmr_for_error = raw_regime_value_from_context
             elif 'market_context_data' in locals() and market_context_data:
-                 cmr_for_error = market_context_data.get("regime", "UNKNOWN").upper()
+                 cmr_for_error = str(market_context_data.get("regime", MarketRegime.UNKNOWN.value)).upper()
 
             return self._error_response(
                 symbol, 
