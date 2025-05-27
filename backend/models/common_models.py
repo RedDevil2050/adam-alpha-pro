@@ -12,6 +12,8 @@ class VerdictType(Enum):
     HOLD_BULLISH_CROSS_UPPER = "HOLD_BULLISH_CROSS_UPPER"
     SELL_CROSS_ABOVE_50 = "SELL_CROSS_ABOVE_50"
     HOLD_BEARISH_CROSS_LOWER = "HOLD_BEARISH_CROSS_LOWER"
+    BUY_DIVERGENCE = "BUY_DIVERGENCE"  # Added BUY_DIVERGENCE
+    SELL_DIVERGENCE = "SELL_DIVERGENCE"  # Added SELL_DIVERGENCE
     # Add other potential verdict types as needed by other agents or common usage
     BUY = "BUY"
     SELL = "SELL"
