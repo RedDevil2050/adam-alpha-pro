@@ -1,114 +1,189 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional, TypeVar
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from backend.utils.cache_utils import get_redis_client
-from backend.config.settings import settings
+from backend.config.settings import settings, AgentSettings # Added AgentSettings
 from backend.agents.categories import CategoryType, CategoryManager
 import json
+from pydantic import ValidationError # Added ValidationError
+from backend.models.common_models import VerdictType, MarketRegime # Added VerdictType, MarketRegime
+from backend.data.providers.base_provider import BaseDataProvider # Added BaseDataProvider
+
+T = TypeVar('T', bound='AgentBase')
 
 class AgentBase(ABC):
-    def __init__(self):
-        self.logger = logging.getLogger(self.__class__.__name__)
-        self.cache = None
-        self.ttl = settings.agent_settings.agent_cache_ttl_seconds
-        self.context = {}
-        self.metrics = {"calls": 0, "errors": 0, "avg_latency": 0}
+    version: str = "1.0.0"
+    agent_type: str = "base"
+    description: str = "A base agent."
+    
+    name: str
+    settings: AgentSettings 
+    logger: Any # BaseLogger
+    cache_client: Any # BaseCacheClient
+    data_provider: BaseDataProvider
+    market_context_provider: Any # BaseMarketContextProvider
+
+    def __init__(self, 
+                 name: str, 
+                 settings: AgentSettings, 
+                 logger: Any, # BaseLogger
+                 cache_client: Any, # BaseCacheClient
+                 data_provider: BaseDataProvider,
+                 market_context_provider: Any, # BaseMarketContextProvider
+                 **kwargs): # Allow for additional subclass-specific args
+        self.name = name
+        self.settings = settings
+        self.logger = logger
+        self.cache_client = cache_client
+        self.data_provider = data_provider
+        self.market_context_provider = market_context_provider
+        # self._last_execution_time = None # Not currently used
+        # self._last_verdict = None # Not currently used
+        self.logger.debug(f"Agent {self.name} v{self.version} initialized.")
+
+    def _generate_cache_key(self, symbol: str, agent_outputs: Dict[str, Any], **kwargs) -> str:
+        """Generate a cache key for storing/retrieving agent results."""
+        key_components = [self.agent_type, symbol, json.dumps(agent_outputs, sort_keys=True)]
+        if kwargs:
+            key_components.append(json.dumps(kwargs, sort_keys=True))
+        return ":".join(key_components)
+
+    async def _get_from_cache(self, key: str) -> Optional[Dict[str, Any]]:
+        """Retrieve data from cache."""
+        try:
+            cached_data = await self.cache_client.get(key) # Changed self.cache to self.cache_client
+            if cached_data:
+                return json.loads(cached_data)
+        except Exception as e:
+            self.logger.warning(f"Cache get error for {key}: {e}")
+        return None
+
+    async def _set_to_cache(self, key:str, value: Dict[str, Any], ttl: Optional[int] = None):
+        """Store data in cache with optional TTL."""
+        try:
+            await self.cache_client.set(key, json.dumps(value), ex=ttl or self.settings.agent_cache_ttl) # Changed self.cache to self.cache_client and self.ttl to self.settings.agent_cache_ttl
+        except Exception as e:
+            self.logger.warning(f"Cache set error for {key}: {e}")
+
+    async def execute(self, symbol:str, agent_outputs: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        self.logger.info(f"Executing agent {self.name} for symbol {symbol} with params: {kwargs}")
         
-    async def execute(self, symbol: str, agent_outputs: Dict = {}) -> Dict[str, Any]:
-        """Template method for agent execution with metrics"""
-        # Initialize if not already done
-        if self.cache is None:
-            await self.initialize()
-            
-        start_time = datetime.now()
-        self.metrics["calls"] += 1
+        cache_key = self._generate_cache_key(symbol, agent_outputs, **kwargs)
+        
+        # Ensure settings is available and has agent_cache_enabled attribute
+        if hasattr(self.settings, 'agent_cache_enabled') and self.settings.agent_cache_enabled:
+            cached_result = await self._get_from_cache(cache_key)
+            if cached_result:
+                # Update timestamp and mark as cached
+                return self._format_output(
+                    verdict=cached_result.get("verdict"),
+                    confidence=cached_result.get("confidence"),
+                    symbol=cached_result.get("symbol", symbol), # Use cached symbol or current
+                    details=cached_result.get("details"),
+                    data=cached_result.get("data"),
+                    retrieved_from_cache=True
+                )
 
         try:
-            cache_key = f"{self.__class__.__name__}:{symbol}"
-            cached = await self.cache.get(cache_key)
-            if cached:
-                try:
-                    # Decode cached data
-                    decoded_result = json.loads(cached)
-                    self.logger.debug(f"Cache hit for {cache_key}")
-                    return decoded_result
-                except json.JSONDecodeError:
-                    self.logger.warning(f"Failed to decode cached JSON for {cache_key}. Fetching fresh data.")
-                except Exception as e: # Catch other potential decoding errors
-                    self.logger.warning(f"Error processing cached data for {cache_key}: {e}. Fetching fresh data.")
+            # The core logic of the agent
+            raw_result = await self._execute(symbol, agent_outputs, **kwargs)
+            
+            if not isinstance(raw_result, dict) or not all(k in raw_result for k in ["verdict", "confidence", "details"]):
+                self.logger.error(f"Agent {self.name}._execute for {symbol} did not return a dict with required keys (verdict, confidence, details). Result: {raw_result}")
+                return self._error_response(
+                    "Internal error: _execute response malformed or incomplete.",
+                    details={"malformed_raw_result": True, "raw_result_preview": str(raw_result)[:200]}
+                )
 
-            result = await self._execute(symbol, agent_outputs)
+            final_result = self._format_output(
+                verdict=raw_result["verdict"],
+                confidence=raw_result["confidence"],
+                symbol=symbol, 
+                details=raw_result["details"],
+                data=raw_result.get("data") 
+            )
 
-            # Cache only valid results
-            if result and result.get("verdict") not in ["ERROR", "NO_DATA", None]:
-                try:
-                    # Encode result before caching
-                    await self.cache.set(cache_key, json.dumps(result), ex=self.ttl)
-                    self.logger.debug(f"Cached result for {cache_key} with TTL {self.ttl}s")
-                except TypeError as json_err:
-                     self.logger.error(f"Failed to serialize result for {cache_key} to JSON: {json_err}. Result not cached.")
-                except Exception as cache_err:
-                     self.logger.error(f"Failed to set cache for {cache_key}: {cache_err}. Result not cached.")
+            # Ensure settings is available and has agent_cache_enabled attribute
+            if hasattr(self.settings, 'agent_cache_enabled') and self.settings.agent_cache_enabled:
+                await self._set_to_cache(cache_key, final_result)
+            
+            return final_result
 
-            return result
-
+        except ValidationError as ve:
+            self.logger.error(f"Validation error in agent {self.name} for {symbol}: {ve}")
+            return self._error_response(
+                "Input validation error.", 
+                details={"errors": ve.errors()}
+            )
         except Exception as e:
-            self.metrics["errors"] += 1
-            # Log the specific agent name causing the error
-            self.logger.exception(f"Agent {self.__class__.__name__} execution failed for {symbol}: {e}")
-            return self._error_response(symbol, str(e))
-        finally:
-            latency = (datetime.now() - start_time).total_seconds()
-            self._update_latency(latency)
+            self.logger.error(f"Unhandled error in agent {self.name} execute for {symbol}: {e}", exc_info=True)
+            return self._error_response(
+                f"Unhandled agent error: {str(e)}",
+                details={"exception_type": type(e).__name__, "exception_message": str(e)}
+            )
 
     @abstractmethod
-    async def _execute(self, symbol: str, agent_outputs: Dict) -> Dict[str, Any]:
-        """Actual agent logic implementation"""
+    async def _execute(self, symbol: str, agent_outputs: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """
+        Core agent logic. Expected to return a dictionary containing at least:
+        - 'verdict': The agent's decision (e.g., VerdictType.BUY, "HOLD_NEUTRAL")
+        - 'confidence': The confidence in this verdict (0.0 to 1.0)
+        - 'details': A dictionary with specific data points supporting the verdict (e.g., k, d values for stochastic)
+        It can optionally return a 'data' field for other structured information.
+        """
         pass
 
-    def _error_response(self, symbol: str, error: str) -> Dict[str, Any]:
-        return {
-            "symbol": symbol,
-            "verdict": "ERROR",
-            "confidence": 0.0,
-            "value": None,
-            "details": {},
-            "error": error,
-            "agent_name": self.__class__.__name__,
+    def _error_response(self, 
+                        error_message: str, 
+                        error_code: Optional[str] = None, 
+                        status_code: int = 500,
+                        details: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        self.logger.error(f"Agent {self.name} encountered an error: {error_message}{f' Details: {details}' if details else ''}")
+        
+        base_details = {
+            "error_message": error_message,
+            "error_code": error_code,
+            "status_code": status_code
         }
+        if details:
+            base_details.update(details) # Merge provided details
 
-    def _update_latency(self, new_latency: float):
-        old_avg = self.metrics["avg_latency"]
-        calls = self.metrics["calls"]
-        self.metrics["avg_latency"] = (old_avg * (calls - 1) + new_latency) / calls
+        response = {
+            "verdict": VerdictType.ERROR.value,
+            "confidence": 0.0,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "agent_name": self.name,
+            "agent_version": self.version,
+            "details": base_details
+        }
+        return response
+        
+    def _format_output(self, 
+                       verdict: Any, # Can be VerdictType enum or string value
+                       confidence: float, 
+                       symbol: str, 
+                       details: Dict[str, Any], 
+                       data: Optional[Dict[str, Any]] = None,
+                       retrieved_from_cache: bool = False) -> Dict[str, Any]:
+        output = {
+            "verdict": verdict.value if isinstance(verdict, VerdictType) else str(verdict),
+            "confidence": confidence,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "agent_name": self.name,
+            "agent_version": self.version,
+            "symbol": symbol,
+            "details": details if details is not None else {},
+            "retrieved_from_cache": retrieved_from_cache
+        }
+        if data:
+            output["data"] = data # Optional field for any other structured data
+        
+        # Ensure confidence is within bounds
+        output["confidence"] = max(0.0, min(1.0, output["confidence"]))
+        return output
 
-    async def pre_execute(self, symbol: str, context: Dict) -> None:
-        """Hook called before execution"""
-        # Symbol and context parameters are required for method signature
-        # but not used in base implementation
-        pass
-
-    async def post_execute(self, result: Dict, context: Dict) -> None:
-        """Hook called after execution"""
-        # Result and context parameters are required for method signature
-        # but not used in base implementation
-        pass
-
-    async def pre_execute(self, symbol: str, context: Dict) -> None:
-        """Hook called before execution"""
-        pass
-
-    async def post_execute(self, result: Dict, context: Dict) -> None:
-        """Hook called after execution"""
-        pass
-
-    def validate_result(self, result: Dict) -> bool:
-        """Validate agent output"""
-        required = ["symbol", "verdict", "confidence", "value"]
-        return all(k in result for k in required)
-
-    async def get_market_context(self, symbol: str) -> Dict[str, Any]:
+    async def get_market_context(self, symbol: str, default_regime: MarketRegime = MarketRegime.NEUTRAL) -> Dict[str, Any]:
         """Get current market context"""
         try:
             from backend.market.context import MarketContext
