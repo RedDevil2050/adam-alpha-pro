@@ -94,30 +94,18 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
             result = None
             
             try:
-                # Get Redis client instance - always use the synchronous version in test mode
-                redis_client = await get_redis_client() # MODIFIED: Added await
-                
+                # Get Redis client instance
+                redis_client = await get_redis_client()
+                client_to_use = redis_client # client_to_use is the async-ready client
+
                 # 1. Cache Check
-                
-                _raw_cache_val = None
-                # Ensure redis_client is awaited if it's a coroutine object before accessing attributes
-                # This is a defensive check, assuming get_redis_client() now consistently returns an awaited client
-                # However, if redis_client itself could be a coroutine (e.g. if get_redis_client was not awaited properly outside)
-                # client_to_use = await redis_client if asyncio.iscoroutine(redis_client) else redis_client
-                client_to_use = redis_client # Assuming get_redis_client already returned an awaited client instance
-
-                if hasattr(client_to_use.get, "__await__"): # Check if the 'get' method itself is awaitable
-                    _raw_cache_val = await client_to_use.get(cache_key)
-                else: # 'get' method is synchronous (but might return a coroutine)
-                    _raw_cache_val = client_to_use.get(cache_key)
-
                 _resolved_cache_val = None
-                if asyncio.iscoroutine(_raw_cache_val): # Resolve if the obtained value is a coroutine
-                    _resolved_cache_val = await _raw_cache_val
-                else:
+                if client_to_use: # Ensure client was obtained
+                    # Assuming client_to_use.get is directly awaitable
+                    _raw_cache_val = await client_to_use.get(cache_key)
+                    # _raw_cache_val is the actual value or None, not a coroutine.
                     _resolved_cache_val = _raw_cache_val
                 
-                # Proceed if _resolved_cache_val is not None (could be empty string, which is handled by json.loads)
                 if _resolved_cache_val is not None:
                     _data_to_load = _resolved_cache_val
                     if isinstance(_data_to_load, bytes): # Decode if cache returned bytes
@@ -127,36 +115,124 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
                         try:
                             cached_result = json.loads(_data_to_load)
                             logger.debug(f"Cache hit for {cache_key}")
-                            # Note: Original code's tracker update for cache hit might be elsewhere or in finally block
                             return cached_result 
                         except json.JSONDecodeError as e:
                             logger.warning(f"Failed to decode cached JSON for {cache_key}. Data: '{_data_to_load!r}'. Error: {e}. Fetching fresh data.")
-                            # Fall through to treat as cache miss
                     else:
-                        # If _resolved_cache_val was not None, but not bytes or str after processing
                         logger.warning(f"Cached data for {cache_key} is of unexpected type: {type(_data_to_load)}. Value: '{_data_to_load!r}'. Fetching fresh data.")
-                        # Fall through to treat as cache miss
                 
-                # If we reach here, it implies a cache miss:
-                # - _resolved_cache_val was None initially
-                # - Or, it was not a string/bytes
-                # - Or, json.loads failed
                 logger.debug(f"Cache miss for {cache_key}")
                 # 2. Execute Core Logic
-                # Attempt to execute the agent function
                 try:
                     # Execute the function first
                     
-                    # Make a copy of kwargs to modify, so we don't alter the original dict
-                    # if it's used elsewhere, and to allow popping 'market_context_provider'.
-                    _func_kwargs = kwargs.copy()
-                    _market_provider = _func_kwargs.pop('market_context_provider', None)
+                    # Original kwargs from the user's call to the decorated function
+                    # _func_kwargs = kwargs.copy() # REMOVED
+                    # Extract market_provider from user_kwargs if present, as it's handled specially.
+                    # _market_provider = _func_kwargs.pop('market_context_provider', None) # REMOVED
 
-                    executed_func_result = func(*args,
-                                        cache_client=client_to_use,  # Use defined client_to_use
-                                        logger_instance=logger,      # Use imported logger
-                                        market_context_provider=_market_provider, # Use extracted value
-                                        **_func_kwargs) # Pass remaining kwargs
+                    # Inspect the signature of the wrapped function
+                    func_sig = inspect.signature(func)
+                    func_params = func_sig.parameters
+
+                    # Start with an empty dict for kwargs to be passed to the actual function
+                    call_kwargs = {}
+
+                    # 1. Populate with original user-provided kwargs if accepted by func.
+                    #    The decorator will then inject/override core dependencies.
+                    for key, value in kwargs.items(): # Use original kwargs from wrapper's signature
+                        if key in func_params:
+                            call_kwargs[key] = value
+                    
+                    # 2. Decorator-injected/managed arguments.
+                    # These are essential for AgentBase and are provided/overridden by the decorator
+                    # if the wrapped function declares them in its signature.
+
+                    # Agent Name (parameter for the decorator itself)
+                    if 'name' in func_params:
+                        call_kwargs['name'] = agent_name
+
+                    # Cache Client (obtained earlier in the decorator)
+                    if 'cache_client' in func_params:
+                        call_kwargs['cache_client'] = client_to_use
+
+                    # Logger (from the decorator's scope, typically loguru instance)
+                    # AgentBase constructor expects 'logger'.
+                    if 'logger' in func_params:
+                        call_kwargs['logger'] = logger 
+                    elif 'logger_instance' in func_params: # Support alternative naming if used by func
+                        call_kwargs['logger_instance'] = logger
+                    
+                    # Settings, DataProvider, and MarketContextProvider
+                    _settings_instance = None
+                    _data_provider_instance = None
+                    # mcp_instance will be defined if market_context_provider is successfully created
+
+                    # Step 1: Determine if settings need to be loaded and load them.
+                    needs_settings_loaded = (
+                        'settings' in func_params or
+                        'data_provider' in func_params or
+                        'market_context_provider' in func_params # MCP needs settings, often via DP
+                    )
+
+                    if needs_settings_loaded:
+                        from backend.config import settings as global_settings_accessor
+                        _settings_instance = global_settings_accessor.settings
+                        if not _settings_instance:
+                            logger.error(f"Agent {agent_name} decorator: Global settings failed to load. Required by function {func.__name__} for settings, data_provider, or market_context_provider.")
+                        # If the function explicitly asks for settings, provide it
+                        if 'settings' in func_params:
+                            call_kwargs['settings'] = _settings_instance
+
+                    # Step 2: Instantiate DataProvider if needed and possible.
+                    # DataProvider is needed if 'data_provider' is in func_params OR 'market_context_provider' is (as MCP depends on it).
+                    needs_data_provider = 'data_provider' in func_params or 'market_context_provider' in func_params
+                    
+                    if needs_data_provider:
+                        if _settings_instance: # DP requires settings to have loaded successfully
+                            from backend.data.providers.unified_provider import UnifiedDataProvider
+                            # UnifiedDataProvider does not take settings in its constructor
+                            _data_provider_instance = UnifiedDataProvider() 
+                            
+                            # If the function explicitly asks for data_provider, provide it.
+                            if 'data_provider' in func_params:
+                                call_kwargs['data_provider'] = _data_provider_instance
+                        else:
+                            # This logs if settings failed to load AND data_provider (or MCP needing DP) was requested.
+                            logger.error(f"Agent {agent_name} decorator: Cannot create data_provider for {func.__name__} due to missing settings.")
+                            # _data_provider_instance remains None
+
+                    # Step 3: Instantiate MarketContextProvider if needed and possible.
+                    if 'market_context_provider' in func_params:
+                        mcp_instance_to_pass = None # Initialize to None, to be passed if requested
+                        if _data_provider_instance and _settings_instance: # MCP requires both DP and settings
+                            from backend.market.context import MarketContext
+                            try:
+                                # Attempt to get/create the MarketContext instance
+                                mcp_instance_val = await MarketContext.get_instance(
+                                    data_provider=_data_provider_instance,
+                                    settings=_settings_instance
+                                )
+                                mcp_instance_to_pass = mcp_instance_val # Assign if successful
+                            except Exception as e_mcp:
+                                logger.error(f"Agent {agent_name} decorator: Failed to instantiate MarketContext for {func.__name__}: {e_mcp}")
+                                # mcp_instance_to_pass remains None, will be passed as None
+                        else:
+                            missing_mcp_deps = []
+                            if not _data_provider_instance:
+                                missing_mcp_deps.append("data_provider instance (dependency not met or its own settings dependency failed)")
+                            if not _settings_instance: # This check is somewhat redundant if DP creation relies on settings, but good for explicit clarity
+                                missing_mcp_deps.append("settings instance (dependency not met)")
+                            
+                            logger.warning(
+                                f"Agent {agent_name} decorator: Cannot create market_context_provider for function {func.__name__}. "
+                                f"Missing dependencies: {', '.join(missing_mcp_deps) if missing_mcp_deps else 'unknown reason (likely settings or data_provider init failure)'}."
+                            )
+                            # mcp_instance_to_pass remains None, will be passed as None
+                        
+                        call_kwargs['market_context_provider'] = mcp_instance_to_pass # Always add to call_kwargs if in func_params
+                    
+                    executed_func_result = func(*args, **call_kwargs)
                     # Then, check if the result is a coroutine and await it if so
                     if asyncio.iscoroutine(executed_func_result):
                         result = await executed_func_result
@@ -188,20 +264,13 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
                         result_for_cache_and_dict_ops = result # Pass through, but dict operations will fail
 
                     # If execution successful, cache the result
-                    if result_for_cache_and_dict_ops is not None and redis_client:
-                        # 3. Cache Result (only on success/valid data)
-                        # Now use result_for_cache_and_dict_ops for dict operations
+                    if result_for_cache_and_dict_ops is not None and client_to_use: # Check client_to_use
                         if isinstance(result_for_cache_and_dict_ops, dict) and \
                            result_for_cache_and_dict_ops.get("verdict") not in [VerdictType.ERROR.value, VerdictType.NO_DATA.value, None]:
                             try:
-                                # Handle both sync and async set methods
                                 cache_data = json.dumps(result_for_cache_and_dict_ops, default=robust_json_serializer)
-                                
-                                # Call the method, then check if the result is awaitable
-                                set_operation_result = redis_client.set(cache_key, cache_data, ex=cache_ttl)
-                                if inspect.isawaitable(set_operation_result):
-                                    await set_operation_result
-                                
+                                # Assuming client_to_use.set is directly awaitable
+                                await client_to_use.set(cache_key, cache_data, ex=cache_ttl)
                                 logger.debug(f"Cached result for {cache_key} with TTL {cache_ttl}s")
                             except TypeError as json_err:
                                 logger.error(f"Failed to serialize result for {cache_key} to JSON using robust_json_serializer: {json_err}. Result not cached.")
@@ -275,6 +344,7 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
                             if inspect.isawaitable(error_update_status_result):
                                 await error_update_status_result
                             
+
                             logger.debug(f"Tracker updated for {agent_name} ({symbol}): {status} (after main exception)")
                         else:
                             logger.warning(f"Skipping tracker update for {agent_name} after exception due to missing symbol or tracker method.")

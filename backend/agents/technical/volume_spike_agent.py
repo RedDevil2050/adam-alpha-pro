@@ -4,10 +4,11 @@ import numpy as np
 from loguru import logger
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
-from typing import Dict # Import Dict
+from typing import Dict, Any # Import Dict and Any
 from backend.agents.decorators import standard_agent_execution # Import decorator
 
 agent_name = "volume_spike_agent"
+AGENT_CATEGORY = "TECHNICAL" # Added category
 
 
 class VolumeSpikeAgent(TechnicalAgent):
@@ -77,8 +78,8 @@ class VolumeSpikeAgent(TechnicalAgent):
             return self._error_response(symbol, str(e))
 
 # Add standalone run function for backward compatibility with tests
-@standard_agent_execution(agent_name=agent_name, category="technical")
-async def run(symbol: str, agent_outputs: dict = None) -> dict:
+@standard_agent_execution(agent_name=agent_name, category=AGENT_CATEGORY) # Use AGENT_CATEGORY
+async def run(symbol: str, agent_outputs: dict = None, name: str = None, settings: Any = None, logger: Any = None, cache_client: Any = None, data_provider: Any = None, market_context_provider: Any = None) -> dict: # Added injected params
     """
     Standalone run function that creates and calls the VolumeSpikeAgent class.
     This maintains backward compatibility with tests that import this function.
@@ -86,9 +87,23 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     Args:
         symbol: The ticker symbol to analyze
         agent_outputs: Optional dictionary of outputs from other agents
+        name: Injected by decorator
+        settings: Injected by decorator
+        logger: Injected by decorator
+        cache_client: Injected by decorator
+        data_provider: Injected by decorator
+        market_context_provider: Injected by decorator
         
     Returns:
         Dictionary with the volume spike analysis results
     """
-    agent = VolumeSpikeAgent()
+    # Pass all injected dependencies to the agent constructor
+    agent = VolumeSpikeAgent(
+        name=name,
+        settings=settings,
+        logger=logger,
+        cache_client=cache_client,
+        data_provider=data_provider,
+        market_context_provider=market_context_provider
+    )
     return await agent.run(symbol, agent_outputs)

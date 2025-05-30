@@ -7,7 +7,23 @@ import asyncio
 
 
 class BaseAgent(ABC):
-    def __init__(self):
+    def __init__(
+        self,
+        name: str,
+        settings: Any,
+        logger: Any,
+        cache_client: Any,
+        data_provider: Any,
+        market_context_provider: Any,
+        **kwargs: Any
+    ):
+        self.name = name
+        self.settings = settings
+        self.logger = logger
+        self.cache_client = cache_client
+        self.data_provider = data_provider
+        self.market_context_provider = market_context_provider
+
         self.circuit_breaker = CircuitBreaker()
         self.last_run = 0
         self.min_interval = 1.0  # Minimum seconds between runs

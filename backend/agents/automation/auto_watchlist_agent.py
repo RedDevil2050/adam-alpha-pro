@@ -74,6 +74,6 @@ async def run(symbol: str, agent_outputs: dict = {}) -> dict:
         "agent_name": agent_name,
     }
 
-    await redis_client.set(cache_key, json.dumps(result), ex=settings.agent_cache_ttl)
+    await redis_client.set(cache_key, json.dumps(result), ex=settings.agent_settings.agent_cache_ttl_seconds) # Corrected attribute
     tracker.update("automation", agent_name, "implemented")
     return result

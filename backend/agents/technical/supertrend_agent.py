@@ -6,6 +6,10 @@ from loguru import logger
 import datetime
 from dateutil.relativedelta import relativedelta
 from backend.agents.decorators import standard_agent_execution # Import decorator
+from typing import Optional # Added
+from backend.config.settings import Settings # Corrected import path for Settings
+from backend.data.providers.unified_provider import UnifiedDataProvider # Added
+from backend.market.context import MarketContext # Added - Assuming this is the type for market_context_provider instance
 
 agent_name = "supertrend_agent"
 
@@ -28,7 +32,8 @@ class SupertrendAgent(TechnicalAgent):
                 return self._error_response(symbol, "No data available")
 
             # Get market context for volatility adjustment
-            market_context = await self.get_market_context(symbol)
+            # The agent_outputs are passed to the constructor and stored in self.agent_outputs by AgentBase
+            market_context = await self.get_market_context(symbol) # get_market_context in TechnicalAgent uses self.agent_outputs
             volatility = market_context.get("volatility", 0.2)
             adjustments = self.get_volatility_adjustments(volatility)
 
@@ -117,7 +122,30 @@ class SupertrendAgent(TechnicalAgent):
 
 # Apply the decorator to the standalone run function
 @standard_agent_execution(agent_name=agent_name, category="technical")
-async def run(symbol: str, period: int = 7, multiplier: float = 3.0, agent_outputs: dict = None) -> dict:
-    agent = SupertrendAgent()
+async def run(symbol: str, # First positional arg from user
+              # Dependencies injected by decorator, matching AgentBase/TechnicalAgent constructor
+              name: str,
+              settings: Settings,
+              data_provider: UnifiedDataProvider,
+              market_context_provider: Optional[MarketContext],
+              cache_client,
+              logger_instance, # Renamed from logger to logger_instance to match AgentBase
+              # User-provided kwargs for the run function itself
+              agent_outputs: Optional[dict] = None,
+              # Specific params for supertrend, with defaults (currently unused by _execute directly)
+              period: int = 7, # These are not passed to SupertrendAgent constructor
+              multiplier: float = 3.0 # These are not passed to SupertrendAgent constructor
+              ) -> dict:
+    agent = SupertrendAgent(
+        name=name,
+        settings=settings,
+        data_provider=data_provider,
+        market_context_provider=market_context_provider,
+        cache_client=cache_client,
+        logger=logger_instance, # Pass logger_instance as logger
+        agent_outputs=agent_outputs # Pass agent_outputs
+    )
     # The decorator now handles caching and error wrapping around this call
+    # _execute expects agent_outputs, which is now part of the agent instance.
+    # Passing agent_outputs explicitly as it was before.
     return await agent._execute(symbol, agent_outputs if agent_outputs else {})

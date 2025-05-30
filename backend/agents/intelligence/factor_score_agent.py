@@ -1,8 +1,13 @@
 from backend.agents.base.category_bases import IntelligenceAgentBase
 import numpy as np
-from loguru import logger
+from loguru import logger  # Module-level logger
+from backend.agents.decorators import standard_agent_execution  # Added
+from backend.config.settings import AgentSettings  # Added for type hinting
+from backend.data.providers.base_provider import BaseDataProvider  # Added for type hinting
+from typing import Any  # Added
 
 agent_name = "factor_score_agent"
+AGENT_CATEGORY = "INTELLIGENCE"  # Added category
 
 
 class FactorScoreAgent(IntelligenceAgentBase):
@@ -46,11 +51,11 @@ class FactorScoreAgent(IntelligenceAgentBase):
                     "market_regime": regime,
                 },
                 "error": None,
-                "agent_name": agent_name,
+                "agent_name": agent_name,  # Using module-level agent_name here
             }
 
         except Exception as e:
-            logger.error(f"Factor score calculation error: {e}")
+            self.logger.error(f"Factor score calculation error: {e}")  # Changed to self.logger
             return self._error_response(symbol, str(e))
 
     def _get_regime_weights(self, regime: str) -> dict:
@@ -90,6 +95,25 @@ class FactorScoreAgent(IntelligenceAgentBase):
         return np.mean(scores) if scores else 0.0
 
 
-async def run(symbol: str, agent_outputs: dict = {}) -> dict:
-    agent = FactorScoreAgent()
-    return await agent.execute(symbol, agent_outputs=agent_outputs) # Pass agent_outputs
+@standard_agent_execution(agent_name=agent_name, category=AGENT_CATEGORY)  # Added category argument
+async def run(
+    symbol: str,
+    agent_outputs: dict = {},
+    *,  # Enforce keyword arguments for injected dependencies
+    name: str,  # Injected by decorator, will be 'factor_score_agent'
+    settings: AgentSettings,
+    logger: Any,  # Injected logger instance
+    cache_client: Any,
+    data_provider: BaseDataProvider,
+    market_context_provider: Any,
+    **kwargs  # To catch any other args
+) -> dict:
+    agent = FactorScoreAgent(
+        name=name,  # Use the name from the decorator
+        settings=settings,
+        logger=logger,
+        cache_client=cache_client,
+        data_provider=data_provider,
+        market_context_provider=market_context_provider,
+    )
+    return await agent.execute(symbol, agent_outputs=agent_outputs)

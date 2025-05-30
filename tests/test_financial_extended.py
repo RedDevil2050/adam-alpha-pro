@@ -4,7 +4,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 import pytest
 import pandas as pd
-from unittest.mock import AsyncMock, patch # Ensure patch is imported
+# Ensure patch is imported, and MagicMock if complex mock objects are needed
+from unittest.mock import AsyncMock, patch, MagicMock
 from backend.agents.technical.rsi_agent import run as rsi_run
 from backend.agents.technical.macd_agent import run as macd_run
 from backend.agents.risk.beta_agent import run as beta_run
@@ -20,12 +21,14 @@ from datetime import date, timedelta # Import date utilities
 DEFAULT_END_DATE = date.today()
 DEFAULT_START_DATE = DEFAULT_END_DATE - timedelta(days=90)
 
+@patch('backend.agents.decorators.UnifiedDataProvider') # Patch for UnifiedDataProvider
 @patch('backend.agents.base.get_redis_client', new_callable=AsyncMock)
 @patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock)
 @pytest.mark.asyncio
 async def test_rsi_agent_precision(
-    mock_decorator_get_redis_client,
-    mock_base_get_redis_client,
+    mock_decorator_get_redis_client, # Innermost patch: decorators.get_redis_client
+    mock_base_get_redis_client,      # Middle patch: base.get_redis_client
+    MockUnifiedDataProviderClass,    # Outermost patch: decorators.UnifiedDataProvider
     monkeypatch
 ):
     mock_redis_instance = AsyncMock()
@@ -34,13 +37,17 @@ async def test_rsi_agent_precision(
     mock_base_get_redis_client.return_value = mock_redis_instance
     mock_decorator_get_redis_client.return_value = mock_redis_instance
 
-    # Up series for RSI=100 exactly (need at least 14 periods of gains)
+    # Setup mock for DataProvider
     prices = pd.Series(list(range(1, 31))) # 30 periods of gains
-    # Patch fetch_ohlcv_series as that's what rsi_agent uses
-    async def mock_fetch_ohlcv(symbol, start_date=DEFAULT_START_DATE, end_date=DEFAULT_END_DATE):
-        # Return a DataFrame with a 'close' column
-        return pd.DataFrame({'close': prices})
-    monkeypatch.setattr('backend.agents.technical.rsi_agent.fetch_ohlcv_series', mock_fetch_ohlcv)
+    mock_dp_instance = AsyncMock()
+    ohlcv_df = pd.DataFrame({'close': prices})
+    # Ensure get_ohlcv is an async mock
+    mock_dp_instance.get_ohlcv = AsyncMock(return_value=ohlcv_df)
+    MockUnifiedDataProviderClass.return_value = mock_dp_instance
+    
+    # Old mock - to be removed / commented out if present by previous logic
+    # monkeypatch.setattr('backend.agents.technical.rsi_agent.fetch_ohlcv_series', mock_fetch_ohlcv)
+
     # Mock get_market_context as it's called by the agent
     monkeypatch.setattr('backend.agents.technical.rsi_agent.RSIAgent.get_market_context', AsyncMock(return_value={"regime": "NEUTRAL"}))
 
@@ -51,12 +58,14 @@ async def test_rsi_agent_precision(
     # With only gains, RSI should be 100
     assert pytest.approx(100.0, rel=1e-2) == res['value']
 
+@patch('backend.agents.decorators.UnifiedDataProvider') # Patch for UnifiedDataProvider
 @patch('backend.agents.base.get_redis_client', new_callable=AsyncMock)
 @patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock)
 @pytest.mark.asyncio
 async def test_macd_agent_precision(
-    mock_decorator_get_redis_client,
-    mock_base_get_redis_client,
+    mock_decorator_get_redis_client, # Innermost patch
+    mock_base_get_redis_client,      # Middle patch
+    MockUnifiedDataProviderClass,    # Outermost patch
     monkeypatch
 ):
     mock_redis_instance = AsyncMock()
@@ -65,12 +74,17 @@ async def test_macd_agent_precision(
     mock_base_get_redis_client.return_value = mock_redis_instance
     mock_decorator_get_redis_client.return_value = mock_redis_instance
 
+    # Setup mock for DataProvider
     prices = pd.Series([i for i in range(1,30)])
-    # Patch fetch_ohlcv_series as that's what macd_agent uses
-    async def mock_fetch_ohlcv(symbol, start_date=DEFAULT_START_DATE, end_date=DEFAULT_END_DATE):
-        # Return a DataFrame with a 'close' column
-        return pd.DataFrame({'close': prices})
-    monkeypatch.setattr('backend.agents.technical.macd_agent.fetch_ohlcv_series', mock_fetch_ohlcv)
+    mock_dp_instance = AsyncMock()
+    ohlcv_df = pd.DataFrame({'close': prices})
+    # Ensure get_ohlcv is an async mock
+    mock_dp_instance.get_ohlcv = AsyncMock(return_value=ohlcv_df)
+    MockUnifiedDataProviderClass.return_value = mock_dp_instance
+
+    # Old mock - to be removed / commented out
+    # monkeypatch.setattr('backend.agents.technical.macd_agent.fetch_ohlcv_series', mock_fetch_ohlcv)
+    
     # Mock get_market_context as it's called by the agent
     monkeypatch.setattr('backend.agents.technical.macd_agent.MACDAgent.get_market_context', AsyncMock(return_value={"regime": "NEUTRAL"}))
 

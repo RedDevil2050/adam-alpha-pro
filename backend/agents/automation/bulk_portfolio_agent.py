@@ -176,6 +176,6 @@ async def run(symbol_input: Union[str, List[str]]) -> Dict[str, Any]:
          result_payload["error"] = "One or more symbols failed to process."
 
 
-    await redis_client.set(cache_key_lookup, json.dumps(result_payload), ex=settings.agent_cache_ttl)
+    await redis_client.set(cache_key_lookup, json.dumps(result_payload), ex=settings.agent_settings.agent_cache_ttl_seconds)
     await tracker.update("automation", agent_name, "implemented")
     return result_payload

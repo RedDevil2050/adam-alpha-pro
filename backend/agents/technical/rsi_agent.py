@@ -6,6 +6,10 @@ import pandas as pd
 import logging
 import numpy as np # Import numpy
 import datetime # Import datetime
+from backend.config.settings import AgentSettings # Import AgentSettings
+from backend.data.providers.base_provider import BaseDataProvider # Import BaseDataProvider
+from typing import Any # Import Any
+
 
 logger = logging.getLogger(__name__)
 
@@ -130,8 +134,8 @@ class RSIAgent(TechnicalAgent):
 # For backwards compatibility
 # Apply the standard decorator
 @standard_agent_execution(agent_name=agent_name, category="technical", cache_ttl=3600)
-async def run(symbol: str, agent_outputs: dict = {}) -> dict:
-    agent = RSIAgent()
+async def run(symbol: str, agent_outputs: dict = {}, name: str = None, settings: AgentSettings = None, logger: Any = None, cache_client: Any = None, data_provider: BaseDataProvider = None, market_context_provider: Any = None) -> dict:
+    agent = RSIAgent(name=name, settings=settings, logger=logger, cache_client=cache_client, data_provider=data_provider, market_context_provider=market_context_provider)
     # The decorator now handles execution, caching, errors, etc.
     # We just need the core logic call here.
     # The decorator passes args/kwargs, so we need to adjust the call slightly
@@ -153,7 +157,7 @@ async def run(symbol: str, agent_outputs: dict = {}) -> dict:
     # The run function then calls agent.execute.
 
     # Re-applying decorator to the existing run structure:
-    agent = RSIAgent()
+    # agent = RSIAgent() # This line is replaced by the one above
     # The decorator expects func(symbol, *args, **kwargs)
     # Our run takes (symbol, agent_outputs={}). Let's assume agent_outputs isn't used by decorator.
-    return await agent.execute(symbol, agent_outputs)
+    return await agent.execute(symbol, agent_outputs=agent_outputs)

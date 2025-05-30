@@ -9,9 +9,10 @@ from datetime import datetime, date, timedelta # Import date
 from dateutil.relativedelta import relativedelta
 from backend.utils.cache_utils import get_redis_client # Correct import path
 import pandas as pd # Import pandas for type checking
-from typing import Dict # Import Dict
+from typing import Dict, Any # Import Dict, Any
 
 agent_name = "trend_strength_agent"
+AGENT_CATEGORY = "TECHNICAL" # Added category
 
 
 class TrendStrengthAgent(TechnicalAgent):
@@ -120,8 +121,8 @@ class TrendStrengthAgent(TechnicalAgent):
             return self._error_response(symbol, str(e))
 
 # Add standalone run function for backward compatibility with tests
-@standard_agent_execution(agent_name=agent_name, category="technical")
-async def run(symbol: str, agent_outputs: dict = None) -> dict:
+@standard_agent_execution(agent_name=agent_name, category=AGENT_CATEGORY) # Use AGENT_CATEGORY
+async def run(symbol: str, agent_outputs: dict = None, name: str = None, settings: Any = None, logger: Any = None, cache_client: Any = None, data_provider: Any = None, market_context_provider: Any = None) -> dict: # Added injected params
     """
     Standalone run function that creates and calls the TrendStrengthAgent class.
     This maintains backward compatibility with tests that import this function.
@@ -129,9 +130,23 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     Args:
         symbol: The ticker symbol to analyze
         agent_outputs: Optional dictionary of outputs from other agents
+        name: Injected by decorator
+        settings: Injected by decorator
+        logger: Injected by decorator
+        cache_client: Injected by decorator
+        data_provider: Injected by decorator
+        market_context_provider: Injected by decorator
         
     Returns:
         Dictionary with the trend strength analysis results
     """
-    agent = TrendStrengthAgent()
+    # Pass all injected dependencies to the agent constructor
+    agent = TrendStrengthAgent(
+        name=name,
+        settings=settings,
+        logger=logger,
+        cache_client=cache_client,
+        data_provider=data_provider,
+        market_context_provider=market_context_provider
+    )
     return await agent.run(symbol, agent_outputs)

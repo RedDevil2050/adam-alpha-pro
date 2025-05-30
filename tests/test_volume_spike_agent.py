@@ -4,7 +4,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import pytest
 import pandas as pd
 from unittest.mock import AsyncMock, patch, MagicMock
-from backend.agents.technical.volume_spike_agent import run
+from backend.agents.technical.volume_spike_agent import run, VolumeSpikeAgent # Import VolumeSpikeAgent
 import datetime
 import json # Added for json.dumps
 
@@ -32,9 +32,9 @@ async def test_volume_spike_agent(mock_get_tracker_arg, mock_get_redis_arg, monk
     mock_fetch = AsyncMock(return_value=data_df)
     monkeypatch.setattr('backend.agents.technical.volume_spike_agent.fetch_ohlcv_series', mock_fetch)
 
-    # Mock get_market_context
+    # Mock get_market_context on the class, not base
     mock_market_context = AsyncMock(return_value={'regime': 'NEUTRAL'})
-    monkeypatch.setattr('backend.agents.technical.base.TechnicalAgent.get_market_context', mock_market_context)
+    monkeypatch.setattr(VolumeSpikeAgent, 'get_market_context', mock_market_context) # Patch on VolumeSpikeAgent
 
     # Set up Redis mock instance and return value correctly
     mock_redis_instance = AsyncMock()
@@ -56,7 +56,7 @@ async def test_volume_spike_agent(mock_get_tracker_arg, mock_get_redis_arg, monk
 
     # Verify mocks were called correctly
     mock_fetch.assert_called_once()
-    mock_market_context.assert_called_once()
+    mock_market_context.assert_awaited_once() # Changed from assert_called_once to assert_awaited_once
     mock_get_redis_arg.assert_awaited_once() # Verify the AsyncMock for get_redis_client was awaited
     mock_redis_instance.get.assert_awaited_once()
 

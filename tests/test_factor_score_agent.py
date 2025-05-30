@@ -12,12 +12,28 @@ agent_name = "factor_score_agent"
 @pytest.mark.asyncio
 # Patch the get_market_context method directly on the class prototype
 @patch.object(FactorScoreAgent, 'get_market_context', new_callable=AsyncMock)
-@patch('backend.agents.base.get_redis_client', new_callable=AsyncMock) 
+@patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock) # Patched in decorators
+@patch('backend.agents.base.get_redis_client', new_callable=AsyncMock) # Patched in base
 async def test_factor_score_agent_strong_bull(
-    mock_base_get_redis_client, 
+    mock_base_get_redis_client, # For AgentBase, if it uses it directly (it doesn't for cache)
+    mock_decorator_get_redis_client, # For the decorator
     mock_get_market_context
 ):
     # --- Mock Configuration ---
+    # Configure the mock for the decorator's Redis client
+    mock_redis_decorator_instance = AsyncMock()
+    mock_redis_decorator_instance.get = AsyncMock(return_value=None) # Cache miss
+    mock_redis_decorator_instance.set = AsyncMock() # To capture cache set
+    mock_decorator_get_redis_client.return_value = mock_redis_decorator_instance
+
+    # Configure the mock for AgentBase's Redis client (if it were to use one directly)
+    # This agent doesn't seem to use a separate redis client in its base for this flow,
+    # but good practice to mock it if the patch is there.
+    mock_redis_base_instance = AsyncMock()
+    mock_redis_base_instance.get = AsyncMock(return_value=None)
+    mock_redis_base_instance.set = AsyncMock()
+    mock_base_get_redis_client.return_value = mock_redis_base_instance
+
     symbol = "TEST_SYMBOL"
     market_regime = "BULL"
 
