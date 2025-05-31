@@ -5,6 +5,8 @@ import nltk # Import nltk
 import warnings # Add this line
 import sys
 
+pytest_plugins = ["pytest_httpx"] # Add this line
+
 # Download vader_lexicon once per session
 def pytest_configure(config):
     """Download NLTK data needed for tests."""

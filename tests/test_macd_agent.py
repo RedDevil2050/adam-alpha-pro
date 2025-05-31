@@ -20,14 +20,17 @@ from backend.config.settings import AgentSettings # Import AgentSettings for spe
 @patch.object(MACDAgent, 'get_market_context')
 # Patch the pandas EWM calculation
 @patch('pandas.core.window.ewm.ExponentialMovingWindow.mean')
+# Patch UnifiedDataProvider where the decorator might instantiate it
+@patch('backend.agents.decorators.UnifiedDataProvider')
 async def test_macd_agent_buy_signal(
-    mock_agent_settings_class,       # New mock for AgentSettings class
+    mock_unified_dp_class_for_decorator, # Corresponds to @patch('backend.agents.decorators.UnifiedDataProvider')
     mock_ewm_mean,                   # Corresponds to @patch('pandas.core.window.ewm.ExponentialMovingWindow.mean')
     mock_get_market_context,         # Corresponds to @patch.object(MACDAgent, 'get_market_context')
     mock_datetime_in_agent,          # Corresponds to @patch('backend.agents.technical.macd_agent.datetime')
     mock_decorator_get_redis_client, # Corresponds to @patch('backend.agents.decorators.get_redis_client', ...)
     mock_base_get_redis_client,      # Corresponds to @patch('backend.agents.base.get_redis_client', ...)
-    monkeypatch                      # ADDED monkeypatch fixture
+    mock_agent_settings_class,       # New mock for AgentSettings class (should be from the outermost patch)
+    monkeypatch
 ):
     # --- Mock AgentSettings ---
     # This function will be called when AgentSettings() is instantiated
@@ -75,21 +78,11 @@ async def test_macd_agent_buy_signal(
     # 1. Mock fetch_ohlcv_series
     # Create a dummy DataFrame with a 'close' column
     data_df = pd.DataFrame({'close': np.linspace(100, 110, 35)}) # Need enough data for EWM
-    # The agent uses self.data_provider.get_ohlcv, not a direct import of fetch_ohlcv_series
-    # We need to mock the get_ohlcv method of the data_provider instance.
-    # The `run` function receives a data_provider from the decorator.
-    # We will patch `BaseDataProvider.get_ohlcv` which is the class of the injected `data_provider`.
-    # This requires knowing the actual data provider class being injected.
-    # Assuming it's BaseDataProvider or a subclass that doesn't override get_ohlcv in a way that bypasses this patch.
-    # For the purpose of this test, we'll mock it on BaseDataProvider.
-    # If a more specific provider (e.g., UnifiedDataProvider) is always used, patch that.
-    # Patching 'backend.agents.technical.macd_agent.fetch_ohlcv_series' is incorrect as the agent calls `self.data_provider.get_ohlcv`.
-    # Let's use monkeypatch for this, similar to test_financial_calculations.
-    # This test already has a mock_fetch_ohlcv parameter from a patch, but it's targeting the wrong thing.
-    # Removing the incorrect @patch('backend.agents.technical.macd_agent.fetch_ohlcv_series')
-    # and using monkeypatch for BaseDataProvider.get_ohlcv.
-    # This also means removing mock_fetch_ohlcv from the test signature.
-    monkeypatch.setattr('backend.data.providers.unified_provider.UnifiedDataProvider.get_ohlcv', AsyncMock(return_value=data_df))
+    
+    # Configure the mock for UnifiedDataProvider instance that the decorator will create
+    mock_dp_instance = AsyncMock()
+    mock_dp_instance.get_ohlcv = AsyncMock(return_value=data_df)
+    mock_unified_dp_class_for_decorator.return_value = mock_dp_instance
 
     # 2. Mock EWM calculations to produce BUY signal
     # We need macd > signal and histogram > 0
@@ -159,15 +152,12 @@ async def test_macd_agent_buy_signal(
     # --- Verify Mocks ---
     # Calculate expected dates based on the mocked today's date
     end_date = mock_today_date_object # Use the object used for mocking
-    start_date = end_date - real_datetime_timedelta_class(days=365) # Use real timedelta for test calculation
-    # The assertion for mock_fetch_ohlcv.assert_awaited_once_with is no longer valid as we are not mocking that directly.
-    # Instead, the mocked BaseDataProvider.get_ohlcv (via monkeypatch) would be called.
-    # We can check its call if needed, but the result assertion is more important.
-    # For example: backend.data.providers.base_provider.BaseDataProvider.get_ohlcv.assert_awaited_once_with(symbol, start_date=start_date, end_date=end_date)
-    # This requires assigning the mock to a variable: 
-    # mock_dp_get_ohlcv = AsyncMock(return_value=data_df)
-    # monkeypatch.setattr('backend.data.providers.base_provider.BaseDataProvider.get_ohlcv', mock_dp_get_ohlcv)
-    # mock_dp_get_ohlcv.assert_awaited_once_with(symbol, start_date=start_date, end_date=end_date)
+    # Assuming MACDAgent has a class attribute REQUIRED_HISTORY_DAYS
+    # If not, replace MACDAgent.REQUIRED_HISTORY_DAYS with the actual number of days (e.g., 365 or a calculated value based on periods)
+    start_date = end_date - real_datetime_timedelta_class(days=getattr(MACDAgent, 'REQUIRED_HISTORY_DAYS', 365)) 
+    
+    # Check that the mocked get_ohlcv was called correctly
+    mock_dp_instance.get_ohlcv.assert_awaited_once_with(symbol, start_date=start_date, end_date=end_date)
 
     # Check ewm().mean() calls
     assert mock_ewm_mean.call_count == 3
@@ -201,11 +191,15 @@ async def test_macd_agent_schema(mock_decorator_get_redis_client, mock_base_get_
     mock_base_get_redis_client.return_value = mock_redis_instance
 
     # Mock dependencies for schema test to avoid actual calculation/fetching
-    # Patch BaseDataProvider.get_ohlcv using monkeypatch
-    mock_data_df = pd.DataFrame({'close': [100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126]}) # Ensure enough data
-    monkeypatch.setattr('backend.data.providers.base_provider.BaseDataProvider.get_ohlcv', AsyncMock(return_value=mock_data_df))
-    
-    with patch.object(MACDAgent, 'get_market_context', new_callable=AsyncMock) as mock_context:
+    mock_data_df = pd.DataFrame({'close': [100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126] * 2}) # Ensure enough data
+
+    with patch.object(MACDAgent, 'get_market_context', new_callable=AsyncMock) as mock_context, \
+         patch('backend.agents.decorators.UnifiedDataProvider') as mock_unified_dp_class_for_decorator: # Patch where decorator instantiates it
+        
+        mock_dp_instance_schema = AsyncMock() # Use a different name to avoid conflict if tests run in parallel or share context
+        mock_dp_instance_schema.get_ohlcv = AsyncMock(return_value=mock_data_df)
+        mock_unified_dp_class_for_decorator.return_value = mock_dp_instance_schema
+        
         mock_context.return_value = {"regime": "NEUTRAL"}
         result = await macd_run(symbol)
 
