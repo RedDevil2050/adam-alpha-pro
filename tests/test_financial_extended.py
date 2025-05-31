@@ -26,35 +26,37 @@ DEFAULT_START_DATE = DEFAULT_END_DATE - timedelta(days=90)
 @patch('backend.agents.decorators.UnifiedDataProvider') 
 @patch('backend.agents.technical.rsi_agent.RSIAgent.get_market_context', new_callable=AsyncMock)
 async def test_rsi_agent_precision(
-    mock_get_market_context, 
+    mock_get_market_context,
     mock_unified_data_provider_class, # This is now the class mock
-    httpx_mock: HTTPXMock, 
+    httpx_mock: HTTPXMock,
     sample_real_stock_data,
     monkeypatch # Added monkeypatch
 ):
-    # Redis mock setup
-    mock_redis_instance = AsyncMock()
-    mock_redis_instance.get = AsyncMock(return_value=None)
-    mock_redis_instance.set = AsyncMock()
-    mock_base_redis.return_value = mock_redis_instance
-    mock_decorator_redis.return_value = mock_redis_instance
+    # Define ohlcv_df
+    ohlcv_df = pd.DataFrame({ # Sample DataFrame
+        'Open': [10, 11, 12],
+        'High': [15, 16, 17],
+        'Low': [9, 10, 11],
+        'Close': [12, 13, 14],
+        'Volume': [1000, 1100, 1200]
+    })
 
     # Setup for UnifiedDataProvider instance mock
-    # Configure the instance that will be returned by the mocked class
     mock_dp_instance = AsyncMock()
     mock_dp_instance.get_ohlcv = AsyncMock(return_value=ohlcv_df)
     mock_unified_data_provider_class.return_value = mock_dp_instance
-    
+
+    # Configure market context mock
     mock_get_market_context.return_value = {"regime": "NEUTRAL"}
 
-    # Mock Redis if necessary (assuming AgentSettings enables caching)
-    mock_redis_instance = AsyncMock()
-    mock_redis_instance.get = AsyncMock(return_value=None) # Cache miss
-    mock_redis_instance.set = AsyncMock()
-    
+    # Centralized Redis Mock Setup
+    mock_redis_client = AsyncMock()
+    mock_redis_client.get = AsyncMock(return_value=None)  # Simulate cache miss
+    mock_redis_client.set = AsyncMock()                   # Mock set operation
+
     # Patch get_redis_client for AgentBase and decorators
-    monkeypatch.setattr('backend.agents.base.get_redis_client', AsyncMock(return_value=mock_redis_instance))
-    monkeypatch.setattr('backend.agents.decorators.get_redis_client', AsyncMock(return_value=mock_redis_instance))
+    monkeypatch.setattr('backend.agents.base.get_redis_client', AsyncMock(return_value=mock_redis_client))
+    monkeypatch.setattr('backend.agents.decorators.get_redis_client', AsyncMock(return_value=mock_redis_client))
 
     agent_result = await rsi_agent_run(symbol="TEST_REAL_STOCK")
 
@@ -69,34 +71,37 @@ async def test_rsi_agent_precision(
 @patch('backend.agents.decorators.UnifiedDataProvider')
 @patch('backend.agents.technical.macd_agent.MACDAgent.get_market_context', new_callable=AsyncMock)
 async def test_macd_agent_precision(
-    mock_get_market_context, 
+    mock_get_market_context,
     mock_unified_data_provider_class, # This is now the class mock
-    httpx_mock: HTTPXMock, 
+    httpx_mock: HTTPXMock,
     sample_real_stock_data,
     monkeypatch # Added monkeypatch
 ):
-    # Redis mock setup
-    mock_redis_instance = AsyncMock()
-    mock_redis_instance.get = AsyncMock(return_value=None)
-    mock_redis_instance.set = AsyncMock()
-    mock_base_redis.return_value = mock_redis_instance
-    mock_decorator_redis.return_value = mock_redis_instance
+    # Define ohlcv_df
+    ohlcv_df = pd.DataFrame({ # Sample DataFrame
+        'Open': [10, 11, 12],
+        'High': [15, 16, 17],
+        'Low': [9, 10, 11],
+        'Close': [12, 13, 14],
+        'Volume': [1000, 1100, 1200]
+    })
 
     # Setup for UnifiedDataProvider instance mock
-    # Configure the instance that will be returned by the mocked class
     mock_dp_instance = AsyncMock()
     mock_dp_instance.get_ohlcv = AsyncMock(return_value=ohlcv_df)
     mock_unified_data_provider_class.return_value = mock_dp_instance
-    
+
+    # Configure market context mock
     mock_get_market_context.return_value = {"regime": "NEUTRAL"}
 
-    # Mock Redis if necessary
-    mock_redis_instance = AsyncMock()
-    mock_redis_instance.get = AsyncMock(return_value=None) # Cache miss
-    mock_redis_instance.set = AsyncMock()
+    # Centralized Redis Mock Setup
+    mock_redis_client = AsyncMock()
+    mock_redis_client.get = AsyncMock(return_value=None)  # Simulate cache miss
+    mock_redis_client.set = AsyncMock()                   # Mock set operation
 
-    monkeypatch.setattr('backend.agents.base.get_redis_client', AsyncMock(return_value=mock_redis_instance))
-    monkeypatch.setattr('backend.agents.decorators.get_redis_client', AsyncMock(return_value=mock_redis_instance))
+    # Patch get_redis_client for AgentBase and decorators
+    monkeypatch.setattr('backend.agents.base.get_redis_client', AsyncMock(return_value=mock_redis_client))
+    monkeypatch.setattr('backend.agents.decorators.get_redis_client', AsyncMock(return_value=mock_redis_client))
 
     agent_result = await macd_agent_run(symbol="TEST_REAL_STOCK")
 
@@ -147,6 +152,6 @@ async def test_beta_and_volatility(monkeypatch):
     assert 'value' in res_vol, "'value' key (containing volatility) missing from vol_run result"
     # For linear series [1..10], simple returns are [1.0, 0.5, 0.33...], std dev is not 0.
     # Calculated annualized volatility % is ~426.79
-    # assert pytest.approx(0.0, abs=1e-4) == res_vol['value'] # Original assertion was incorrect
+    # assert pytest.approx(0.0, abs=1e-4) # Original assertion was incorrect
     assert pytest.approx(426.79, abs=0.15) == res_vol['value']
 
