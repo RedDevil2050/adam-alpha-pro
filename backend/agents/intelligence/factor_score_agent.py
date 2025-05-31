@@ -40,23 +40,28 @@ class FactorScoreAgent(IntelligenceAgentBase):
                 verdict = "WEAK_FACTORS"
                 confidence = 0.5
 
+            # Prepare details dictionary
+            details_dict = {
+                "factor_scores": factors,
+                "market_regime": regime,
+                "weights": weights,
+                "value": factor_score,  # Composite score
+            }
+
             return {
-                "symbol": symbol,
                 "verdict": verdict,
                 "confidence": confidence,
-                "value": round(factor_score, 4),
-                "details": {
-                    "factor_scores": {k: round(v, 4) for k, v in factors.items()},
-                    "weights": weights,
-                    "market_regime": regime,
-                },
-                "error": None,
-                "agent_name": agent_name,  # Using module-level agent_name here
+                "details": details_dict,
+                # Fields like 'symbol', 'agent_name', 'error' are handled by AgentBase or _format_output
             }
 
         except Exception as e:
-            self.logger.error(f"Factor score calculation error: {e}")  # Changed to self.logger
-            return self._error_response(symbol, str(e))
+            self.logger.error(f"Factor score calculation error: {e}")
+            # _error_response is part of AgentBase, which will be called by the execute method if an exception bubbles up
+            # For direct calls or specific handling, ensure it matches AgentBase._error_response structure
+            # or rely on AgentBase's error handling.
+            # For now, let the exception propagate to be handled by AgentBase.execute's try-except.
+            raise  # Propagate error to be handled by AgentBase
 
     def _get_regime_weights(self, regime: str) -> dict:
         weights = {

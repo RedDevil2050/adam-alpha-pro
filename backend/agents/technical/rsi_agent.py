@@ -48,29 +48,45 @@ class RSIAgent(TechnicalAgent):
             # Check if RSI calculation was successful
             if rsi_value is None:
                 logger.warning(f"[{self.__class__.__name__}] RSI calculation failed for {symbol}, likely insufficient data.")
-                return self._error_response(symbol, "RSI calculation failed (insufficient data).")
+                # Return structure expected by AgentBase for error handling
+                return {
+                    "verdict": "ERROR", # Or a more specific error verdict
+                    "confidence": 0.0,
+                    "details": {"reason": "RSI calculation failed (insufficient data)."},
+                    "error": "RSI calculation failed (insufficient data)." 
+                    # agent_name and symbol will be added by AgentBase or its _format_output
+                }
+
 
             # Adjust signals based on market regime
             signals = self._get_regime_signals(
                 rsi_value, market_context.get("regime", "NEUTRAL") # Use rsi_value
             )
 
+            # Prepare details dictionary
+            details_dict = {
+                "rsi": round(rsi_value, 2),
+                "market_regime": market_context.get("regime"),
+                # The 'value' key for the primary metric (RSI itself) should be here
+                # if tests expect it within details. Or, if it's the main "output value",
+                # AgentBase._format_output might need a way to specify it.
+                # For now, let's ensure 'rsi' is the key for the RSI value within details.
+                # The previous top-level 'value' was likely the issue.
+            }
+
             return {
-                "symbol": symbol,
                 "verdict": signals["verdict"],
                 "confidence": signals["confidence"],
-                "value": round(rsi_value, 2), # Use rsi_value
-                "details": {
-                    "rsi": round(rsi_value, 2), # Use rsi_value
-                    "market_regime": market_context.get("regime"),
-                },
-                "error": None,
-                "agent_name": self.__class__.__name__,
+                "details": details_dict,
+                # 'symbol', 'agent_name', 'error' are handled by AgentBase or _format_output
+                # The explicit 'value': round(rsi_value, 2) at the top level is removed
+                # as AgentBase._format_output does not preserve arbitrary top-level keys.
             }
 
         except Exception as e:
             logger.exception(f"[{self.__class__.__name__}] Error executing agent for {symbol}: {e}") # Log exception
-            return self._error_response(symbol, str(e))
+            # Let AgentBase.execute handle the error formatting and logging
+            raise e
 
     # --- Added _calculate_rsi method ---
     def _calculate_rsi(self, prices: pd.Series, period: int = 14) -> float | None:
@@ -145,9 +161,7 @@ async def run(symbol: str, agent_outputs: dict = {}, name: str = None, settings:
     # or we adapt the run function. Let's stick to decorating run for now.
     # The agent instance needs to be created inside the decorated function.
     # The decorator expects the decorated function to perform the core logic.
-    # Let's refactor slightly: the decorated function will *be* the core logic.
-
-    # Refactored: The decorated function IS the core logic execution
+    # Let's refactor slightly: the decorated function will *be* the core logic execution
     # The RSIAgent class logic might need adjustment if it relies on self state
     # across calls, but typically agents are stateless per call.
     # Let's assume RSIAgent._execute can be called.

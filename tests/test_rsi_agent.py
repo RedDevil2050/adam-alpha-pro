@@ -102,14 +102,27 @@ async def test_rsi_agent_oversold(
     # Assert agent name using the imported variable
     assert result['agent_name'] == agent_name
     # Check for potential errors before asserting verdict
-    if result.get('error'):
-        pytest.fail(f"Agent returned an error: {result['error']}")
+    if result.get('error') or result.get('verdict') == 'ERROR':
+        # Access error details from the 'details' dictionary if verdict is ERROR
+        error_details = result.get('details', {}).get('error_message', 'Unknown error')
+        pytest.fail(f"Agent returned an error: {error_details} - Full result: {result}")
+
     assert result['verdict'] == expected_verdict
-    assert 'value' in result # RSI value
+    # The primary value (RSI) is now expected within details.rsi
+    # The AgentBase._format_output does not add a top-level 'value' key by default.
+    # If a specific 'value' is needed at the top level, _format_output or the agent's return needs adjustment.
+    # For now, let's check details.rsi as per the agent's _execute structure.
+    if result.get('verdict') not in ["NO_DATA", "ERROR", None]:
+        assert 'details' in result and 'rsi' in result['details'], "RSI value missing from details"
     # Check confidence range if verdict is BUY
     if result['verdict'] == 'BUY':
         assert result['confidence'] >= expected_confidence_min
-    assert result.get('error') is None
+    # The error field at the top level should be None if no error occurred during AgentBase.execute
+    # If _execute raises an error, AgentBase.execute populates 'details' with error info.
+    # If _execute returns an error structure, that structure is passed through _format_output.
+    # The previous check for result.get('error') handles cases where AgentBase.execute catches an exception.
+    # If the agent itself returns an error verdict, the top-level 'error' key might not be set by _format_output.
+    # Let's rely on verdict == 'ERROR' or the initial error check.
 
     # --- Verify Mocks ---
     # Calculate expected dates based on mocked today

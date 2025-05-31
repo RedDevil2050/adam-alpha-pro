@@ -93,11 +93,17 @@ async def test_factor_score_agent_strong_bull(
     assert result['agent_name'] == agent_name
     assert result['verdict'] == expected_verdict
     assert result['confidence'] == pytest.approx(expected_confidence)
-    assert result['value'] == pytest.approx(expected_factor_score) # Value is the composite score
-    assert result.get('error') is None
+    # The composite score ('value') is now nested within 'details'
+    assert 'details' in result, "'details' key missing from result"
+    assert 'value' in result['details'], "'value' key missing from result['details']"
+    assert result['details']['value'] == pytest.approx(expected_factor_score) 
+    # Error is checked by AgentBase, if an error occurs, verdict would be ERROR and details would contain error info
+    # No top-level 'error' key is guaranteed by _format_output unless an exception was caught by AgentBase.execute
+    # We rely on the verdict and details for error information if the agent itself returns an error.
+    if result.get('verdict') == "ERROR":
+        pytest.fail(f"Agent returned an error: {result.get('details')}")
 
-    # Check details
-    assert 'details' in result
+    # Check other details
     details = result['details']
     assert details['market_regime'] == market_regime
     assert details['weights'] == weights
