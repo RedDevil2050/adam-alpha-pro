@@ -77,7 +77,13 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
     def decorator(func):
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
-            if not args:
+            symbol = None
+            if args:
+                symbol = args[0]
+            elif 'symbol' in kwargs:
+                symbol = kwargs['symbol']
+            
+            if not symbol:
                 logger.error(f"Agent {agent_name} called without symbol argument.")
                 return {
                     "symbol": None,
@@ -89,7 +95,6 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
                     "agent_name": agent_name,
                 }
 
-            symbol = args[0]
             cache_key = f"{agent_name}:{symbol}"
             result = None
             

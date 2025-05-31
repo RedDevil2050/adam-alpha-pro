@@ -21,6 +21,8 @@ from backend.agents.valuation.pe_ratio_agent import run as pe_run
 # If these are not found, the tests for rsi_agent and macd_agent will fail at runtime.
 # We will mock them if necessary within the tests that use them if not globally available.
 from datetime import date, timedelta # For DEFAULT_START_DATE, DEFAULT_END_DATE if not imported
+import pandas as pd # Ensure pandas is imported for DataFrame creation in mock
+
 DEFAULT_START_DATE = date.today() - timedelta(days=365)
 DEFAULT_END_DATE = date.today()
 
@@ -131,14 +133,22 @@ async def test_pe_ratio_agent_no_eps_data(
     mock_fetch_eps_func.assert_awaited_once_with('XYZ')
 
 
-@patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock) # For @cache_agent_result decorator
-@patch('backend.agents.base.get_redis_client', new_callable=AsyncMock)      # For AgentBase.initialize
+@patch('backend.utils.data_provider.provider')  # Patch the 'provider' instance directly
+@patch('backend.market.context.MarketContext.get_instance', new_callable=AsyncMock)
+@patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock)
+@patch('backend.agents.base.get_redis_client', new_callable=AsyncMock)
 @pytest.mark.asyncio
 async def test_rsi_agent_accuracy(
-    mock_base_get_redis_client,      # Corresponds to base.get_redis_client (inner patch)
-    mock_decorator_get_redis_client, # Corresponds to decorators.get_redis_client (outer patch)
+    mock_base_get_redis_client,
+    mock_decorator_get_redis_client,
+    mock_market_context_get_instance,
+    mock_provider_instance,  # This is now the mocked backend.utils.data_provider.provider
     monkeypatch
 ):
+    # Setup for mock_market_context_get_instance
+    mock_mcp_instance = AsyncMock()
+    mock_market_context_get_instance.return_value = mock_mcp_instance
+
     mock_redis_instance = AsyncMock()
     mock_redis_instance.get = AsyncMock(return_value=None) # Simulate cache miss
     mock_redis_instance.set = AsyncMock()
@@ -146,34 +156,40 @@ async def test_rsi_agent_accuracy(
     mock_decorator_get_redis_client.return_value = mock_redis_instance
 
     # Fixed price series to calculate known RSI value
-    # 15 points allow for the first 14-period RSI calculation
-    prices = pd.Series([45,46,47,48,47,46,45,44,43,42,41,40,41,42,43])
-    # Mock fetch_ohlcv_series used by rsi_agent
-    async def mock_fetch_ohlcv(symbol, start_date=DEFAULT_START_DATE, end_date=DEFAULT_END_DATE):
-        # Return a DataFrame with a 'close' column
-        return pd.DataFrame({'close': prices})
-    # The rsi_agent.py uses self.data_provider.get_ohlcv.
-    # The run function for rsi_agent is decorated with @standard_agent_execution,
-    # which will instantiate a UnifiedDataProvider if one is not provided.
-    # So, we need to patch \'backend.agents.decorators.UnifiedDataProvider\'
-    # and make its get_ohlcv method return our mock data.
+    close_prices = [45,46,47,48,47,46,45,44,43,42,41,40,41,42,43.0] # Length 15
 
-    with patch('backend.agents.decorators.UnifiedDataProvider') as mock_udp_class:
-        mock_udp_instance = AsyncMock()
-        mock_udp_instance.get_ohlcv = AsyncMock(side_effect=mock_fetch_ohlcv) # Use side_effect for async func
-        mock_udp_class.return_value = mock_udp_instance
+    # Update mock_fetch_ohlcv_data to accept interval and **kwargs
+    async def mock_fetch_ohlcv_data(symbol, start_date=DEFAULT_START_DATE, end_date=DEFAULT_END_DATE, interval="1d", **kwargs):
+        num_periods = len(close_prices)
+        data = {
+            'open': [p - 0.5 for p in close_prices],
+            'high': [p + 0.5 for p in close_prices],
+            'low': [p - 1.0 for p in close_prices],
+            'close': close_prices,
+            'volume': [1000.0] * num_periods
+        }
+        actual_end_date = pd.Timestamp(end_date)
+        index = pd.date_range(end=actual_end_date, periods=num_periods, freq='B')
+        df = pd.DataFrame(data, index=index)
+        df.columns = [col.lower() for col in df.columns]
+        # print(f"Mock returning DataFrame: empty={df.empty}, shape={df.shape}, columns={df.columns}, index_min={df.index.min()}, index_max={df.index.max()}")
+        return df
 
-        # Mock get_market_context as it's called by the agent (needed for adjustments)
-        monkeypatch.setattr('backend.agents.technical.rsi_agent.RSIAgent.get_market_context', AsyncMock(return_value={"regime": "NEUTRAL"}))
+    # Configure the fetch_price_data method on the mocked provider instance
+    mock_provider_instance.fetch_price_data = AsyncMock(side_effect=mock_fetch_ohlcv_data)
 
-        res = await rsi_agent_run('ABC') # Corrected: rsi_agent_run was rsi_run
+    # Mock get_market_context as it's called by the agent (needed for adjustments)
+    monkeypatch.setattr('backend.agents.technical.rsi_agent.RSIAgent.get_market_context', AsyncMock(return_value={"regime": "NEUTRAL"}))
 
-    # if res.get('error') is None, f"RSI agent returned error: {res.get('error')}"
-    # Check for error verdict or error details
+    res = await rsi_agent_run('ABC')
+    
+    mock_provider_instance.fetch_price_data.assert_awaited_once() # Ensure the mock was called
+
     if res.get('verdict') == 'ERROR' or (res.get('details') and res['details'].get('error_message')):
-        error_info = res.get('details', {}).get('error_message', 'Unknown error')
+        error_info = res.get('details', {}).get('error_code', res.get('details', {}).get('error_message', 'Unknown error'))
         pytest.fail(f"RSI agent returned error: {error_info} - Full result: {res}")
 
+    # Basic check for non-empty values if calculation succeeded
     if res.get('verdict') not in ["NO_DATA", "ERROR", None]: 
         assert 'details' in res, "'details' key missing from rsi_agent result"
         assert 'rsi' in res['details'], "\'rsi\' (value) key missing from rsi_agent result details"
@@ -184,12 +200,13 @@ async def test_rsi_agent_accuracy(
 # Adding new_callable=AsyncMock if the instantiation of UnifiedDataProvider might be async
 @patch('backend.agents.technical.macd_agent.MACDAgent.get_market_context', new_callable=AsyncMock)
 # Patch UnifiedDataProvider where the decorator will instantiate it
-@patch('backend.agents.decorators.UnifiedDataProvider') 
+@patch('backend.data.providers.unified_provider.UnifiedDataProvider') # Corrected: Patch target to actual source
+@pytest.mark.asyncio
 async def test_macd_agent_accuracy(
     mock_unified_data_provider_class, 
     mock_get_market_context,
-    httpx_mock: HTTPXMock, 
-    sample_stock_data_json
+    httpx_mock: HTTPXMock
+    # sample_stock_data_json fixture removed
 ):
     symbol = "TEST_STOCK"
     # Mock for Redis (same as before)
