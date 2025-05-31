@@ -165,17 +165,22 @@ async def test_rsi_agent_accuracy(
 
 @patch('backend.agents.base.get_redis_client', new_callable=AsyncMock)
 @patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock)
+@patch('backend.data.providers.unified_provider.UnifiedDataProvider')
 @pytest.mark.asyncio
 async def test_macd_agent_accuracy(
-    mock_decorator_get_redis_client,
-    mock_base_get_redis_client,
+    # Argument order: mock from outermost patch, then middle, then innermost
+    mock_unified_data_provider_class, # Receives mock for UnifiedDataProvider class
+    mock_decorator_redis_client,    # Receives mock for decorators.get_redis_client
+    mock_base_redis_client,         # Receives mock for base.get_redis_client
     monkeypatch
 ):
     mock_redis_instance = AsyncMock()
     mock_redis_instance.get = AsyncMock(return_value=None)
     mock_redis_instance.set = AsyncMock()
-    mock_base_get_redis_client.return_value = mock_redis_instance
-    mock_decorator_get_redis_client.return_value = mock_redis_instance
+    
+    # Configure the redis client mocks using the correct parameters
+    mock_base_redis_client.return_value = mock_redis_instance
+    mock_decorator_redis_client.return_value = mock_redis_instance
 
     prices = pd.Series([10,11,12,13,14,15,14,13,12,11,10]) # Test price movement
     # MACD requires enough data points for EMAs (12, 26) and Signal line (9).
@@ -183,27 +188,11 @@ async def test_macd_agent_accuracy(
     # Prepend stable prices to ensure EMAs stabilize before the test series. 40 stable points + 11 test points = 51 points total.
     extended_prices = pd.concat([pd.Series([10]*40), prices], ignore_index=True)
     
-    # Mock fetch_ohlcv_series used by macd_agent
-    async def mock_fetch_ohlcv(symbol, start_date=DEFAULT_START_DATE, end_date=DEFAULT_END_DATE):
-        # Return a DataFrame with a 'close' column
-        return pd.DataFrame({'close': extended_prices})
-    # Correct patch target: MACDAgent instance will have a data_provider attribute
-    # We need to patch the get_ohlcv method of the data_provider instance that the agent will use.
-    # This is tricky because the instance is created inside the `run` function.
-    # A common way is to patch the class used for data_provider if it's known,
-    # or patch at the point of call if the agent directly imports and uses a fetch function.
-    # Since MACDAgent uses self.data_provider.get_ohlcv, we need to ensure the
-    # data_provider instance it gets has a mocked get_ohlcv.
-    # The `run` function for MACDAgent is decorated with `standard_agent_execution`,
-    # which injects `data_provider`. We can mock the `get_ohlcv` method of the
-    # `BaseDataProvider` or `UnifiedDataProvider` if that's the type being injected.
-    # For simplicity in this test, if `macd_run` creates the agent and its data_provider,
-    # we might need to patch where `data_provider` is sourced or patch `BaseDataProvider.get_ohlcv` globally for the test.
-    # Let's assume the data_provider is an instance of BaseDataProvider or similar.
-    # The agent uses `self.data_provider.get_ohlcv`.
-    # The `standard_agent_execution` decorator injects a `data_provider`.
-    # We will patch the `get_ohlcv` method on the `BaseDataProvider` class, which should affect the instance used by the agent.
-    monkeypatch.setattr('backend.data.providers.unified_provider.UnifiedDataProvider.get_ohlcv', AsyncMock(return_value=pd.DataFrame({'close': extended_prices})))
+    # Configure the mock instance of UnifiedDataProvider
+    # mock_unified_data_provider_class is the mock for the class UnifiedDataProvider.
+    # Its .return_value will be the mock instance used by the agent.
+    mock_dp_instance = mock_unified_data_provider_class.return_value 
+    mock_dp_instance.get_ohlcv = AsyncMock(return_value=pd.DataFrame({'close': extended_prices}))
 
     # Mock get_market_context as it's called by the agent
     monkeypatch.setattr('backend.agents.technical.macd_agent.MACDAgent.get_market_context', AsyncMock(return_value={"regime": "NEUTRAL"}))
