@@ -250,7 +250,7 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
                             result.agent_name = agent_name
                         # Convert Verdict to dict for caching and further dict-based operations
                         # This is a key change: the decorator will now work with a dict internally
-                        # after the agent's core logic returns a Verdict object.
+                        # after the agent\'s core logic returns a Verdict object.
                         # We use robust_json_serializer to prepare for JSON, then json.loads to get a clean dict.
                         result_for_cache_and_dict_ops = json.loads(json.dumps(result, default=robust_json_serializer))
                     elif result and isinstance(result, dict) and "agent_name" not in result:
@@ -260,9 +260,9 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
                         result_for_cache_and_dict_ops = None
                     else: # Not a Verdict or dict, or already has agent_name if dict
                         # This case might need specific handling if other types are expected.
-                        # For now, assume if not Verdict or dict, it's an error or unhandled.
-                        # If it's a simple type, it won't have 'verdict' or 'agent_name'.
-                        # Let's assume for now that if it's not None, Verdict, or dict,
+                        # For now, assume if not Verdict or dict, it\'s an error or unhandled.
+                        # If it\'s a simple type, it won\'t have \'verdict\' or \'agent_name\'.
+                        # Let\'s assume for now that if it\'s not None, Verdict, or dict,
                         # it will likely fail subsequent checks or be an error.
                         # If the agent can return other valid types, this logic needs expansion.
                         logger.warning(f"Agent {agent_name} returned unexpected type: {type(result)}. Proceeding, but caching/tracking might be affected.")
@@ -270,7 +270,7 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
 
                     # If execution successful, cache the result
                     if result_for_cache_and_dict_ops is not None and client_to_use: # Check client_to_use
-                        if isinstance(result_for_cache_and_dict_ops, dict) and \
+                        if isinstance(result_for_cache_and_dict_ops, dict) and \\\
                            result_for_cache_and_dict_ops.get("verdict") not in [VerdictType.ERROR.value, VerdictType.NO_DATA.value, None]:
                             try:
                                 cache_data = json.dumps(result_for_cache_and_dict_ops, default=robust_json_serializer)
@@ -315,13 +315,14 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
                         except ImportError:
                             logger.warning("Tracker module not found or get_tracker failed. Skipping tracker update.")
                         except AttributeError:
-                            logger.warning(f"Tracker instance missing 'update_agent_status' method. Skipping tracker update.")
+                            logger.warning(f"Tracker instance missing \'update_agent_status\' method. Skipping tracker update.")
                         except Exception as tracker_err:
                             logger.warning(f"Failed to update tracker for {agent_name} ({symbol}): {tracker_err}")
 
                     # IMPORTANT: Return the original 'result' (which could be a Verdict object)
                     # not 'result_for_cache_and_dict_ops', unless the decorator's contract is to always return a dict.
-                    return result
+                    # return result # OLD LINE
+                    return result_for_cache_and_dict_ops # NEW LINE: Return the dictionary version
 
                 except Exception as e:
                     # 5. Standard Error Handling
@@ -333,7 +334,7 @@ def standard_agent_execution(agent_name: str, category: str, cache_ttl: int = 36
                         "confidence": 0.0,
                         "value": None,
                         "details": {"error": str(e)}, # Store the error message in details
-                        "error": str(e), # Keep the top-level error for now, or decide if it's redundant
+                        "error": str(e), # Keep the top-level error for now, or decide if it\'s redundant
                         "agent_name": agent_name,
                     }
                     # Ensure agent_name is added in error case (already done)                    # Try to update tracker even if the main agent logic failed
