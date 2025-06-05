@@ -18,13 +18,11 @@ except ImportError:
             pass
     tracker = DummyTracker()
 
-# Initialize redis client
-redis_client = get_redis_client()
-
 agent_name = "nlp_summary_agent"
 
 
 async def run(text: str) -> dict:
+    redis_client = await get_redis_client()
     cache_key = f"{agent_name}"
     cached = await redis_client.get(cache_key)
     if cached:

@@ -25,8 +25,7 @@ class MarketContext:
             # Pass data_provider and settings to constructor if provided
             cls._instance = cls(data_provider=data_provider, settings=settings)
             await cls._instance.initialize()
-        # If instance exists, but new DP/settings are provided, re-initialize (optional, depends on desired behavior)
-        # For now, we assume that if get_instance is called with new params, it's for the initial creation
+        # If instance exists, but new DP/settings are provided, re-initialize (optional, depends on desired behavior)        # For now, we assume that if get_instance is called with new params, it's for the initial creation
         # or a specific re-configuration scenario that the caller is managing.
         # If the instance exists and no new params, just return it.
         return cls._instance

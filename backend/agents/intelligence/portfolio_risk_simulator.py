@@ -9,7 +9,7 @@ agent_name = "portfolio_risk_simulator"
 
 
 async def run(symbols: list, weights: list = None) -> dict:
-    redis_client = get_redis_client()
+    redis_client = await get_redis_client()
     cache_key = f"{agent_name}:{','.join(symbols)}"
     cached = await redis_client.get(cache_key)
     if cached:
