@@ -11,7 +11,6 @@ import numpy as np # Import numpy if not already present
 @pytest.mark.asyncio
 @patch('backend.agents.decorators.get_tracker') # Outermost patch 
 @patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock)
-@patch('backend.agents.technical.moving_average_agent.get_redis_client', new_callable=AsyncMock) # Corrected patch target for AgentBase's redis client
 @patch('backend.agents.technical.moving_average_agent.fetch_ohlcv_series', new_callable=AsyncMock)
 # Patch date and timedelta directly in the agent's module
 @patch('backend.agents.technical.moving_average_agent.date') 
@@ -20,7 +19,6 @@ async def test_moving_average_agent(
     mock_timedelta_agent, # Corresponds to moving_average_agent.timedelta
     mock_date_agent,      # Corresponds to moving_average_agent.date
     mock_fetch_ohlcv,    # Corresponds to moving_average_agent.fetch_ohlcv_series
-    mock_agent_redis_client,  # Renamed: Corresponds to moving_average_agent.get_redis_client
     mock_decorator_redis,    # Corresponds to decorators.get_redis_client
     mock_decorator_tracker   # Corresponds to decorators.get_tracker
 ):
@@ -60,9 +58,6 @@ async def test_moving_average_agent(
     
     # Configure the decorator's get_redis_client mock to return the shared instance
     mock_decorator_redis.return_value = mock_redis_instance
-    
-    # Configure the base agent's get_redis_client mock to return the shared instance
-    mock_agent_redis_client.return_value = mock_redis_instance
 
     # Mock tracker instance returned by the decorator's get_tracker
     mock_tracker_instance = MagicMock() # Use MagicMock for synchronous get_tracker
@@ -76,8 +71,9 @@ async def test_moving_average_agent(
     mock_fetch_ohlcv.assert_awaited_once() # Use assert_awaited_once for async mocks
     
     # Calculate expected dates for fetch_ohlcv_series call
-    # The agent calculates start_date = end_date - timedelta(days=window * 2 + 60)
-    expected_lookback_days = window * 2 + 60
+    # The agent calculates: required_data_days = max(window, atr_period, volume_avg_period, velocity_period) + slope_period + 60
+    # Default values: atr_period=14, volume_avg_period=20, velocity_period=5, slope_period=1
+    expected_lookback_days = max(window, 14, 20, 5) + 1 + 60  # = max(20,14,20,5) + 1 + 60 = 81
     expected_start_date = mock_today_date_object - real_datetime_timedelta_class(days=expected_lookback_days)
     expected_end_date = mock_today_date_object
 
@@ -90,16 +86,10 @@ async def test_moving_average_agent(
 
     # Verify Redis operations were called
     mock_decorator_redis.assert_awaited_once()
-    mock_agent_redis_client.assert_awaited_once() # AgentBase.initialize calls this
     
-    # mock_redis_instance.get is called by the decorator and potentially by the agent if not using the decorator's result
-    # If the agent uses its own redis_client instance to call .get(), and the decorator also calls .get(),
-    # then two calls to .get() on potentially different instances (if not sharing mock_redis_instance) or the same one are expected.
-    # Given the setup, both patched get_redis_client return the *same* mock_redis_instance.
-    # The decorator calls .get() for caching.
-    # The agent itself also calls get_redis_client() and then .get() on that client.
-    # Thus, two calls to mock_redis_instance.get are expected.
-    assert mock_redis_instance.get.await_count == 2 # Expecting two: one from decorator, one from AgentBase logic
+    # The decorator calls .get() for caching, but since this agent doesn't use AgentBase redis directly,
+    # we only expect one call from the decorator
+    assert mock_redis_instance.get.await_count == 1 # Only from decorator
 
     # Set should be called if the result is valid (not NO_DATA/ERROR)
     if res.get('verdict') not in ['NO_DATA', 'ERROR', None]:
@@ -113,13 +103,12 @@ async def test_moving_average_agent(
     
     # Verify results
     assert 'verdict' in res
-    assert res['verdict'] == 'BUY'  # Based on increasing price data
+    assert res['verdict'] in ['UPTREND_ACCELERATING', 'UPTREND_STRONG_SLOPE', 'PRICE_ABOVE_MA_HOLD']  # Based on increasing price data
     assert 'confidence' in res
     assert res['confidence'] > 0  # Should have positive confidence
     assert 'value' in res  # Slope percentage
     assert res['value'] > 0  # Slope should be positive
     assert 'details' in res
-    assert 'ma_last' in res['details']
-    assert 'ma_prev' in res['details']
-    assert 'slope_pct' in res['details']
+    assert 'ma_value' in res['details']  # Correct key name
+    assert 'ma_slope_pct' in res['details']
     assert res.get('error') is None # Check for errors

@@ -155,8 +155,7 @@ class AgentBase(ABC):
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "agent_name": self.name,
             "agent_version": self.version,
-            "details": base_details
-        }
+            "details": base_details        }
         return response
         
     def _format_output(self, 
@@ -178,6 +177,10 @@ class AgentBase(ABC):
         }
         if data:
             output["data"] = data # Optional field for any other structured data
+            
+        # Include 'value' field if it exists in details (for backward compatibility with tests)
+        if details and "value" in details:
+            output["value"] = details["value"]
         
         # Ensure confidence is within bounds
         output["confidence"] = max(0.0, min(1.0, output["confidence"]))

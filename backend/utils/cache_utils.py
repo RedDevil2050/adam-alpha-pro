@@ -26,19 +26,16 @@ _in_test_mode = any([
     os.path.basename(sys.argv[0]).startswith('test_')  # Check if main script is a test
 ])
 
-# This function will always return a synchronous client - no awaiting needed
-def get_redis_client():
+# Make get_redis_client async in both test and production modes
+async def get_redis_client():
     """
     Returns a Redis client (mocked for testing).
-    In test mode: returns a synchronous mock to avoid 'coroutine not awaited' warnings.
+    In test mode: returns a synchronous mock instance but via an async function.
     In prod mode: returns the async mock that should be awaited.
     """
-    # Always return a sync client to avoid any need for awaiting
-    return _redis_client_sync
-
-# If we're not in test mode, redefine as async function for production
-if not _in_test_mode:
-    async def get_redis_client():  # type: ignore
-        """Returns the Redis client instance for production."""
+    if _in_test_mode:
+        # Return sync client in test mode, but from an async function
+        return _redis_client_sync
+    else:
         # In a real application, this would initialize and return a real Redis client
         return _redis_client

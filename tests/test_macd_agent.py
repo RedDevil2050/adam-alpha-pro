@@ -111,7 +111,7 @@ async def test_macd_agent_buy_signal(
     )
     assert mock_ewm_mean.call_count == 3
     mock_agent_get_market_context.assert_awaited_once_with(symbol)
-    mock_base_get_redis_client.assert_awaited_once()      
+    mock_decorator_get_redis_client.assert_awaited_once()  # Check decorator redis client, not base      
     assert mock_redis_instance.get.await_count == 1 
     if result.get('verdict') not in ['NO_DATA', 'ERROR', None]:
         assert mock_redis_instance.set.await_count == 1 
@@ -187,11 +187,12 @@ async def test_macd_agent_schema(
             assert "histogram" in result["details"]
             assert "market_regime" in result["details"]
 
-    # Explicitly verify that the passed data_provider's get_ohlcv was called
+    # Explicitly verify that the passed data_provider's fetch_price_data was called
     explicit_mock_dp_instance.fetch_price_data.assert_awaited_once_with(
         symbol,
-        start_date=mock.ANY, # Start date is calculated based on REQUIRED_HISTORY_DAYS
-        end_date=mock.ANY,   # End date is the mocked today's date
+        start_date=ANY, # Start date is calculated based on REQUIRED_HISTORY_DAYS
+        end_date=ANY,   # End date is the mocked today's date
+        interval=ANY    # The agent also passes an interval parameter
     )
 
     # Fallback mock should not have been called if the explicit one was used

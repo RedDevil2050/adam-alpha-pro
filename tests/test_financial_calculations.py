@@ -222,7 +222,8 @@ async def test_macd_agent_accuracy(
     # Sample data for OHLCV
     extended_prices = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35]
     mock_ohlcv_df = pd.DataFrame({'close': extended_prices})
-    mock_dp_instance.get_ohlcv = AsyncMock(return_value=mock_ohlcv_df)
+    # Fix: Mock fetch_price_data instead of get_ohlcv
+    mock_dp_instance.fetch_price_data = AsyncMock(return_value=mock_ohlcv_df)
 
     # Mock the market context
     mock_get_market_context.return_value = {"regime": "NEUTRAL"} 

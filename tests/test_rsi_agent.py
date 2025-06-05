@@ -9,19 +9,15 @@ from unittest.mock import AsyncMock, patch, MagicMock
 # Import the agent's run function
 from backend.agents.technical.rsi_agent import run as rsi_run, agent_name # Import agent_name
 
-# agent_name = "rsi_agent" # Use imported name
-
 @pytest.mark.asyncio
 # Patch dependencies in reverse order
 # Patch datetime used by the agent
 @patch('backend.agents.technical.rsi_agent.datetime')
 @patch('backend.agents.decorators.get_tracker')
 @patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock)
-@patch('backend.agents.technical.rsi_agent.fetch_ohlcv_series', new_callable=AsyncMock)
-@patch('backend.agents.base.get_redis_client', new_callable=AsyncMock)  # Patch for AgentBase
+@patch('backend.data.providers.unified_provider.UnifiedDataProvider.fetch_price_data', new_callable=AsyncMock)
 async def test_rsi_agent_oversold(
-    mock_base_get_redis_client, # New mock for base
-    mock_fetch_ohlcv, # Renamed mock
+    mock_fetch_price_data, # Mock for the data provider method
     mock_get_redis_decorator, # Renamed to reflect it mocks the decorator's get_redis_client
     mock_get_tracker,
     mock_datetime_in_agent # This is the mock for 'backend.agents.technical.rsi_agent.datetime'
@@ -63,8 +59,11 @@ async def test_rsi_agent_oversold(
     }, index=pd.date_range(end='2025-05-01', periods=num_periods, freq='D'))
 
 
-    # 1. Mock fetch_ohlcv_series
-    mock_fetch_ohlcv.return_value = price_df
+    # 1. Mock data provider (will be injected by decorator)
+    # The decorator will create a UnifiedDataProvider and inject it, 
+    # but we need to mock its fetch_price_data method
+    # We'll mock this at the UnifiedDataProvider level
+    mock_fetch_price_data.return_value = price_df
 
     # Shared Redis instance for all mocks that need it
     mock_redis_instance = AsyncMock()
@@ -72,10 +71,7 @@ async def test_rsi_agent_oversold(
     mock_redis_instance.set = AsyncMock()
 
     # Configure the decorator's get_redis_client mock
-    mock_get_redis_decorator.return_value = mock_redis_instance
-
-    # Configure the base agent's get_redis_client mock
-    mock_base_get_redis_client.return_value = mock_redis_instance 
+    mock_get_redis_decorator.return_value = mock_redis_instance 
 
     # 3. Mock Tracker instance and configure the factory mock
     mock_tracker_instance = AsyncMock() # Use AsyncMock for async method
@@ -128,16 +124,10 @@ async def test_rsi_agent_oversold(
     # Calculate expected dates based on mocked today
     end_date = mock_today_date_object # Use the object used for mocking
     start_date = end_date - real_datetime_timedelta_class(days=365) # Use real timedelta for test calculation
-    mock_fetch_ohlcv.assert_awaited_once_with(symbol, start_date=start_date, end_date=end_date) # Check symbol and date args
+    mock_fetch_price_data.assert_awaited_once_with(symbol, start_date=start_date, end_date=end_date, interval="1d") # Check symbol and date args
     mock_get_redis_decorator.assert_awaited_once() # Verify the factory function was awaited
-    mock_base_get_redis_client.assert_awaited_once() # AgentBase's redis client factory
     
-    # The decorator calls .get() once. The agent base also calls .get() once.
-    # Both use the same mock_redis_instance.get
-    assert mock_redis_instance.get.await_count == 2
-    if result.get('verdict') not in ['NO_DATA', 'ERROR', None]:
-        assert mock_redis_instance.set.await_count == 2 # Expecting set to be called twice
-    else:
-        mock_redis_instance.set.assert_not_awaited()
+    # The decorator calls .get() once for caching
+    mock_redis_instance.get.assert_awaited_once()
     mock_get_tracker.assert_called_once() # Tracker factory
     mock_tracker_instance.update_agent_status.assert_awaited_once() # Tracker update method

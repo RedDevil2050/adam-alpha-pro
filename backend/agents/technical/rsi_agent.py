@@ -1,6 +1,4 @@
 from backend.agents.technical.base import TechnicalAgent
-# Correct the import path
-from backend.utils.data_provider import fetch_ohlcv_series
 from backend.agents.decorators import standard_agent_execution  # Corrected import path
 import pandas as pd
 import logging
@@ -24,7 +22,7 @@ class RSIAgent(TechnicalAgent):
             start_date = end_date - datetime.timedelta(days=365)
 
             # Add await here and pass dates
-            df = await fetch_ohlcv_series(symbol, start_date=start_date, end_date=end_date)
+            df = await self.data_provider.fetch_price_data(symbol, start_date=start_date, end_date=end_date, interval="1d")
             # Add check for DataFrame type and emptiness
             if not isinstance(df, pd.DataFrame) or df.empty:
                 logger.warning(f"[{self.__class__.__name__}] Insufficient or invalid data for {symbol}. Type: {type(df)}")

@@ -16,7 +16,7 @@ AGENT_CATEGORY = "TECHNICAL"  # Added
 class MACDAgent(TechnicalAgent):
     REQUIRED_HISTORY_DAYS = 365  # Added class attribute
 
-    async def _execute(self, symbol: str, agent_outputs: dict) -> Verdict: # Changed return type
+    async def _execute(self, symbol: str, agent_outputs: dict) -> dict: # Changed return type to dict
         try:
             # Define date range (e.g., 1 year back from today)
             end_date = datetime.date.today()
@@ -29,13 +29,11 @@ class MACDAgent(TechnicalAgent):
             # Add check for DataFrame type and emptiness
             if not isinstance(df, pd.DataFrame) or df.empty:
                 self.logger.warning(f"[{agent_name}] Insufficient or invalid data for {symbol}. Type: {type(df)}")
-                return Verdict(
-                    verdict=VerdictType.ERROR,
-                    confidence=0.0,
-                    agent_name=agent_name,
-                    details={"error": f"Insufficient or invalid OHLCV data received. Type: {type(df)}", "symbol": symbol},
-                    value=None
-                )
+                return {
+                    "verdict": VerdictType.ERROR,
+                    "confidence": 0.0,
+                    "details": {"error": f"Insufficient or invalid OHLCV data received. Type: {type(df)}", "symbol": symbol}
+                }
 
             # Calculate MACD
             exp1 = df["close"].ewm(span=12, adjust=False).mean()
@@ -67,33 +65,30 @@ class MACDAgent(TechnicalAgent):
             
             verdict_val = VerdictType[verdict_str] # Convert string to VerdictType
 
-            return Verdict(
-                verdict=verdict_val,
-                confidence=confidence,
-                value=round(current_macd, 4),
-                details={
+            return {
+                "verdict": verdict_val,
+                "confidence": confidence,
+                "details": {
                     "macd": round(current_macd, 4),
                     "signal": round(current_signal, 4),
                     "histogram": round(current_hist, 4),
                     "market_regime": regime,
-                    "symbol": symbol, 
-                },
-                agent_name=agent_name
-            )
+                    "symbol": symbol,
+                    "value": round(current_macd, 4)
+                }
+            }
 
         except Exception as e:
             self.logger.error(f"MACD calculation error: {e}")
-            return Verdict(
-                verdict=VerdictType.ERROR,
-                confidence=0.0,
-                agent_name=agent_name,
-                details={"error": str(e), "symbol": symbol},
-                value=None
-            )
+            return {
+                "verdict": VerdictType.ERROR,
+                "confidence": 0.0,
+                "details": {"error": str(e), "symbol": symbol}
+            }
 
 
 @standard_agent_execution(agent_name=agent_name, category=AGENT_CATEGORY)
-async def run(symbol: str, agent_outputs: dict = None, name: str = None, settings: AgentSettings = None, logger: Any = None, cache_client: Any = None, data_provider: BaseDataProvider = None, market_context_provider: Any = None) -> Verdict: # Modified signature to return Verdict
+async def run(symbol: str, agent_outputs: dict = None, name: str = None, settings: AgentSettings = None, logger: Any = None, cache_client: Any = None, data_provider: BaseDataProvider = None, market_context_provider: Any = None) -> dict: # Modified signature to return dict
     agent = MACDAgent(
         name=name,
         settings=settings,

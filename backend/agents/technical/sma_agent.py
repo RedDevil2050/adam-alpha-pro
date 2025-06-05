@@ -1,12 +1,9 @@
 import pandas as pd
 import numpy as np
-# from backend.utils.data_provider import fetch_price_series # Old import
-from backend.utils.data_provider import fetch_ohlcv_series # New: For HLCV data
 from backend.agents.decorators import standard_agent_execution
 from backend.config.settings import get_settings
 from loguru import logger
-# from unittest.mock import MagicMock # Import MagicMock for fallback - No longer needed with direct settings access
-from backend.agents.technical.utils import compute_atr # New: For ATR calculation
+from backend.agents.technical.utils import compute_atr
 
 agent_name = "sma_agent"
 AGENT_CATEGORY = "technical"
@@ -14,7 +11,7 @@ AGENT_CATEGORY = "technical"
 @standard_agent_execution(
     agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600
 )
-async def run(symbol: str, agent_outputs: dict = None) -> dict:
+async def run(symbol: str, agent_outputs: dict = None, data_provider=None) -> dict:
     """
     Calculates Simple Moving Averages (SMA) and generates trading signals with advanced logic.
 
@@ -65,13 +62,16 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     atr_distance_threshold = getattr(sma_settings, 'ATR_DISTANCE_THRESHOLD', 2.0) if sma_settings else 2.0
 
     # Fetch OHLCV data (adjust period based on longest window + buffer)
-    fetch_period_days = max(long_window, atr_period, volume_avg_period) + 60 # Increased buffer for all calcs
-    
-    # Extract market regime and volatility factor from agent_outputs if available
+    fetch_period_days = max(long_window, atr_period, volume_avg_period) + 60 # Increased buffer for all calcs    # Extract market regime and volatility factor from agent_outputs if available
     market_regime = agent_outputs.get("market_context", {}).get("regime", "UNKNOWN") if agent_outputs else "UNKNOWN"
     # volatility_factor = agent_outputs.get("market_context", {}).get("volatility_factor", 1.0) if agent_outputs else 1.0
 
-    ohlcv_data = await fetch_ohlcv_series(symbol, start_date=(pd.Timestamp.now().date() - pd.Timedelta(days=fetch_period_days)), end_date=pd.Timestamp.now().date(), interval='1d')
+    ohlcv_data = await data_provider.fetch_price_data(
+        symbol, 
+        start_date=(pd.Timestamp.now().date() - pd.Timedelta(days=fetch_period_days)), 
+        end_date=pd.Timestamp.now().date(), 
+        interval='1d'
+    )
 
     if ohlcv_data is None or ohlcv_data.empty or len(ohlcv_data) < max(long_window, atr_period, volume_avg_period):
         reason = f"Insufficient OHLCV data (need at least {max(long_window, atr_period, volume_avg_period)} days, got {len(ohlcv_data) if ohlcv_data is not None else 0})"
