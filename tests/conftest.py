@@ -4,6 +4,8 @@ from unittest.mock import AsyncMock, patch, Mock
 import nltk # Import nltk
 import warnings # Add this line
 import sys
+import pandas as pd
+import numpy as np
 
 pytest_plugins = ["pytest_httpx"] # Add this line
 
@@ -73,3 +75,31 @@ def mock_redis_client():
     with patch("backend.agents.decorators.get_redis_client", new=fake_async_get_redis_client):
         yield mock_instance
         actual_cache.clear() # Clear cache after session
+
+@pytest.fixture
+def sample_real_stock_data():
+    """Fixture providing sample stock data for testing"""
+    return {
+        "symbol": "TEST_REAL_STOCK",
+        "price": 100.0,
+        "eps": 5.0,
+        "pe_ratio": 20.0,
+        "market_cap": 1000000000,
+        "volume": 1000000,
+        "historical_prices": pd.Series(
+            np.linspace(90, 110, 50),
+            index=pd.date_range(end=pd.Timestamp.now(), periods=50, freq='D')
+        )
+    }
+
+@pytest.fixture
+def mock_analyzer():
+    """Fixture providing a mock VADER sentiment analyzer for news sentiment testing"""
+    mock = Mock()
+    mock.polarity_scores = Mock(return_value={
+        'compound': 0.5,
+        'neu': 0.5,
+        'pos': 0.5,
+        'neg': 0.0
+    })
+    return mock

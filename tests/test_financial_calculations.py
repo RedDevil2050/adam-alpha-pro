@@ -133,7 +133,7 @@ async def test_pe_ratio_agent_no_eps_data(
     mock_fetch_eps_func.assert_awaited_once_with('XYZ')
 
 
-@patch('backend.utils.data_provider.provider')  # Patch the 'provider' instance directly
+@patch('backend.data.providers.unified_provider.UnifiedDataProvider.fetch_price_data', new_callable=AsyncMock)
 @patch('backend.market.context.MarketContext.get_instance', new_callable=AsyncMock)
 @patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock)
 @patch('backend.agents.base.get_redis_client', new_callable=AsyncMock)
@@ -142,7 +142,7 @@ async def test_rsi_agent_accuracy(
     mock_base_get_redis_client,
     mock_decorator_get_redis_client,
     mock_market_context_get_instance,
-    mock_provider_instance,  # This is now the mocked backend.utils.data_provider.provider
+    mock_fetch_price_data,  # This is now the mocked fetch_price_data method
     monkeypatch
 ):
     # Setup for mock_market_context_get_instance
@@ -175,15 +175,15 @@ async def test_rsi_agent_accuracy(
         # print(f"Mock returning DataFrame: empty={df.empty}, shape={df.shape}, columns={df.columns}, index_min={df.index.min()}, index_max={df.index.max()}")
         return df
 
-    # Configure the fetch_price_data method on the mocked provider instance
-    mock_provider_instance.fetch_price_data = AsyncMock(side_effect=mock_fetch_ohlcv_data)
+    # Configure the mock fetch_price_data method
+    mock_fetch_price_data.side_effect = mock_fetch_ohlcv_data
 
     # Mock get_market_context as it's called by the agent (needed for adjustments)
     monkeypatch.setattr('backend.agents.technical.rsi_agent.RSIAgent.get_market_context', AsyncMock(return_value={"regime": "NEUTRAL"}))
 
     res = await rsi_agent_run('ABC')
     
-    mock_provider_instance.fetch_price_data.assert_awaited_once() # Ensure the mock was called
+    mock_fetch_price_data.assert_awaited_once() # Ensure the mock was called
 
     if res.get('verdict') == 'ERROR' or (res.get('details') and res['details'].get('error_message')):
         error_info = res.get('details', {}).get('error_code', res.get('details', {}).get('error_message', 'Unknown error'))

@@ -5,6 +5,8 @@ from typing import Dict, Any, Optional, List, Union
 from backend.utils.data_provider import fetch_eps_data, fetch_market_data
 from backend.utils.retry_utils import async_retry
 from backend.agents.base import AgentBase
+from backend.config.settings import AgentSettings
+from backend.data.providers.base_provider import BaseDataProvider
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +22,24 @@ class DividendAgent(AgentBase):
     3. Dividend growth history (when available)
     4. Dividend sustainability
     """
+
+    def __init__(self, 
+                 name: str, 
+                 settings: AgentSettings, 
+                 logger: Any, 
+                 cache_client: Any, 
+                 data_provider: BaseDataProvider,
+                 market_context_provider: Any, 
+                 **kwargs):
+        super().__init__(
+            name=name,
+            settings=settings, 
+            logger=logger,
+            cache_client=cache_client,
+            data_provider=data_provider,
+            market_context_provider=market_context_provider,
+            **kwargs
+        )
 
     async def _execute(self, symbol: str, agent_outputs: dict = None) -> dict:
         # agent_name is now defined at module level

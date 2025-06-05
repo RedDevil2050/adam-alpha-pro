@@ -257,17 +257,15 @@ class TestSystemIntegration:
         monitor = SystemMonitor() # Correct indentation
         symbol_to_test = "SBIN.NS"
         # Define specific categories for this test, as per previous fix strategy
-        test_categories = [CategoryType.VALUATION, CategoryType.TECHNICAL]
-    
-        # Patch get_redis_client for the explicit cache deletion part of this test
+        test_categories = [CategoryType.VALUATION, CategoryType.TECHNICAL]        # Patch get_redis_client for the explicit cache deletion part of this test
         with patch('backend.utils.cache_utils.get_redis_client') as mock_get_redis_for_delete:
             # Configure the mock client instance that get_redis_client will return
             mock_client_instance_for_delete = AsyncMock() # Make the client instance itself an AsyncMock
             # mock_client_instance_for_delete.delete = AsyncMock() # This line is not strictly necessary if the parent is AsyncMock
             mock_get_redis_for_delete.return_value = mock_client_instance_for_delete
     
-            # Get the client from the mock by calling the patched version
-            cache_client_for_deletion = mock_get_redis_for_delete()
+            # Get the client from the mock - use the return_value directly
+            cache_client_for_deletion = mock_client_instance_for_delete
     
             categories_str = ",".join(sorted([cat.value for cat in test_categories]))
             cache_key_to_delete = f"analysis:{symbol_to_test}:{categories_str}"
@@ -401,8 +399,8 @@ class TestSystemIntegration:
             # mock_client_instance_for_delete.delete = AsyncMock() # This line is not strictly necessary if the parent is AsyncMock
             mock_get_redis_for_delete.return_value = mock_client_instance_for_delete
     
-            # Get the client from the mock by calling the patched version
-            cache_client_for_deletion = mock_get_redis_for_delete()
+            # Get the client from the mock - use the return_value directly
+            cache_client_for_deletion = mock_client_instance_for_delete
     
             # Correct cache key for deletion, assuming analyze_symbol defaults to all categories
             # as no specific categories are passed to it in this test.

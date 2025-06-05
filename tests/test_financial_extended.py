@@ -22,8 +22,8 @@ from datetime import date, timedelta # Import date utilities
 DEFAULT_END_DATE = date.today()
 DEFAULT_START_DATE = DEFAULT_END_DATE - timedelta(days=90)
 
-# Patch the UnifiedDataProvider where it's instantiated by the standard_agent_execution decorator
-@patch('backend.agents.decorators.UnifiedDataProvider') 
+# Patch the UnifiedDataProvider where it's actually imported and used
+@patch('backend.data.providers.unified_provider.UnifiedDataProvider') 
 @patch('backend.agents.technical.rsi_agent.RSIAgent.get_market_context', new_callable=AsyncMock)
 async def test_rsi_agent_precision(
     mock_get_market_context,
@@ -32,18 +32,19 @@ async def test_rsi_agent_precision(
     sample_real_stock_data,
     monkeypatch # Added monkeypatch
 ):
-    # Define ohlcv_df
-    ohlcv_df = pd.DataFrame({ # Sample DataFrame
-        'Open': [10, 11, 12],
-        'High': [15, 16, 17],
-        'Low': [9, 10, 11],
-        'Close': [12, 13, 14],
-        'Volume': [1000, 1100, 1200]
+    # Define ohlcv_df with enough data for RSI calculation (need at least 15 periods)
+    price_data = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30]
+    ohlcv_df = pd.DataFrame({ # Sample DataFrame with sufficient data
+        'open': price_data,
+        'high': [p * 1.05 for p in price_data],
+        'low': [p * 0.95 for p in price_data],
+        'close': price_data,
+        'volume': [1000 + i * 100 for i in range(len(price_data))]
     })
 
     # Setup for UnifiedDataProvider instance mock
     mock_dp_instance = AsyncMock()
-    mock_dp_instance.get_ohlcv = AsyncMock(return_value=ohlcv_df)
+    mock_dp_instance.fetch_price_data = AsyncMock(return_value=ohlcv_df)
     mock_unified_data_provider_class.return_value = mock_dp_instance
 
     # Configure market context mock
@@ -63,12 +64,12 @@ async def test_rsi_agent_precision(
     # Assertions
     assert agent_result.get('error_code') is None, f"RSI agent returned error: {agent_result.get('error_message', agent_result.get('error'))} with code {agent_result.get('error_code')}"
     assert 'details' in agent_result, "'details' key missing from rsi_agent result"
-    assert 'value' in agent_result['details'], f"'value' key (containing RSI) missing from rsi_agent details. Result: {agent_result}"
-    assert isinstance(agent_result['details']['value'], float), f"RSI value is not a float. Got: {type(agent_result['details']['value'])}"
-    assert 0 <= agent_result['details']['value'] <= 100, f"RSI value out of bounds (0-100). Got: {agent_result['details']['value']}"
+    assert 'rsi' in agent_result['details'], f"'rsi' key (containing RSI) missing from rsi_agent details. Result: {agent_result}"
+    assert isinstance(agent_result['details']['rsi'], float), f"RSI value is not a float. Got: {type(agent_result['details']['rsi'])}"
+    assert 0 <= agent_result['details']['rsi'] <= 100, f"RSI value out of bounds (0-100). Got: {agent_result['details']['rsi']}"
 
 
-@patch('backend.agents.decorators.UnifiedDataProvider')
+@patch('backend.data.providers.unified_provider.UnifiedDataProvider')
 @patch('backend.agents.technical.macd_agent.MACDAgent.get_market_context', new_callable=AsyncMock)
 async def test_macd_agent_precision(
     mock_get_market_context,
@@ -77,18 +78,19 @@ async def test_macd_agent_precision(
     sample_real_stock_data,
     monkeypatch # Added monkeypatch
 ):
-    # Define ohlcv_df
-    ohlcv_df = pd.DataFrame({ # Sample DataFrame
-        'Open': [10, 11, 12],
-        'High': [15, 16, 17],
-        'Low': [9, 10, 11],
-        'Close': [12, 13, 14],
-        'Volume': [1000, 1100, 1200]
+    # Define ohlcv_df with enough data for MACD calculation (need at least 26 periods)
+    price_data = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40]
+    ohlcv_df = pd.DataFrame({ # Sample DataFrame with sufficient data
+        'open': price_data,
+        'high': [p * 1.05 for p in price_data],
+        'low': [p * 0.95 for p in price_data],
+        'close': price_data,
+        'volume': [1000 + i * 100 for i in range(len(price_data))]
     })
 
     # Setup for UnifiedDataProvider instance mock
     mock_dp_instance = AsyncMock()
-    mock_dp_instance.get_ohlcv = AsyncMock(return_value=ohlcv_df)
+    mock_dp_instance.fetch_price_data = AsyncMock(return_value=ohlcv_df)
     mock_unified_data_provider_class.return_value = mock_dp_instance
 
     # Configure market context mock
