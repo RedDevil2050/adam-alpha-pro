@@ -40,10 +40,10 @@ class DatabaseService:
             session.close()
 
     def get_historical_data(self, symbol: str, start_date: datetime) -> pd.DataFrame:
-        query = f"""
+        query = """
         SELECT timestamp, price, volume 
         FROM market_data 
-        WHERE symbol = '{symbol}' 
-        AND timestamp >= '{start_date}'
+        WHERE symbol = ? 
+        AND timestamp >= ?
         """
-        return pd.read_sql(query, self.engine)
+        return pd.read_sql(query, self.engine, params=[symbol, start_date])

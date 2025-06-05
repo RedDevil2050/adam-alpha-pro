@@ -9,6 +9,19 @@ import numpy as np
 
 pytest_plugins = ["pytest_httpx"] # Add this line
 
+# Import database components for test setup
+from backend.db.base import Base
+from backend.db.session import get_db, is_testing
+from backend.db.models import User, Portfolio, Holding, Watchlist, WatchlistSymbol, UserSetting, Alert
+from sqlalchemy.orm import Session
+from backend.security.utils import get_password_hash
+from sqlalchemy import create_engine
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
+import os
+from backend.config.settings import get_settings
+from backend.api.main import app
+
 # Download vader_lexicon once per session
 def pytest_configure(config):
     """Download NLTK data needed for tests."""
@@ -102,3 +115,79 @@ def mock_analyzer():
         'neg': 0.0
     })
     return mock
+
+# Database setup fixtures
+
+@pytest.fixture(scope="session", autouse=True)
+def setup_test_database():
+    """Create all database tables and setup test data."""
+    # Set testing environment
+    os.environ["PYTEST_CURRENT_TEST"] = "True"
+    
+    # Create engine for testing
+    settings = get_settings()
+    db_url = settings.DATABASE_URL
+    if db_url.startswith('sqlite+aiosqlite'):
+        db_url = db_url.replace('sqlite+aiosqlite', 'sqlite')
+    
+    engine = create_engine(db_url, echo=False, connect_args={"check_same_thread": False})
+    
+    # Create all tables
+    Base.metadata.create_all(bind=engine)
+    
+    # Create a test user for authentication tests
+    db = Session(bind=engine)
+    try:
+        # Create admin user for tests
+        existing_admin = db.query(User).filter(User.username == "admin").first()
+        if not existing_admin:
+            admin_user = User(
+                username="admin",
+                email="admin@example.com",
+                hashed_password=get_password_hash("changeme"),
+                full_name="Admin User",
+                is_active=True,
+                is_superuser=True
+            )
+            db.add(admin_user)
+            
+        # Also create a regular test user for other tests
+        existing_user = db.query(User).filter(User.username == "testuser").first()
+        if not existing_user:
+            test_user = User(
+                username="testuser",
+                email="test@example.com",
+                hashed_password=get_password_hash("testpassword"),
+                full_name="Test User",
+                is_active=True,
+                is_superuser=False
+            )
+            db.add(test_user)
+            
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"Error creating test users: {e}")
+        raise
+    finally:
+        db.close()
+        
+    # Create async engine for FastAPI dependency override
+    async_db_url = db_url.replace('sqlite', 'sqlite+aiosqlite') if 'sqlite' in db_url else db_url
+    async_engine = create_async_engine(async_db_url, echo=False)
+    AsyncSessionLocal = sessionmaker(
+        bind=async_engine, class_=AsyncSession, expire_on_commit=False
+    )
+
+    # Override the database dependency
+    async def override_get_db():
+        async with AsyncSessionLocal() as session:
+            yield session
+
+    app.dependency_overrides[get_db] = override_get_db
+        
+    yield
+    
+    # Cleanup: Drop all tables and remove dependency override
+    Base.metadata.drop_all(bind=engine)
+    app.dependency_overrides.clear()

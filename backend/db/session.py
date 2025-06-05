@@ -9,6 +9,9 @@ settings = get_settings()
 # Check if we're in a testing environment
 is_testing = os.getenv("PYTEST_CURRENT_TEST") is not None or settings.is_testing
 
+# Initialize engine variable
+engine = None
+
 if is_testing:
     # Use a synchronous engine for testing - SQLite doesn't support asyncio
     from sqlalchemy import create_engine
