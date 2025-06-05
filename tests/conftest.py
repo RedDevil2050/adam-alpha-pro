@@ -16,8 +16,7 @@ def pytest_configure(config):
     warnings.filterwarnings(
         "ignore",
         category=DeprecationWarning,
-        message=r"pkg_resources is deprecated as an API.*",
-        module="pandas_ta"  # Filter for warnings originating from the pandas_ta module
+        message=r"pkg_resources is deprecated as an API.*"
     )
     
     # Also suppress RuntimeWarning for coroutine never awaited

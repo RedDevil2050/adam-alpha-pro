@@ -30,12 +30,12 @@ _in_test_mode = any([
 async def get_redis_client():
     """
     Returns a Redis client (mocked for testing).
-    In test mode: returns a synchronous mock instance but via an async function.
+    In test mode: returns an async mock that behaves like sync for testing.
     In prod mode: returns the async mock that should be awaited.
     """
     if _in_test_mode:
-        # Return sync client in test mode, but from an async function
-        return _redis_client_sync
+        # Return async client configured for test mode
+        return _redis_client
     else:
         # In a real application, this would initialize and return a real Redis client
         return _redis_client
