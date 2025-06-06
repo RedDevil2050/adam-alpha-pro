@@ -2,19 +2,19 @@ import asyncio
 from backend.utils.cache_utils import get_redis_client
 from backend.config.settings import settings
 from backend.agents.intelligence.utils import tracker
+from backend.agents.decorators import standard_agent_execution
 import importlib
 import json # Import json
 
 agent_name = "peer_compare_agent"
+AGENT_CATEGORY = "intelligence"  # Define category for the decorator
 
 
+@standard_agent_execution(
+    agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600
+)
 async def run(symbol: str) -> dict:
-    redis_client = await get_redis_client()
-    cache_key = f"{agent_name}:{symbol}"
-    cached = await redis_client.get(cache_key)
-    if cached:
-        # Parse the JSON string from cache before returning
-        return json.loads(cached)
+    # Decorator handles cache check, so remove manual cache logic
 
     # Fetch PE ratio
     pe_mod = importlib.import_module("backend.agents.valuation.pe_ratio_agent")
@@ -45,7 +45,6 @@ async def run(symbol: str) -> dict:
             "agent_name": agent_name,
         }
 
-    # Convert result to JSON string before caching
-    await redis_client.set(cache_key, json.dumps(result), ex=3600) # ex=settings.agent_cache_ttl would be better
+    # Decorator handles caching, so remove manual cache logic
     tracker.update("intelligence", agent_name, "implemented")
     return result

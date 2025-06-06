@@ -51,7 +51,7 @@ class UnifiedDataProvider(BaseDataProvider):
             ("investing", "https://www.investing.com/equities/{symbol}"),
             ("google", "https://www.google.com/finance/quote/{symbol}"),        ]        # Rate limiting for Yahoo Finance to prevent "Too Many Requests"
         self._last_yahoo_call = 0
-        self._yahoo_rate_limit = 15.0  # Minimum 15.0 seconds between calls to prevent rate limiting
+        self._yahoo_rate_limit = 30.0  # Increase to 30 seconds between calls to prevent rate limiting
 
     async def fetch_data_resilient(self, symbol: str, data_type: str) -> Dict[str, Any]:
         """
@@ -362,7 +362,6 @@ class UnifiedDataProvider(BaseDataProvider):
         # Implement rate limiting
         current_time = time.time()
         time_since_last_call = current_time - self._last_yahoo_call
-        
         if time_since_last_call < self._yahoo_rate_limit:
             sleep_time = self._yahoo_rate_limit - time_since_last_call
             logger.debug(f"Rate limiting Yahoo Finance API call for {sleep_time:.2f} seconds")
@@ -389,8 +388,14 @@ class UnifiedDataProvider(BaseDataProvider):
 
             return await asyncio.get_event_loop().run_in_executor(self._executor, get_ticker_data)
         except Exception as e:
-            logger.error(f"Yahoo Finance API error: {str(e)}")
-            raise
+            error_msg = str(e).lower()
+            if "too many requests" in error_msg or "429" in error_msg:
+                logger.warning(f"Yahoo Finance rate limit hit for {symbol}: {str(e)}. Increasing rate limit.")
+                self._yahoo_rate_limit = min(self._yahoo_rate_limit * 1.5, 60.0)  # Exponential backoff, max 60s
+                raise Exception(f"Yahoo Finance rate limit exceeded for {symbol}")
+            else:
+                logger.error(f"Yahoo Finance API error: {str(e)}")
+                raise
 
     async def _fetch_alpha_vantage(self, symbol: str, data_type: str) -> Optional[Dict[str, Any]]:
         """Fetch data from Alpha Vantage API"""

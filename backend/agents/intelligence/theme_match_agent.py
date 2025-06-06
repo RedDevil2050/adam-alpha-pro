@@ -1,19 +1,19 @@
 import httpx
 from backend.utils.cache_utils import get_redis_client
+from backend.agents.decorators import standard_agent_execution
 import json # Import json
 from backend.agents.intelligence.utils import tracker
 
 agent_name = "theme_match_agent"
+AGENT_CATEGORY = "intelligence"  # Define category for the decorator
 themes = ["Regulatory", "Earnings", "M&A", "Product", "Leadership"]
 
 
+@standard_agent_execution(
+    agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600
+)
 async def run(symbol: str) -> dict:
-    cache_key = f"{agent_name}:{symbol}"
-    redis_client = await get_redis_client()
-    cached = await redis_client.get(cache_key)
-    if cached:
-        # Parse the JSON string from cache before returning
-        return json.loads(cached)
+    # Decorator handles cache check, so remove manual cache logic
 
     # Fetch latest headlines
     from backend.utils.data_provider import fetch_news
@@ -36,10 +36,8 @@ async def run(symbol: str) -> dict:
         "value": scores,
         "details": scores,
         "score": score,
-        "agent_name": agent_name,
-    }
+        "agent_name": agent_name,        }
 
-    # Convert result to JSON string before caching
-    await redis_client.set(cache_key, json.dumps(result), ex=None) # ex=None means no expiry, consider settings.agent_cache_ttl
+    # Decorator handles caching, so remove manual cache logic
     tracker.update("intelligence", agent_name, "implemented")
     return result

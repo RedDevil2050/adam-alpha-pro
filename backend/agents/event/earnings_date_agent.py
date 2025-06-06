@@ -1,16 +1,17 @@
 import datetime
 from backend.utils.cache_utils import get_redis_client
 from backend.agents.event.utils import fetch_alpha_events, tracker
+from backend.agents.decorators import standard_agent_execution
 
 agent_name = "earnings_date_agent"
+AGENT_CATEGORY = "event"  # Define category for the decorator
 
 
+@standard_agent_execution(
+    agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600
+)
 async def run(symbol: str) -> dict:
-    redis_client = await get_redis_client()
-    cache_key = f"{agent_name}:{symbol}"
-    cached = await redis_client.get(cache_key)
-    if cached:
-        return cached
+    # Decorator handles cache check, so remove manual cache logic
 
     # 1) API fetch next earnings date
     data = await fetch_alpha_events(symbol, "EARNINGS")
@@ -66,6 +67,6 @@ async def run(symbol: str) -> dict:
             "agent_name": agent_name,
         }
 
-    await redis_client.set(cache_key, result, ex=86400)
+    # Decorator handles caching, so remove manual cache logic
     tracker.update("event", agent_name, "implemented")
     return result

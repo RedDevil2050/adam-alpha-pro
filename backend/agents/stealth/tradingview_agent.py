@@ -5,6 +5,7 @@ import pandas_ta as ta
 from loguru import logger
 
 agent_name = "tradingview_agent"
+category = "stealth"  # Add missing category attribute
 
 
 class TradingViewAgent(StealthAgentBase):
@@ -162,7 +163,9 @@ class TradingViewAgent(StealthAgentBase):
         score = 0.5 # Start neutral
         if candlestick_patterns.get("hammer") or candlestick_patterns.get("morning_star"):
             score += 0.1
-        if candlestick_patterns.get("engulfing") > 0: # Bullish engulfing
+        # Fix type comparison error: check if engulfing value exists and is a number before comparison
+        engulfing_value = candlestick_patterns.get("engulfing")
+        if engulfing_value is not None and isinstance(engulfing_value, (int, float)) and engulfing_value > 0: # Bullish engulfing
              score += 0.1
         # Add more logic based on other signals
         return {
