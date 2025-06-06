@@ -35,12 +35,14 @@
       "insider_trade_agent": "implemented",
       "corporate_actions_agent": "implemented",
       "share_buyback_agent": "implemented",
-      "earnings_date_agent": "implemented"
+      "earnings_date_agent": "implemented",
+      "corporate_action_agent": "implemented"
     },
     "automation": {
       "alert_engine_agent": "implemented",
       "ask_alpha_agent": "implemented",
-      "auto_watchlist_agent": "implemented"
+      "auto_watchlist_agent": "implemented",
+      "bulk_portfolio_agent": "implemented"
     },
     "forecast": {
       "price_forecast_agent": "implemented",
@@ -67,5 +69,5 @@
       "interest_rate_agent": "implemented"
     }
   },
-  "last_updated": "2025-05-30T18:08:34.337510+00:00Z"
+  "last_updated": "2025-06-06T07:17:17.149314+00:00Z"
 }

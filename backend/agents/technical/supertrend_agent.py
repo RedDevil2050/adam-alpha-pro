@@ -12,6 +12,7 @@ from backend.data.providers.unified_provider import UnifiedDataProvider # Added
 from backend.market.context import MarketContext # Added - Assuming this is the type for market_context_provider instance
 
 agent_name = "supertrend_agent"
+AGENT_CATEGORY = "technical"  # Define category for the decorator
 
 
 class SupertrendAgent(TechnicalAgent):

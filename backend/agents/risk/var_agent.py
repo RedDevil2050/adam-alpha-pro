@@ -14,25 +14,52 @@ AGENT_CATEGORY = "risk"  # Define category for the decorator
 )
 async def run(
     symbol: str, agent_outputs: dict = None
-) -> dict:  # Added agent_outputs default
-    # Boilerplate (cache check, try/except, cache set, tracker, error handling) is handled by decorator
+) -> dict:  # Added agent_outputs default    # Boilerplate (cache check, try/except, cache set, tracker, error handling) is handled by decorator
     # Core logic moved from the previous _execute method
-
-    prices = await fetch_price_series(symbol)
+    
+    price_data = await fetch_price_series(symbol)
     # Use a reasonable lookback period, e.g., 252 trading days (1 year)
     min_days = 60  # Keep minimum requirement
-    if prices is None or prices.empty or len(prices) < min_days:
-        # Return NO_DATA format
-        return {
-            "symbol": symbol,
-            "verdict": "NO_DATA",
-            "confidence": 0.0,
-            "value": None,
-            "details": {
-                "reason": f"Insufficient price history for VaR calculation (need {min_days}, got {len(prices) if prices else 0})"
-            },
-            "agent_name": agent_name,
-        }
+    
+    # Extract prices from DataFrame or handle other data types
+    if isinstance(price_data, pd.DataFrame):
+        if price_data.empty or len(price_data) < min_days:
+            return {
+                "symbol": symbol,
+                "verdict": "NO_DATA",
+                "confidence": 0.0,
+                "value": None,
+                "details": {
+                    "reason": f"Insufficient price history for VaR calculation (need {min_days}, got {len(price_data) if price_data is not None else 0})"
+                },
+                "agent_name": agent_name,
+            }
+        # Extract close prices from DataFrame
+        if 'close' in price_data.columns:
+            prices = price_data['close']
+        elif 'Close' in price_data.columns:
+            prices = price_data['Close']
+        else:
+            # Fallback to last column if close not found
+            prices = price_data.iloc[:, -1]
+    else:
+        # Handle other data types (list, array, Series)
+        if isinstance(price_data, pd.Series):
+            prices = price_data
+        else:
+            prices = pd.Series(price_data) if hasattr(price_data, '__iter__') else pd.Series([price_data])
+        
+        if len(prices) < min_days:
+            return {
+                "symbol": symbol,
+                "verdict": "NO_DATA",
+                "confidence": 0.0,
+                "value": None,
+                "details": {
+                    "reason": f"Insufficient price history for VaR calculation (need {min_days}, got {len(prices)})"
+                },
+                "agent_name": agent_name,
+            }
 
     # Calculate log returns
     # Ensure prices are numeric and handle potential issues

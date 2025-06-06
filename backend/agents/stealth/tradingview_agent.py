@@ -100,10 +100,10 @@ class TradingViewAgent(StealthAgentBase):
 
             pattern_functions = {
                 "doji": ta.cdl_doji,
-                "engulfing": ta.cdl_engulfing,
-                "morning_star": ta.cdl_morningstar,
-                "evening_star": ta.cdl_eveningstar,
-                "hammer": ta.cdl_hammer,
+                "inside": ta.cdl_inside,
+                "z_score": ta.cdl_z,
+                # Note: pandas_ta doesn't have cdl_engulfing, cdl_morningstar, cdl_eveningstar, cdl_hammer
+                # Use cdl_pattern for general pattern detection
             }
 
             for name, func in pattern_functions.items():

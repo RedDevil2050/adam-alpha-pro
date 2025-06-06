@@ -2,6 +2,7 @@ from backend.utils.cache_utils import get_redis_client
 from backend.agents.esg.utils import fetch_esg_breakdown, tracker
 
 agent_name = "social_agent"
+AGENT_CATEGORY = "esg"  # Define category for the decorator
 
 
 async def run(symbol: str) -> dict:

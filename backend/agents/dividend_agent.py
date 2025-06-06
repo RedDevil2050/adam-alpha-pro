@@ -7,6 +7,7 @@ from backend.utils.retry_utils import async_retry
 from backend.agents.base import AgentBase
 from backend.config.settings import AgentSettings
 from backend.data.providers.base_provider import BaseDataProvider
+from backend.agents.categories import CategoryType
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,10 @@ class DividendAgent(AgentBase):
     3. Dividend growth history (when available)
     4. Dividend sustainability
     """
+
+    @property
+    def category(self) -> CategoryType:
+        return CategoryType.VALUATION
 
     def __init__(self, 
                  name: str, 

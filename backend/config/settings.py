@@ -63,6 +63,7 @@ class APIKeys(BaseSettings):
     QUANDL_API_KEY: Optional[str] = Field(None, json_schema_extra={"env":"QUANDL_API_KEY"})
     IEX_CLOUD_API_KEY: Optional[str] = Field(None, json_schema_extra={"env":"IEX_CLOUD_API_KEY"})
     MARKETSTACK_API_KEY: Optional[str] = Field(None, json_schema_extra={"env":"MARKETSTACK_API_KEY"})
+    NEWS_API_KEY: Optional[str] = Field(None, json_schema_extra={"env":"NEWS_API_KEY"})  # Added for news sentiment
     REACT_APP_BACKEND_URL: Optional[str] = Field(None, json_schema_extra={"env":"REACT_APP_BACKEND_URL"})
     REDIS_URL: Optional[str] = Field(None, json_schema_extra={"env":"REDIS_URL"})
     METRICS_PORT: Optional[int] = Field(None, json_schema_extra={"env":"METRICS_PORT"})
@@ -312,6 +313,32 @@ class Settings(BaseSettings):
         env_file=".env",    # Load .env file
         extra="ignore"      # Ignore extra fields that might come from environment
     )
+    
+    # Convenience property getters for direct API key access
+    @property
+    def news_api_key(self) -> Optional[str]:
+        """Direct access to news API key"""
+        return self.api_keys.NEWS_API_KEY
+    
+    @property
+    def twitter_bearer_token(self) -> Optional[str]:
+        """Direct access to Twitter bearer token"""
+        return self.api_keys.TWITTER_BEARER_TOKEN
+    
+    @property
+    def alpha_vantage_key(self) -> Optional[str]:
+        """Direct access to Alpha Vantage API key"""
+        return self.api_keys.ALPHA_VANTAGE_KEY
+    
+    @property
+    def polygon_api_key(self) -> Optional[str]:
+        """Direct access to Polygon API key"""
+        return self.api_keys.POLYGON_API_KEY
+    
+    @property
+    def finnhub_api_key(self) -> Optional[str]:
+        """Direct access to Finnhub API key"""
+        return self.api_keys.FINNHUB_API_KEY
 
 # Global cached settings instance
 # _cached_settings: Optional[Settings] = None # Removed

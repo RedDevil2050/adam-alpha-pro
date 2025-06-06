@@ -47,17 +47,43 @@ async def run(symbol: str) -> dict:
             - agent_name (str): The name of the agent ('volatility_level_agent').
     """
     # Fetch price series
-    prices = await fetch_price_series(symbol)
-    # Use prices.empty for pandas Series check
-    if prices is None or prices.empty or len(prices) < 2:
-        return {
-            "symbol": symbol,
-            "verdict": "NO_DATA",
-            "confidence": 0.0,
-            "value": None,
-            "details": {"reason": f"Insufficient price data for {symbol}"},
-            "agent_name": agent_name,
-        }
+    price_data = await fetch_price_series(symbol)
+    
+    # Extract prices from DataFrame or handle other data types
+    if isinstance(price_data, pd.DataFrame):
+        if price_data.empty or len(price_data) < 2:
+            return {
+                "symbol": symbol,
+                "verdict": "NO_DATA",
+                "confidence": 0.0,
+                "value": None,
+                "details": {"reason": f"Insufficient price data for {symbol}"},
+                "agent_name": agent_name,
+            }
+        # Extract close prices from DataFrame
+        if 'close' in price_data.columns:
+            prices = price_data['close'].values
+        elif 'Close' in price_data.columns:
+            prices = price_data['Close'].values
+        else:
+            # Fallback to last column if close not found
+            prices = price_data.iloc[:, -1].values
+    else:
+        # Handle other data types (list, array, Series)
+        if isinstance(price_data, pd.Series):
+            prices = price_data.values
+        else:
+            prices = np.array(price_data) if hasattr(price_data, '__iter__') else [price_data]
+        
+        if len(prices) < 2:
+            return {
+                "symbol": symbol,
+                "verdict": "NO_DATA",
+                "confidence": 0.0,
+                "value": None,
+                "details": {"reason": f"Insufficient price data for {symbol}"},
+                "agent_name": agent_name,
+            }
 
     # Compute daily returns and volatility
     prices_array = np.array(prices)

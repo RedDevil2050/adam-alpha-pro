@@ -4,6 +4,7 @@ from backend.utils.cache_utils import get_redis_client
 from backend.agents.sentiment.utils import analyzer, normalize_compound, tracker
 
 agent_name = "news_sentiment_agent"
+AGENT_CATEGORY = "sentiment"  # Define category for the decorator
 
 
 async def run(symbol: str) -> dict:

@@ -1,5 +1,6 @@
 import sys, os
 import json # Add json import
+from datetime import datetime, timedelta
 
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -55,8 +56,7 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
             - confidence (float): Fixed confidence score based on verdict.
             - value (float | None): The average momentum percentage.
             - details (dict): Contains individual period returns, average momentum, and configuration used.
-            - error (str | None): Error message if execution failed.
-            - agent_name (str): The name of the agent.
+            - error (str | None): Error message if execution failed.            - agent_name (str): The name of the agent.
     """
     settings = get_settings()
     mom_settings = settings.agent_settings.momentum
@@ -77,9 +77,13 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
     max_lookback = max(mom_settings.LOOKBACK_PERIODS)
     required_years = int(max_lookback / 252) + 1
 
+    # Convert years to start_date and end_date for fetch_historical_price_series
+    end_date = datetime.now().strftime("%Y-%m-%d")
+    start_date = (datetime.now() - timedelta(days=required_years * 365)).strftime("%Y-%m-%d")
+
     # Let the decorator handle fetch exceptions
     historical_prices = await fetch_historical_price_series(
-        symbol, years=required_years
+        symbol, start_date=start_date, end_date=end_date
     )
 
     # Validate data

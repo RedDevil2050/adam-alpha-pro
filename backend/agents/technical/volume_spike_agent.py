@@ -8,7 +8,7 @@ from typing import Dict, Any # Import Dict and Any
 from backend.agents.decorators import standard_agent_execution # Import decorator
 
 agent_name = "volume_spike_agent"
-AGENT_CATEGORY = "TECHNICAL" # Added category
+AGENT_CATEGORY = "technical"  # Define category for the decorator
 
 
 class VolumeSpikeAgent(TechnicalAgent):

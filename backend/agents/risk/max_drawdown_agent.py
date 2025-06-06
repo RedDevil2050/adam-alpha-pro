@@ -14,17 +14,43 @@ async def run(symbol: str) -> dict:
     # Boilerplate (cache check, try/except, cache set, tracker, error handling) is handled by decorator
 
     # Fetch price series (Core Logic)
-    prices = await fetch_price_series(symbol)
-    if not prices or len(prices) < 2:
-        # Return NO_DATA format (decorator won't cache this)
-        return {
-            "symbol": symbol,
-            "verdict": "NO_DATA",
-            "confidence": 0.0,
-            "value": None,
-            "details": {"reason": f"Insufficient price data for {symbol}"},
-            "agent_name": agent_name,
-        }
+    price_data = await fetch_price_series(symbol)
+    
+    # Extract prices from DataFrame or handle other data types
+    if isinstance(price_data, pd.DataFrame):
+        if price_data.empty or len(price_data) < 2:
+            return {
+                "symbol": symbol,
+                "verdict": "NO_DATA",
+                "confidence": 0.0,
+                "value": None,
+                "details": {"reason": f"Insufficient price data for {symbol}"},
+                "agent_name": agent_name,
+            }
+        # Extract close prices from DataFrame
+        if 'close' in price_data.columns:
+            prices = price_data['close'].values
+        elif 'Close' in price_data.columns:
+            prices = price_data['Close'].values
+        else:
+            # Fallback to last column if close not found
+            prices = price_data.iloc[:, -1].values
+    else:
+        # Handle other data types (list, array, Series)
+        if isinstance(price_data, pd.Series):
+            prices = price_data.values
+        else:
+            prices = np.array(price_data) if hasattr(price_data, '__iter__') else [price_data]
+        
+        if len(prices) < 2:
+            return {
+                "symbol": symbol,
+                "verdict": "NO_DATA",
+                "confidence": 0.0,
+                "value": None,
+                "details": {"reason": f"Insufficient price data for {symbol}"},
+                "agent_name": agent_name,
+            }
 
     # Calculate max drawdown (Core Logic)
     prices_array = np.array(prices)

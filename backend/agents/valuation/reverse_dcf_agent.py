@@ -4,6 +4,7 @@ from loguru import logger
 from backend.agents.decorators import standard_agent_execution
 
 agent_name = "reverse_dcf_agent"
+AGENT_CATEGORY = "valuation"  # Define category for the decorator
 
 
 class ReverseDCFAgent(ValuationAgentBase):

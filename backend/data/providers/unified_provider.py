@@ -10,6 +10,7 @@ import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 import re
+import time
 
 from backend.monitoring.performance import (
     record_provider_latency,
@@ -48,8 +49,9 @@ class UnifiedDataProvider(BaseDataProvider):
             ("yahoo", "https://finance.yahoo.com/quote/{symbol}"),
             ("marketwatch", "https://www.marketwatch.com/investing/stock/{symbol}"),
             ("investing", "https://www.investing.com/equities/{symbol}"),
-            ("google", "https://www.google.com/finance/quote/{symbol}"),
-        ]
+            ("google", "https://www.google.com/finance/quote/{symbol}"),        ]        # Rate limiting for Yahoo Finance to prevent "Too Many Requests"
+        self._last_yahoo_call = 0
+        self._yahoo_rate_limit = 5.0  # Minimum 5.0 seconds between calls to prevent rate limiting
 
     async def fetch_data_resilient(self, symbol: str, data_type: str) -> Dict[str, Any]:
         """
@@ -310,8 +312,7 @@ class UnifiedDataProvider(BaseDataProvider):
             return {"price": await self._estimate_price(symbol)}
         elif data_type == "volume":
             # Use average volume
-            return {"volume": await self._estimate_volume(symbol)}
-        # Add other data types as needed
+            return {"volume": await self._estimate_volume(symbol)}        # Add other data types as needed
         return {"value": None, "warning": "No estimation available"}
 
     async def _estimate_price(self, symbol: str) -> float:
@@ -355,7 +356,20 @@ class UnifiedDataProvider(BaseDataProvider):
         return 0.0
 
     async def _fetch_yahoo(self, symbol: str, data_type: str) -> Optional[Dict[str, Any]]:
-        """Fetch data from Yahoo Finance API"""
+        """Fetch data from Yahoo Finance API with rate limiting"""
+        import time
+        
+        # Implement rate limiting
+        current_time = time.time()
+        time_since_last_call = current_time - self._last_yahoo_call
+        
+        if time_since_last_call < self._yahoo_rate_limit:
+            sleep_time = self._yahoo_rate_limit - time_since_last_call
+            logger.debug(f"Rate limiting Yahoo Finance API call for {sleep_time:.2f} seconds")
+            await asyncio.sleep(sleep_time)
+        
+        self._last_yahoo_call = time.time()
+        
         try:
             def get_ticker_data():
                 ticker = yf.Ticker(symbol)
@@ -546,23 +560,38 @@ class UnifiedDataProvider(BaseDataProvider):
                 end_dt = datetime.now()
             if not start_dt:
                 start_dt = end_dt - timedelta(days=365)
+                  # Use thread pool to run yfinance in a separate thread with rate limiting
+            async def get_historical_data_with_rate_limit():
+                import time
                 
-            # Use thread pool to run yfinance in a separate thread
-            def get_historical_data():
-                import yfinance as yf
-                ticker = yf.Ticker(symbol)
-                hist = ticker.history(
-                    start=start_dt.strftime("%Y-%m-%d"),
-                    end=end_dt.strftime("%Y-%m-%d"),
-                    interval=interval
+                # Implement rate limiting
+                current_time = time.time()
+                time_since_last_call = current_time - self._last_yahoo_call
+                
+                if time_since_last_call < self._yahoo_rate_limit:
+                    sleep_time = self._yahoo_rate_limit - time_since_last_call
+                    logger.debug(f"Rate limiting Yahoo Finance historical data call for {sleep_time:.2f} seconds")
+                    await asyncio.sleep(sleep_time)
+                
+                self._last_yahoo_call = time.time()
+                
+                def get_historical_data():
+                    import yfinance as yf
+                    ticker = yf.Ticker(symbol)
+                    hist = ticker.history(
+                        start=start_dt.strftime("%Y-%m-%d"),
+                        end=end_dt.strftime("%Y-%m-%d"),
+                        interval=interval
+                    )
+                    # Ensure column names are lowercase for consistency
+                    hist.columns = [col.lower() for col in hist.columns]
+                    return hist
+                
+                return await asyncio.get_event_loop().run_in_executor(
+                    self._executor, get_historical_data
                 )
-                # Ensure column names are lowercase for consistency
-                hist.columns = [col.lower() for col in hist.columns]
-                return hist
                 
-            data = await asyncio.get_event_loop().run_in_executor(
-                self._executor, get_historical_data
-            )
+            data = await get_historical_data_with_rate_limit()
             
             # Ensure the returned data is a DataFrame
             if data is None or data.empty:

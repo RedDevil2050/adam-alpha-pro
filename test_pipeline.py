@@ -9,7 +9,8 @@ from backend.orchestrator import run_full_cycle
 
 @pytest.mark.asyncio # Add decorator
 async def test():
-    result = await run_full_cycle("TCS")
+    # Test with MOSCHIP in correct NSE format
+    result = await run_full_cycle("MOSCHIP.NS")
     print("PIPELINE TEST RESULT:", result)
 
 asyncio.run(test())

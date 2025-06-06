@@ -99,23 +99,39 @@ async def run(symbol: str, agent_outputs: dict = None) -> dict:
         }
 
     # Calculate returns (Core Logic)
-    # Handle 2D price arrays by extracting the closing price column
+    # Handle DataFrame price data by extracting the closing price column
     try:
-        # Check if symbol_prices is a 2D array and extract closing prices
-        if isinstance(symbol_prices, np.ndarray) and len(symbol_prices.shape) > 1:
-            close_idx = 3  # Assuming 4th column (index 3) is close price
-            sym_series = pd.Series(symbol_prices[:, close_idx])
+        # Handle pandas DataFrame (expected format from fetch_price_series)
+        if isinstance(symbol_prices, pd.DataFrame):
+            if 'close' in symbol_prices.columns:
+                sym_series = symbol_prices['close']
+            elif 'Close' in symbol_prices.columns:
+                sym_series = symbol_prices['Close']
+            else:
+                # Fallback to last column if close not found
+                sym_series = symbol_prices.iloc[:, -1]
+        elif isinstance(symbol_prices, pd.Series):
+            sym_series = symbol_prices
         else:
+            # Convert other formats to Series
             sym_series = pd.Series(symbol_prices)
             
         # Similarly for market prices
-        if isinstance(market_prices, np.ndarray) and len(market_prices.shape) > 1:
-            close_idx = 3  # Assuming 4th column (index 3) is close price
-            mkt_series = pd.Series(market_prices[:, close_idx])
+        if isinstance(market_prices, pd.DataFrame):
+            if 'close' in market_prices.columns:
+                mkt_series = market_prices['close']
+            elif 'Close' in market_prices.columns:
+                mkt_series = market_prices['Close']
+            else:
+                # Fallback to last column if close not found
+                mkt_series = market_prices.iloc[:, -1]
+        elif isinstance(market_prices, pd.Series):
+            mkt_series = market_prices
         else:
+            # Convert other formats to Series
             mkt_series = pd.Series(market_prices)
             
-        # A more robust approach would align based on dates if available
+        # Calculate returns
         sym_ret = sym_series.pct_change().dropna()
         mkt_ret = mkt_series.pct_change().dropna()
     except Exception as e:

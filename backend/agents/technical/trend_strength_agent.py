@@ -12,7 +12,7 @@ import pandas as pd # Import pandas for type checking
 from typing import Dict, Any # Import Dict, Any
 
 agent_name = "trend_strength_agent"
-AGENT_CATEGORY = "TECHNICAL" # Added category
+AGENT_CATEGORY = "technical"  # Define category for the decorator
 
 
 class TrendStrengthAgent(TechnicalAgent):
