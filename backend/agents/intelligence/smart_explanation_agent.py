@@ -2,18 +2,18 @@ from backend.utils.cache_utils import get_redis_client
 from backend.agents.intelligence.utils import tracker
 import json # Import json
 from backend.config.settings import settings
+from backend.agents.decorators import standard_agent_execution
 
 agent_name = "smart_explanation_agent"
+AGENT_CATEGORY = "intelligence"  # Define category for the decorator
 
+
+@standard_agent_execution(
+    agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600
+)
 async def run(symbol: str, agent_outputs: dict) -> dict:
-    # Get Redis client when needed, don't initialize at module level
-    redis_client = await get_redis_client()
-    cache_key = f"{agent_name}:{symbol}"
-    cached = await redis_client.get(cache_key)
-    if cached:
-        # Parse the JSON string from cache before returning
-        return json.loads(cached)
-
+    # Decorator handles cache check, so remove manual cache logic
+    
     # Summarize top signals
     top = sorted(
         agent_outputs.items(), key=lambda x: x[1].get("confidence", 0), reverse=True
@@ -30,7 +30,5 @@ async def run(symbol: str, agent_outputs: dict) -> dict:
         "agent_name": agent_name,
     }
 
-    # Convert result to JSON string before caching
-    await redis_client.set(cache_key, json.dumps(result), ex=None) # ex=None means no expiry, consider settings.agent_cache_ttl
-    tracker.update("intelligence", agent_name, "implemented")
+    # Decorator handles caching and tracker update
     return result

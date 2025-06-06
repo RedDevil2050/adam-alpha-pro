@@ -2,19 +2,18 @@ import httpx
 from backend.config.settings import settings
 from backend.utils.cache_utils import get_redis_client
 from backend.agents.sentiment.utils import analyzer, normalize_compound, tracker
+from backend.agents.decorators import standard_agent_execution
 
 agent_name = "social_sentiment_agent"
 AGENT_CATEGORY = "sentiment"  # Define category for the decorator
 
 
-async def run(symbol: str) -> dict:
-    cache_key = f"{agent_name}:{symbol}"
-    redis_client = await get_redis_client()
-    # Cache check
-    cached = await redis_client.get(cache_key)
-    if cached:
-        return cached
-
+@standard_agent_execution(
+    agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600
+)
+async def run(symbol: str, agent_outputs: dict = None) -> dict:
+    # Decorator handles cache check, so remove manual cache logic
+    
     # Fetch recent tweets using Twitter v2 API
     bearer = settings.twitter_bearer_token
     url = "https://api.twitter.com/2/tweets/search/recent"
@@ -55,7 +54,5 @@ async def run(symbol: str) -> dict:
             "agent_name": agent_name,
         }
 
-    # Cache and update progress
-    await redis_client.set(cache_key, result, ex=3600)
-    tracker.update("sentiment", agent_name, "implemented")
+    # Decorator handles caching and tracker update
     return result

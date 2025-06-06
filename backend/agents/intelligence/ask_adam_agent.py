@@ -2,18 +2,18 @@ from backend.utils.cache_utils import get_redis_client
 from backend.utils.data_provider import fetch_price_series, fetch_eps_data
 import json # Import json
 from backend.agents.intelligence.utils import tracker
+from backend.agents.decorators import standard_agent_execution
 
 agent_name = "ask_adam_agent"
+AGENT_CATEGORY = "intelligence"  # Define category for the decorator
 
 
+@standard_agent_execution(
+    agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600
+)
 async def run(symbol: str, question: str = "") -> dict:
-    redis_client = await get_redis_client()  # Modified
-    cache_key = f"{agent_name}:{symbol}:{question}"
-    cached = await redis_client.get(cache_key)
-    if cached:
-        # Parse the JSON string from cache before returning
-        return json.loads(cached)
-
+    # Decorator handles cache check, so remove manual cache logic
+    
     q = question.lower()
     if "price" in q:
         prices = await fetch_price_series(symbol, source_preference=["api", "scrape"])
@@ -36,7 +36,5 @@ async def run(symbol: str, question: str = "") -> dict:
         "agent_name": agent_name,
     }
 
-    # Convert result to JSON string before caching
-    await redis_client.set(cache_key, json.dumps(result), ex=None) # ex=None means no expiry, consider settings.agent_cache_ttl
-    tracker.update("intelligence", agent_name, "implemented")
+    # Decorator handles caching and tracker update
     return result

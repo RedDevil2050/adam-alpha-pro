@@ -1,11 +1,16 @@
 import httpx
 from backend.utils.cache_utils import get_redis_client
 from backend.agents.event.utils import tracker
+from backend.agents.decorators import standard_agent_execution
 
 agent_name = "corporate_action_agent"
+AGENT_CATEGORY = "event"
 
 
-async def run(symbol: str) -> dict:
+@standard_agent_execution(
+    agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=86400
+)
+async def run(symbol: str, agent_outputs: dict = None) -> dict:
     redis_client = await get_redis_client()
     cache_key = f"{agent_name}:{symbol}"
     cached = await redis_client.get(cache_key)
@@ -52,11 +57,9 @@ async def run(symbol: str) -> dict:
             "verdict": verdict,
             "confidence": round(score, 4),
             "value": count,
-            "details": {"actions": actions},
-            "score": score,
+            "details": {"actions": actions},            "score": score,
             "agent_name": agent_name,
         }
 
-    await redis_client.set(cache_key, result, ex=86400)
-    tracker.update("event", agent_name, "implemented")
+    # Decorator handles caching and tracker update
     return result

@@ -11,16 +11,23 @@ class TijoriAgent(StealthAgentBase):
     async def _execute(self, symbol: str, agent_outputs: dict) -> dict:
         try:
             # 1) Primary: Alpha Vantage
-            price = await fetch_price_alpha_vantage(symbol)
+            price_data = await fetch_price_alpha_vantage(symbol)
+            
+            # Extract numeric price from response
+            price = None
+            if isinstance(price_data, dict) and 'price' in price_data:
+                price = price_data['price']
+            elif isinstance(price_data, (int, float)):
+                price = price_data
             
             # 2) Fallback: Tijori Finance web scrape
-            if not price or price <= 0:
+            if not price or not isinstance(price, (int, float)) or price <= 0:
                 data = await self._fetch_stealth_data(symbol)
                 if data and 'price' in data:
                     price = data['price']
 
             # 3) No data
-            if not price:
+            if not price or not isinstance(price, (int, float)):
                 return self._error_response(symbol, "No price data available")
 
             # 4) Calculate verdict and confidence

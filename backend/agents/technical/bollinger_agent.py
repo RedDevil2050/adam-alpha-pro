@@ -3,19 +3,19 @@ from backend.utils.data_provider import fetch_ohlcv_series
 from backend.utils.cache_utils import get_redis_client
 from backend.agents.technical.utils import tracker
 from datetime import datetime, timedelta
+from backend.agents.decorators import standard_agent_execution
 
 agent_name = "bollinger_agent"
+AGENT_CATEGORY = "technical"  # Define category for the decorator
 
 
+@standard_agent_execution(
+    agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600
+)
 async def run(symbol: str, agent_outputs: dict = None, window: int = 20, num_std: float = 2.0) -> dict:
-    cache_key = f"{agent_name}:{symbol}:{window}:{num_std}"
-    redis_client = await get_redis_client()
-    # 1) Cache check
-    cached = await redis_client.get(cache_key)
-    if cached:
-        return cached
-
-    # 2) Fetch OHLCV data
+    # Decorator handles cache check, so remove manual cache logic
+    
+    # Fetch OHLCV data
     end_date = datetime.now().strftime("%Y-%m-%d")
     start_date = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
     df = await fetch_ohlcv_series(symbol, start_date, end_date)
@@ -30,7 +30,7 @@ async def run(symbol: str, agent_outputs: dict = None, window: int = 20, num_std
         }
     else:
         close = df["close"]
-        # 3) Compute moving average and standard deviation
+        # Compute moving average and standard deviation
         ma = close.rolling(window=window, min_periods=window).mean()
         std = close.rolling(window=window, min_periods=window).std()
 
@@ -41,7 +41,7 @@ async def run(symbol: str, agent_outputs: dict = None, window: int = 20, num_std
         upper_band = last_ma + num_std * last_std
         lower_band = last_ma - num_std * last_std
 
-        # 4) Normalize and map verdict
+        # Normalize and map verdict
         if last_close < lower_band:
             score = 1.0
             verdict = "BUY"
@@ -68,9 +68,5 @@ async def run(symbol: str, agent_outputs: dict = None, window: int = 20, num_std
             "agent_name": agent_name,
         }
 
-    # 5) Cache result for 1 hour
-    await redis_client.set(cache_key, result, ex=3600)
-    # 6) Update progress tracker
-    tracker.update("technical", agent_name, "implemented")
-
+    # Decorator handles caching and tracker update
     return result

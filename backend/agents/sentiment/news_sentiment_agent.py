@@ -2,20 +2,19 @@ import httpx
 from backend.config.settings import settings
 from backend.utils.cache_utils import get_redis_client
 from backend.agents.sentiment.utils import analyzer, normalize_compound, tracker
+from backend.agents.decorators import standard_agent_execution
 
 agent_name = "news_sentiment_agent"
 AGENT_CATEGORY = "sentiment"  # Define category for the decorator
 
 
-async def run(symbol: str) -> dict:
-    cache_key = f"{agent_name}:{symbol}"
-    # 1) Cache check
-    redis_client = await get_redis_client()
-    cached = await redis_client.get(cache_key)
-    if cached:
-        return cached
-
-    # 2) Fetch recent news headlines via NewsAPI
+@standard_agent_execution(
+    agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600
+)
+async def run(symbol: str, agent_outputs: dict = None) -> dict:
+    # Decorator handles cache check, so remove manual cache logic
+    
+    # Fetch recent news headlines via NewsAPI
     api_key = settings.news_api_key
     url = "https://newsapi.org/v2/everything"
     params = {"q": symbol, "apiKey": api_key, "pageSize": 5, "sortBy": "publishedAt"}
@@ -39,11 +38,11 @@ async def run(symbol: str) -> dict:
             "agent_name": agent_name,
         }
     else:
-        # 3) Compute sentiment scores
+        # Compute sentiment scores
         comp_scores = [analyzer.polarity_scores(h)["compound"] for h in headlines]
         avg_comp = sum(comp_scores) / len(comp_scores)
         score = normalize_compound(avg_comp)
-        # 4) Verdict mapping
+        # Verdict mapping
         if score >= 0.6:
             verdict = "POSITIVE"
         elif score <= 0.4:
@@ -60,8 +59,5 @@ async def run(symbol: str) -> dict:
             "agent_name": agent_name,
         }
 
-    # 5) Cache result for 1 hour and track progress
-    redis_client = await get_redis_client()
-    await redis_client.set(cache_key, result, ex=3600)
-    tracker.update("sentiment", agent_name, "implemented")
+    # Decorator handles caching and tracker update
     return result

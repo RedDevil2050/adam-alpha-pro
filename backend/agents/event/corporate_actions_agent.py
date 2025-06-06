@@ -4,11 +4,16 @@ from backend.utils.cache_utils import get_redis_client
 from backend.agents.event.utils import tracker
 # Import the specific data provider function
 from backend.utils.data_provider import fetch_corporate_actions
+from backend.agents.decorators import standard_agent_execution
 
 agent_name = "corporate_actions_agent"
+AGENT_CATEGORY = "event"
 
 
-async def run(symbol: str) -> dict:
+@standard_agent_execution(
+    agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=86400
+)
+async def run(symbol: str, agent_outputs: dict = None) -> dict:
     redis_client = await get_redis_client() # Ensure redis client is awaited
     cache_key = f"{agent_name}:{symbol}"
     cached = await redis_client.get(cache_key)
@@ -64,6 +69,5 @@ async def run(symbol: str) -> dict:
             "agent_name": agent_name,
         }
 
-    await redis_client.set(cache_key, result, ex=86400)
-    tracker.update("event", agent_name, "implemented")
+    # Decorator handles caching and tracker update
     return result

@@ -51,7 +51,7 @@ class UnifiedDataProvider(BaseDataProvider):
             ("investing", "https://www.investing.com/equities/{symbol}"),
             ("google", "https://www.google.com/finance/quote/{symbol}"),        ]        # Rate limiting for Yahoo Finance to prevent "Too Many Requests"
         self._last_yahoo_call = 0
-        self._yahoo_rate_limit = 5.0  # Minimum 5.0 seconds between calls to prevent rate limiting
+        self._yahoo_rate_limit = 15.0  # Minimum 15.0 seconds between calls to prevent rate limiting
 
     async def fetch_data_resilient(self, symbol: str, data_type: str) -> Dict[str, Any]:
         """

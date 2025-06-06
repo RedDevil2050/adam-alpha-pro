@@ -1,14 +1,16 @@
 from backend.utils.cache_utils import redis_client
 from backend.agents.esg.utils import fetch_esg_breakdown, tracker
+from backend.agents.decorators import standard_agent_execution
 
 agent_name = "composite_esg_agent"
+AGENT_CATEGORY = "esg"  # Define category for the decorator
 
 
+@standard_agent_execution(
+    agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=3600
+)
 async def run(symbol: str, agent_outputs: dict) -> dict:
-    cache_key = f"{agent_name}:{{symbol}}"
-    cached = await redis_client.get(cache_key)
-    if cached:
-        return cached
+    # Decorator handles cache check, so remove manual cache logic
 
     try:
         # Fetch breakdown or use sub-agent outputs
@@ -55,8 +57,7 @@ async def run(symbol: str, agent_outputs: dict) -> dict:
                 "agent_name": agent_name,
             }
 
-        await redis_client.set(cache_key, result, ex=3600)
-        tracker.update("esg", agent_name, "implemented")
+        # Decorator handles caching and tracker update
         return result
 
     except Exception as e:
