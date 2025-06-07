@@ -774,8 +774,7 @@ class UnifiedDataProvider(BaseDataProvider):
         result = await self.fetch_data_resilient(symbol, data_type)
         return result.get("data", {}) # Return empty dict as default
 
-    # --- End of implementations for new abstract methods ---
-    def _normalize_symbol_for_provider(self, symbol: str, provider: str) -> str:
+    # --- End of implementations for new abstract methods ---    def _normalize_symbol_for_provider(self, symbol: str, provider: str) -> str:
         """
         Normalize symbol for specific data provider.
         
@@ -787,30 +786,34 @@ class UnifiedDataProvider(BaseDataProvider):
             str: Symbol formatted for the provider
         """
         try:
-            # Validate symbol format first
-            is_valid, error_msg = IndianEquitySymbolNormalizer.validate_symbol_format(symbol)
-            if not is_valid:
-                logger.warning(f"Invalid symbol format {symbol}: {error_msg}")
-                return symbol  # Return as-is for now, let provider handle the error
-                
-            # Normalize based on provider
-            if provider == "yahoo_finance":
-                normalized = normalize_indian_symbol(symbol, "yahoo")
-                logger.debug(f"Normalized {symbol} -> {normalized} for Yahoo Finance")
-                return normalized
-            elif provider == "alpha_vantage":
-                normalized = normalize_indian_symbol(symbol, "alpha_vantage") 
-                logger.debug(f"Normalized {symbol} -> {normalized} for Alpha Vantage")
-                return normalized
-            elif provider in ["polygon", "finnhub"]:
-                normalized = normalize_indian_symbol(symbol, "polygon")
-                logger.debug(f"Normalized {symbol} -> {normalized} for {provider}")
-                return normalized
+            # Check if this is an Indian symbol first
+            from backend.utils.symbol_normalizer_fixed import validate_indian_symbol, normalize_indian_symbol
+            is_indian, _ = validate_indian_symbol(symbol)
+            
+            # Only apply Indian normalization for Indian symbols
+            if is_indian:
+                # Normalize based on provider
+                if provider == "yahoo_finance":
+                    normalized = normalize_indian_symbol(symbol, "yahoo")
+                    logger.debug(f"Normalized Indian symbol {symbol} -> {normalized} for Yahoo Finance")
+                    return normalized
+                elif provider == "alpha_vantage":
+                    normalized = normalize_indian_symbol(symbol, "alpha_vantage") 
+                    logger.debug(f"Normalized Indian symbol {symbol} -> {normalized} for Alpha Vantage")
+                    return normalized
+                elif provider in ["polygon", "finnhub"]:
+                    normalized = normalize_indian_symbol(symbol, "polygon")
+                    logger.debug(f"Normalized Indian symbol {symbol} -> {normalized} for {provider}")
+                    return normalized
+                else:
+                    # For web scraping, use Yahoo format as it's most common
+                    normalized = normalize_indian_symbol(symbol, "yahoo")
+                    logger.debug(f"Normalized Indian symbol {symbol} -> {normalized} for web scraping")
+                    return normalized
             else:
-                # For web scraping, use Yahoo format as it's most common
-                normalized = normalize_indian_symbol(symbol, "yahoo")
-                logger.debug(f"Normalized {symbol} -> {normalized} for web scraping")
-                return normalized
+                # For non-Indian symbols, return as-is
+                logger.debug(f"Non-Indian symbol {symbol} kept as-is for {provider}")
+                return symbol
                 
         except Exception as e:
             logger.warning(f"Error normalizing symbol {symbol} for {provider}: {e}")

@@ -129,18 +129,17 @@ class TestCompleteWorkflow:
         with TestClient(app) as client:
             headers = {"Authorization": f"Bearer {access_token}"}
             invalid_symbol = "INVALID_SYMBOL_XYZ123"
-            response = client.get(f"/api/analyze/{invalid_symbol}", headers=headers)
-
-            # Allow 404 if the backend/data source correctly identifies symbol as not found,
+            response = client.get(f"/api/analyze/{invalid_symbol}", headers=headers)            # Allow 400 for invalid symbol format (validation error),
+            # 404 if the backend/data source correctly identifies symbol as not found,
             # or 503 if it fails due to interacting with the external service.
-            expected_statuses = [status.HTTP_404_NOT_FOUND, status.HTTP_503_SERVICE_UNAVAILABLE]
+            expected_statuses = [status.HTTP_400_BAD_REQUEST, status.HTTP_404_NOT_FOUND, status.HTTP_503_SERVICE_UNAVAILABLE]
             assert response.status_code in expected_statuses, \
                 f"Expected one of {expected_statuses}, got {response.status_code}. Response: {response.text}"
 
             # Check for relevant error message in the detail field (if JSON)
             detail = response.json().get("detail", "") if response.headers.get("content-type") == "application/json" else response.text
             # Adjust possible messages based on how your backend reports invalid symbol errors
-            assert any(msg in detail for msg in ["Failed to fetch", "Could not retrieve", "No data available", "Symbol not found", "invalid symbol", "Analysis failed for symbol:"]), \
+            assert any(msg in detail for msg in ["Failed to fetch", "Could not retrieve", "No data available", "Symbol not found", "invalid symbol", "Analysis failed for symbol:", "Invalid symbol format", "validation error"]), \
                 f"Unexpected error detail for invalid symbol: {detail}"
 
 

@@ -11,9 +11,8 @@ from pydantic import ValidationError
 router = APIRouter()
 
 @router.get("/analyze/{symbol}", 
-            summary="Run comprehensive analysis for a given stock symbol")
-            # Temporarily remove JWT dependency for live testing
-            # dependencies=[Depends(verify_token)])
+            summary="Run comprehensive analysis for a given stock symbol",
+            dependencies=[Depends(verify_token)])
 async def analyze_symbol(symbol: str, settings: Settings = Depends(get_settings)):
     """
     Endpoint to trigger a full analysis workflow for a specific stock symbol.
@@ -69,9 +68,8 @@ async def analyze_symbol(symbol: str, settings: Settings = Depends(get_settings)
         )
 
 @router.post("/analyze/enhanced", 
-             summary="Run comprehensive analysis with provider-specific symbol normalization")
-             # Temporarily remove JWT dependency for live testing
-             # dependencies=[Depends(verify_token)])
+             summary="Run comprehensive analysis with provider-specific symbol normalization",
+             dependencies=[Depends(verify_token)])
 async def analyze_symbol_enhanced(request: EnhancedSymbolRequest, settings: Settings = Depends(get_settings)):
     """
     Enhanced endpoint that supports provider-specific symbol normalization.

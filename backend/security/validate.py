@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 from backend.utils.symbol_normalizer_fixed import validate_indian_symbol, IndianEquitySymbolNormalizer
 
@@ -6,7 +6,8 @@ from backend.utils.symbol_normalizer_fixed import validate_indian_symbol, Indian
 class SymbolRequest(BaseModel):
     symbol: str = Field(..., pattern=r"^[A-Z0-9^.\-&]{1,20}$")  # Enhanced NSE/BSE compatible pattern
     
-    @validator('symbol')
+    @field_validator('symbol')
+    @classmethod
     def validate_indian_symbol_format(cls, v):
         """Enhanced validation for Indian equity symbols"""
         if not v:
@@ -36,7 +37,8 @@ class EnhancedSymbolRequest(BaseModel):
     provider: str = "yahoo"  # Default provider
     exchange: Optional[str] = None  # Optional exchange specification
     
-    @validator('symbol')
+    @field_validator('symbol')
+    @classmethod
     def validate_and_normalize_symbol(cls, v):
         """Validate and normalize symbol"""
         if not v:
@@ -57,7 +59,8 @@ class EnhancedSymbolRequest(BaseModel):
         from backend.utils.symbol_normalizer_fixed import normalize_indian_symbol
         return normalize_indian_symbol(self.symbol, self.provider)
     
-    @validator('provider')
+    @field_validator('provider')
+    @classmethod
     def validate_provider(cls, v):
         """Validate provider name"""
         valid_providers = [
@@ -69,7 +72,8 @@ class EnhancedSymbolRequest(BaseModel):
             raise ValueError(f"Invalid provider. Must be one of: {valid_providers}")
         return v.lower()
     
-    @validator('exchange')
+    @field_validator('exchange')
+    @classmethod
     def validate_exchange(cls, v):
         """Validate exchange if provided"""
         if v is None:
