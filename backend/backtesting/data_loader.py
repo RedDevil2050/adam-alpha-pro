@@ -1,6 +1,6 @@
 import yfinance as yf
 import pandas as pd
-from backend.utils.symbol_normalizer import normalize_indian_symbol
+from backend.utils.symbol_normalizer_fixed import normalize_indian_symbol
 
 
 def get_historical_ohlcv(symbol: str, start: str, end: str) -> pd.DataFrame:

@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, validator
 from typing import Optional
-from backend.utils.symbol_normalizer import validate_indian_symbol, IndianEquitySymbolNormalizer
+from backend.utils.symbol_normalizer_fixed import validate_indian_symbol, IndianEquitySymbolNormalizer
 
 
 class SymbolRequest(BaseModel):
@@ -54,7 +54,7 @@ class EnhancedSymbolRequest(BaseModel):
     @property
     def normalized_symbol(self) -> str:
         """Get normalized symbol for the specified provider"""
-        from backend.utils.symbol_normalizer import normalize_indian_symbol
+        from backend.utils.symbol_normalizer_fixed import normalize_indian_symbol
         return normalize_indian_symbol(self.symbol, self.provider)
     
     @validator('provider')

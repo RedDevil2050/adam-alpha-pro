@@ -392,8 +392,7 @@ class IndianEquityOptimizer:
             
         except Exception as e:
             execution_time = (datetime.now() - start_time).total_seconds()
-            return {
-                "success": False,
+            return {                "success": False,
                 "error": str(e),
                 "execution_time": execution_time,
                 "details": f"Failed to expand symbol database: {e}"
@@ -404,7 +403,7 @@ class IndianEquityOptimizer:
         start_time = datetime.now()
         
         try:
-            from backend.utils.symbol_normalizer import (
+            from backend.utils.symbol_normalizer_fixed import (
                 normalize_indian_symbol, 
                 IndianEquitySymbolNormalizer
             )
@@ -546,10 +545,9 @@ class IndianEquityOptimizer:
                 "symbol_normalization", execution_time, True, symbol, provider
             )
             return cached_result
-        
-        # Cache miss - compute normalization
+          # Cache miss - compute normalization
         try:
-            from backend.utils.symbol_normalizer import normalize_indian_symbol
+            from backend.utils.symbol_normalizer_fixed import normalize_indian_symbol
             result = normalize_indian_symbol(symbol, provider)
             
             execution_time = (datetime.now() - start_time).total_seconds()

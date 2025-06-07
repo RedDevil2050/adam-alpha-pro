@@ -1,5 +1,5 @@
 import requests
-from backend.utils.symbol_normalizer import normalize_indian_symbol
+from backend.utils.symbol_normalizer_fixed import normalize_indian_symbol
 
 class AlphaVantageProvider:
     @staticmethod

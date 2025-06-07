@@ -27,7 +27,7 @@ from backend.monitoring.performance import (
 from backend.data.providers.base_provider import BaseDataProvider
 from backend.utils.circuit_breaker import CircuitBreaker
 from backend.config.settings import get_settings
-from backend.utils.symbol_normalizer import IndianEquitySymbolNormalizer, normalize_indian_symbol
+from backend.utils.symbol_normalizer_fixed import IndianEquitySymbolNormalizer, normalize_indian_symbol
 
 class UnifiedDataProvider(BaseDataProvider):
     """

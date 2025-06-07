@@ -141,7 +141,7 @@ async def validate_symbol(symbol: str):
         validated_symbol = SymbolRequest(symbol=symbol)
         
         # Get normalization info for different providers
-        from backend.utils.symbol_normalizer import IndianEquitySymbolNormalizer
+        from backend.utils.symbol_normalizer_fixed import IndianEquitySymbolNormalizer
         
         normalizer = IndianEquitySymbolNormalizer()
         

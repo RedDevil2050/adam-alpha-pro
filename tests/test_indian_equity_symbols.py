@@ -29,13 +29,13 @@ class TestSymbolNormalizer:
     
     def test_import_normalizer(self):
         """Test that the symbol normalizer can be imported."""
-        from backend.utils.symbol_normalizer import IndianEquitySymbolNormalizer
+        from backend.utils.symbol_normalizer_fixed import IndianEquitySymbolNormalizer
         normalizer = IndianEquitySymbolNormalizer()
         assert normalizer is not None
     
     def test_validate_symbols(self, sample_symbols):
         """Test symbol validation."""
-        from backend.utils.symbol_normalizer import IndianEquitySymbolNormalizer
+        from backend.utils.symbol_normalizer_fixed import IndianEquitySymbolNormalizer
         normalizer = IndianEquitySymbolNormalizer()
         
         # Valid symbols should pass
@@ -48,7 +48,7 @@ class TestSymbolNormalizer:
     
     def test_normalize_for_yahoo(self, sample_symbols):
         """Test normalization for Yahoo Finance provider."""
-        from backend.utils.symbol_normalizer import IndianEquitySymbolNormalizer
+        from backend.utils.symbol_normalizer_fixed import IndianEquitySymbolNormalizer
         normalizer = IndianEquitySymbolNormalizer()
         
         assert normalizer.get_provider_symbol('RELIANCE', 'yahoo') == 'RELIANCE.NS'
@@ -57,7 +57,7 @@ class TestSymbolNormalizer:
     
     def test_normalize_for_alpha_vantage(self):
         """Test normalization for Alpha Vantage provider."""
-        from backend.utils.symbol_normalizer import IndianEquitySymbolNormalizer
+        from backend.utils.symbol_normalizer_fixed import IndianEquitySymbolNormalizer
         normalizer = IndianEquitySymbolNormalizer()
         
         assert normalizer.get_provider_symbol('RELIANCE', 'alpha_vantage') == 'RELIANCE'
@@ -156,7 +156,7 @@ def test_system_components_available():
 
 def test_convenience_functions():
     """Test the convenience functions work properly."""
-    from backend.utils.symbol_normalizer import normalize_indian_symbol, validate_indian_symbol
+    from backend.utils.symbol_normalizer_fixed import normalize_indian_symbol, validate_indian_symbol
     
     # Test normalization
     assert normalize_indian_symbol('RELIANCE', 'yahoo') == 'RELIANCE.NS'

@@ -1,0 +1,43 @@
+{
+  "summary": {
+    "successful_steps": 2,
+    "total_steps": 4,
+    "total_time": 11.929948000000001,
+    "optimization_complete": false
+  },
+  "results": {
+    "database_expansion": {
+      "success": true,
+      "total_added": 247,
+      "categories": [
+        "large_cap",
+        "mid_cap",
+        "small_cap"
+      ],
+      "execution_time": 0.103517,
+      "details": "Successfully added 247 Indian stocks to extended database"
+    },
+    "cache_creation": {
+      "success": false,
+      "error": "cannot import name 'normalize_indian_symbol' from 'backend.utils.symbol_normalizer' (D:\\Zion\\backend\\utils\\symbol_normalizer.py)",
+      "execution_time": 0.065191,
+      "details": "Failed to create symbol cache: cannot import name 'normalize_indian_symbol' from 'backend.utils.symbol_normalizer' (D:\\Zion\\backend\\utils\\symbol_normalizer.py)"
+    },
+    "performance_analysis": {
+      "error": "division by zero",
+      "details": "Failed to analyze performance metrics"
+    },
+    "performance_test": {
+      "success": true,
+      "avg_normalization_time": 0.1176124,
+      "cache_hit_rate": 0.0,
+      "total_operations": 100,
+      "execution_time": 11.76124,
+      "performance_improvement": {
+        "cache_enabled": false,
+        "fast_normalization": false,
+        "optimized": false
+      }
+    }
+  }
+}

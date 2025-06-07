@@ -14,7 +14,7 @@ backend_path = Path(__file__).parent / "backend"
 sys.path.insert(0, str(backend_path))
 
 from backend.security.validate import SymbolRequest, EnhancedSymbolRequest
-from backend.utils.symbol_normalizer import (
+from backend.utils.symbol_normalizer_fixed import (
     IndianEquitySymbolNormalizer, 
     normalize_indian_symbol, 
     validate_indian_symbol
