@@ -1,0 +1,321 @@
+{
+  "summary": {
+    "total_tests": 7,
+    "successful_tests": 6,
+    "success_rate": 0.8571428571428571,
+    "total_time": 187.191925,
+    "production_ready": true
+  },
+  "results": [
+    {
+      "test_name": "API Key Configuration",
+      "success": true,
+      "details": "Configured: 2/4 providers. Status: {'alpha_vantage': True, 'polygon': False, 'finnhub': False, 'yahoo': True}",
+      "execution_time": 0.25338,
+      "data_sample": {
+        "alpha_vantage": true,
+        "polygon": false,
+        "finnhub": false,
+        "yahoo": true
+      }
+    },
+    {
+      "test_name": "Symbol Normalization Comprehensive",
+      "success": true,
+      "details": "Validated: 29/30 symbols successfully",
+      "execution_time": 0.092575,
+      "data_sample": {
+        "normalization_sample": {
+          "RELIANCE": {
+            "yahoo": "RELIANCE.NS",
+            "alpha_vantage": "RELIANCE",
+            "polygon": "RELIANCE"
+          },
+          "TCS": {
+            "yahoo": "TCS.NS",
+            "alpha_vantage": "TCS",
+            "polygon": "TCS"
+          },
+          "HDFCBANK": {
+            "yahoo": "HDFCBANK.NS",
+            "alpha_vantage": "HDFCBANK",
+            "polygon": "HDFCBANK"
+          },
+          "INFY": {
+            "yahoo": "INFY.NS",
+            "alpha_vantage": "INFY",
+            "polygon": "INFY"
+          },
+          "ICICIBANK": {
+            "yahoo": "ICICIBANK.NS",
+            "alpha_vantage": "ICICIBANK",
+            "polygon": "ICICIBANK"
+          }
+        },
+        "validation_sample": {
+          "RELIANCE": {
+            "valid": true,
+            "error": ""
+          },
+          "TCS": {
+            "valid": true,
+            "error": ""
+          },
+          "HDFCBANK": {
+            "valid": true,
+            "error": ""
+          },
+          "INFY": {
+            "valid": true,
+            "error": ""
+          },
+          "ICICIBANK": {
+            "valid": true,
+            "error": ""
+          }
+        }
+      }
+    },
+    {
+      "test_name": "Unified Provider Live Data",
+      "success": true,
+      "details": "Successful fetches: 3/3",
+      "execution_time": 93.682533,
+      "data_sample": {
+        "RELIANCE": {
+          "price_success": true,
+          "volume_success": true,
+          "price_sample": "{'source': 'yahoo_finance', 'data': {'price': 1443.5}, 'confidence': 'medium'}",
+          "volume_sample": "{'source': 'yahoo_finance', 'data': {'volume': 8180971.0}, 'confidence': 'medium'}"
+        },
+        "TCS.NS": {
+          "price_success": true,
+          "volume_success": true,
+          "price_sample": "{'source': 'alpha_vantage', 'data': {'price': 0.1405}, 'confidence': 'high'}",
+          "volume_sample": "{'source': 'alpha_vantage', 'data': {'volume': 0.0}, 'confidence': 'high'}"
+        },
+        "^NSEI": {
+          "price_success": true,
+          "volume_success": true,
+          "price_sample": "{'source': 'yahoo_finance', 'data': {'price': 25003.05078125}, 'confidence': 'medium'}",
+          "volume_sample": "{'source': 'yahoo_finance', 'data': {'volume': 0.0}, 'confidence': 'medium'}"
+        }
+      }
+    },
+    {
+      "test_name": "Historical Data Fetching",
+      "success": true,
+      "details": "Successful historical fetches: 3/3",
+      "execution_time": 60.320165,
+      "data_sample": {
+        "RELIANCE": {
+          "success": true,
+          "rows": 22,
+          "columns": [
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume",
+            "dividends",
+            "stock splits"
+          ]
+        },
+        "TCS": {
+          "success": true,
+          "rows": 22,
+          "columns": [
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume",
+            "dividends",
+            "stock splits"
+          ]
+        },
+        "^NSEI": {
+          "success": true,
+          "rows": 22,
+          "columns": [
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume",
+            "dividends",
+            "stock splits"
+          ]
+        }
+      }
+    },
+    {
+      "test_name": "Backtesting Integration",
+      "success": true,
+      "details": "Successful backtesting data loads: 3/3",
+      "execution_time": 1.003832,
+      "data_sample": {
+        "RELIANCE": {
+          "success": true,
+          "rows": 40,
+          "columns": [
+            [
+              "date",
+              ""
+            ],
+            [
+              "close",
+              "RELIANCE.NS"
+            ],
+            [
+              "high",
+              "RELIANCE.NS"
+            ],
+            [
+              "low",
+              "RELIANCE.NS"
+            ],
+            [
+              "open",
+              "RELIANCE.NS"
+            ],
+            [
+              "volume",
+              "RELIANCE.NS"
+            ]
+          ]
+        },
+        "TCS": {
+          "success": true,
+          "rows": 40,
+          "columns": [
+            [
+              "date",
+              ""
+            ],
+            [
+              "close",
+              "TCS.NS"
+            ],
+            [
+              "high",
+              "TCS.NS"
+            ],
+            [
+              "low",
+              "TCS.NS"
+            ],
+            [
+              "open",
+              "TCS.NS"
+            ],
+            [
+              "volume",
+              "TCS.NS"
+            ]
+          ]
+        },
+        "HDFCBANK": {
+          "success": true,
+          "rows": 40,
+          "columns": [
+            [
+              "date",
+              ""
+            ],
+            [
+              "close",
+              "HDFCBANK.NS"
+            ],
+            [
+              "high",
+              "HDFCBANK.NS"
+            ],
+            [
+              "low",
+              "HDFCBANK.NS"
+            ],
+            [
+              "open",
+              "HDFCBANK.NS"
+            ],
+            [
+              "volume",
+              "HDFCBANK.NS"
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "test_name": "Validation System",
+      "success": true,
+      "details": "Valid: 5/5, Invalid rejected: 4/4",
+      "execution_time": 0.006744,
+      "data_sample": {
+        "valid": {
+          "RELIANCE": {
+            "basic_valid": true,
+            "enhanced_valid": true,
+            "normalized": "RELIANCE.NS"
+          },
+          "TCS.NS": {
+            "basic_valid": true,
+            "enhanced_valid": true,
+            "normalized": "TCS.NS"
+          },
+          "HDFCBANK.BO": {
+            "basic_valid": true,
+            "enhanced_valid": true,
+            "normalized": "HDFCBANK.BO"
+          },
+          "^NSEI": {
+            "basic_valid": true,
+            "enhanced_valid": true,
+            "normalized": "^NSEI"
+          },
+          "500325": {
+            "basic_valid": true,
+            "enhanced_valid": true,
+            "normalized": "500325.BO"
+          }
+        },
+        "invalid": {
+          "INVALID@SYMBOL": {
+            "should_fail": true,
+            "actually_failed": true
+          },
+          "": {
+            "should_fail": true,
+            "actually_failed": true
+          },
+          "TOOLONGNAME123456": {
+            "should_fail": true,
+            "actually_failed": true
+          },
+          "12345": {
+            "should_fail": true,
+            "actually_failed": true
+          }
+        }
+      }
+    },
+    {
+      "test_name": "Performance Benchmarks",
+      "success": false,
+      "details": "Normalization: 0.0000s, Fetch: 10.61s",
+      "execution_time": 31.832696,
+      "data_sample": {
+        "avg_normalization_time": 0.0,
+        "avg_fetch_time": 10.610507,
+        "normalization_ok": true,
+        "fetch_ok": false
+      }
+    }
+  ],
+  "recommendations": {
+    "api_keys_configured": true,
+    "ready_for_production": false,
+    "ready_for_testing": true
+  }
+}

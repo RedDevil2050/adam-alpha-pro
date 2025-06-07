@@ -27,6 +27,7 @@ from backend.monitoring.performance import (
 from backend.data.providers.base_provider import BaseDataProvider
 from backend.utils.circuit_breaker import CircuitBreaker
 from backend.config.settings import get_settings
+from backend.utils.symbol_normalizer import IndianEquitySymbolNormalizer, normalize_indian_symbol
 
 class UnifiedDataProvider(BaseDataProvider):
     """
@@ -128,14 +129,17 @@ class UnifiedDataProvider(BaseDataProvider):
         """Fetch data from a specific provider"""
         start_time = time.monotonic()
         try:
+            # Normalize symbol for the specific provider
+            normalized_symbol = self._normalize_symbol_for_provider(symbol, provider)
+            
             if provider == "yahoo_finance":
-                return await self._fetch_yahoo(symbol, data_type)
+                return await self._fetch_yahoo(normalized_symbol, data_type)
             elif provider == "alpha_vantage":
-                return await self._fetch_alpha_vantage(symbol, data_type)
+                return await self._fetch_alpha_vantage(normalized_symbol, data_type)
             elif provider == "polygon":
-                return await self._fetch_polygon(symbol, data_type)
+                return await self._fetch_polygon(normalized_symbol, data_type)
             elif provider == "finnhub":
-                return await self._fetch_finnhub(symbol, data_type)
+                return await self._fetch_finnhub(normalized_symbol, data_type)
         except Exception as e:
             record_provider_failure(provider, data_type, str(e))
             raise
@@ -146,9 +150,12 @@ class UnifiedDataProvider(BaseDataProvider):
     async def _parallel_scrape(self, symbol: str, data_type: str) -> List[Dict[str, Any]]:
         """Scrape data from multiple sources in parallel"""
         tasks = []
+        # Normalize symbol for web scraping (use Yahoo format)
+        normalized_symbol = self._normalize_symbol_for_provider(symbol, "web_scraper")
+        
         async with httpx.AsyncClient(timeout=10) as client:
             for site_name, url_template in self._scraping_sites:
-                url = url_template.format(symbol=symbol)
+                url = url_template.format(symbol=normalized_symbol)
                 tasks.append(self._scrape_single_site(client, site_name, url, data_type))
             
             results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -312,15 +319,19 @@ class UnifiedDataProvider(BaseDataProvider):
             return {"price": await self._estimate_price(symbol)}
         elif data_type == "volume":
             # Use average volume
-            return {"volume": await self._estimate_volume(symbol)}        # Add other data types as needed
+            return {"volume": await self._estimate_volume(symbol)}
+        # Add other data types as needed
         return {"value": None, "warning": "No estimation available"}
 
     async def _estimate_price(self, symbol: str) -> float:
         """Estimate price using moving averages or other technicals"""
         try:
+            # Normalize symbol for Yahoo Finance
+            normalized_symbol = self._normalize_symbol_for_provider(symbol, "yahoo_finance")
+            
             # Use thread pool for synchronous operations
             def get_historical():
-                return yf.download(symbol, period="5d", progress=False)
+                return yf.download(normalized_symbol, period="5d", progress=False)
             
             hist = await asyncio.get_event_loop().run_in_executor(self._executor, get_historical)
             if not hist.empty:
@@ -332,8 +343,11 @@ class UnifiedDataProvider(BaseDataProvider):
     async def _estimate_volume(self, symbol: str) -> float:
         """Estimate volume using historical averages"""
         try:
+            # Normalize symbol for Yahoo Finance
+            normalized_symbol = self._normalize_symbol_for_provider(symbol, "yahoo_finance")
+            
             def get_volume():
-                return yf.download(symbol, period="30d", progress=False)["Volume"].mean()
+                return yf.download(normalized_symbol, period="30d", progress=False)["Volume"].mean()
             
             return float(await asyncio.get_event_loop().run_in_executor(self._executor, get_volume))
         except:
@@ -546,6 +560,9 @@ class UnifiedDataProvider(BaseDataProvider):
             DataFrame with price data
         """
         try:
+            # Normalize symbol for Yahoo Finance (primary provider for historical data)
+            normalized_symbol = self._normalize_symbol_for_provider(symbol, "yahoo_finance")
+            
             # Convert string dates to datetime objects if provided
             start_dt = None
             end_dt = None
@@ -582,7 +599,7 @@ class UnifiedDataProvider(BaseDataProvider):
                 
                 def get_historical_data():
                     import yfinance as yf
-                    ticker = yf.Ticker(symbol)
+                    ticker = yf.Ticker(normalized_symbol)
                     hist = ticker.history(
                         start=start_dt.strftime("%Y-%m-%d"),
                         end=end_dt.strftime("%Y-%m-%d"),
@@ -758,3 +775,43 @@ class UnifiedDataProvider(BaseDataProvider):
         return result.get("data", {}) # Return empty dict as default
 
     # --- End of implementations for new abstract methods ---
+    def _normalize_symbol_for_provider(self, symbol: str, provider: str) -> str:
+        """
+        Normalize symbol for specific data provider.
+        
+        Args:
+            symbol: Raw symbol to normalize
+            provider: Provider name
+            
+        Returns:
+            str: Symbol formatted for the provider
+        """
+        try:
+            # Validate symbol format first
+            is_valid, error_msg = IndianEquitySymbolNormalizer.validate_symbol_format(symbol)
+            if not is_valid:
+                logger.warning(f"Invalid symbol format {symbol}: {error_msg}")
+                return symbol  # Return as-is for now, let provider handle the error
+                
+            # Normalize based on provider
+            if provider == "yahoo_finance":
+                normalized = normalize_indian_symbol(symbol, "yahoo")
+                logger.debug(f"Normalized {symbol} -> {normalized} for Yahoo Finance")
+                return normalized
+            elif provider == "alpha_vantage":
+                normalized = normalize_indian_symbol(symbol, "alpha_vantage") 
+                logger.debug(f"Normalized {symbol} -> {normalized} for Alpha Vantage")
+                return normalized
+            elif provider in ["polygon", "finnhub"]:
+                normalized = normalize_indian_symbol(symbol, "polygon")
+                logger.debug(f"Normalized {symbol} -> {normalized} for {provider}")
+                return normalized
+            else:
+                # For web scraping, use Yahoo format as it's most common
+                normalized = normalize_indian_symbol(symbol, "yahoo")
+                logger.debug(f"Normalized {symbol} -> {normalized} for web scraping")
+                return normalized
+                
+        except Exception as e:
+            logger.warning(f"Error normalizing symbol {symbol} for {provider}: {e}")
+            return symbol  # Fallback to original symbol

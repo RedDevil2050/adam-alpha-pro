@@ -1,14 +1,19 @@
 import yfinance as yf
+from backend.utils.symbol_normalizer import normalize_indian_symbol
 
 class YahooFinanceProvider:
     @staticmethod
     def fetch_price_data(symbol: str, start_date: str, end_date: str, interval: str = "1d"):
-        ticker = yf.Ticker(symbol)
+        # Normalize symbol for Yahoo Finance
+        normalized_symbol = normalize_indian_symbol(symbol, "yahoo")
+        ticker = yf.Ticker(normalized_symbol)
         return ticker.history(start=start_date, end=end_date, interval=interval)
 
     @staticmethod
     def fetch_quote(symbol: str):
-        ticker = yf.Ticker(symbol)
+        # Normalize symbol for Yahoo Finance
+        normalized_symbol = normalize_indian_symbol(symbol, "yahoo")
+        ticker = yf.Ticker(normalized_symbol)
         return ticker.info
 
     @staticmethod
@@ -18,5 +23,7 @@ class YahooFinanceProvider:
 
     @staticmethod
     def fetch_company_info(symbol: str):
-        ticker = yf.Ticker(symbol)
+        # Normalize symbol for Yahoo Finance
+        normalized_symbol = normalize_indian_symbol(symbol, "yahoo")
+        ticker = yf.Ticker(normalized_symbol)
         return ticker.info

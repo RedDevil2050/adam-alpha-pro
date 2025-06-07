@@ -4,6 +4,9 @@ from backend.orchestrator import run_full_cycle
 from backend.utils.cache_utils import get_redis_client
 from backend.config.settings import get_settings
 from backend.agents.automation.utils import tracker
+from backend.security.validate import SymbolRequest
+from backend.utils.validation import validate_symbols
+from pydantic import ValidationError
 from loguru import logger
 import json
 from typing import Union, List, Dict, Any
@@ -58,6 +61,61 @@ async def run(symbol_input: Union[str, List[str]]) -> Dict[str, Any]:
             "score": 0.0,
             "agent_name": agent_name,
             "error": "No symbols to process"
+        }
+
+    # Validate all symbols using existing validation infrastructure
+    try:
+        # Use existing validation utilities
+        validate_symbols(symbols_to_process)
+        
+        # Validate each symbol individually using SymbolRequest
+        validated_symbols = []
+        validation_errors = []
+        
+        for symbol in symbols_to_process:
+            try:
+                validated_symbol = SymbolRequest(symbol=symbol)
+                validated_symbols.append(validated_symbol.symbol)
+                logger.debug(f"Symbol {symbol} passed validation")
+            except ValidationError as ve:
+                validation_errors.append(f"{symbol}: {ve}")
+                logger.warning(f"Symbol validation failed for {symbol}: {ve}")
+            except ValueError as ve:
+                validation_errors.append(f"{symbol}: {ve}")
+                logger.warning(f"Symbol validation failed for {symbol}: {ve}")
+        
+        if validation_errors:
+            logger.error(f"Symbol validation failed for {len(validation_errors)} symbols: {validation_errors}")
+            return {
+                "symbol": symbol_input if isinstance(symbol_input, str) else f"bulk_list_{len(symbols_to_process)}",
+                "verdict": "ERROR",
+                "confidence": 0.0,
+                "value": 0,
+                "details": {
+                    "error": "Symbol validation failed",
+                    "validation_errors": validation_errors,
+                    "valid_symbols": validated_symbols
+                },
+                "score": 0.0,
+                "agent_name": agent_name,
+                "error": f"Validation failed for {len(validation_errors)} symbols"
+            }
+        
+        # Update symbols_to_process with validated symbols
+        symbols_to_process = validated_symbols
+        logger.info(f"All {len(symbols_to_process)} symbols passed validation")
+        
+    except Exception as e:
+        logger.error(f"Unexpected error during symbol validation in {agent_name}: {e}")
+        return {
+            "symbol": symbol_input if isinstance(symbol_input, str) else f"bulk_list_{len(symbols_to_process)}",
+            "verdict": "ERROR",
+            "confidence": 0.0,
+            "value": 0,
+            "details": {"error": f"Validation error: {str(e)}"},
+            "score": 0.0,
+            "agent_name": agent_name,
+            "error": f"Validation error: {str(e)}"
         }
 
     # Initial price fetch for the first symbol (if list) or the only symbol (if string)
