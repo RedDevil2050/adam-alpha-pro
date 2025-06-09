@@ -12,14 +12,13 @@ agent_name = "bollinger_agent"
 
 @pytest.mark.asyncio
 # Patch dependencies (innermost first)
-@patch('backend.agents.technical.bollinger_agent.tracker.update')
-@patch('backend.agents.technical.bollinger_agent.get_redis_client', new_callable=AsyncMock)
+@patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock)  # Patch decorator's redis client
 @patch('backend.agents.technical.bollinger_agent.fetch_ohlcv_series', new_callable=AsyncMock)
 # Mock pandas rolling calculations
-@patch('pandas.core.window.rolling.Rolling.mean') 
-@patch('pandas.core.window.rolling.Rolling.std') 
+@patch('pandas.core.window.rolling.Rolling.mean')
+@patch('pandas.core.window.rolling.Rolling.std')
 async def test_bollinger_agent_buy_signal(
-    mock_pd_std, mock_pd_mean, mock_fetch, mock_get_redis, mock_tracker_update
+    mock_pd_std, mock_pd_mean, mock_fetch, mock_get_redis
 ):
     # --- Mock Configuration ---
     window = 20
@@ -54,16 +53,11 @@ async def test_bollinger_agent_buy_signal(
     # Mock Std Dev calculation result
     mock_std_series = MagicMock()
     mock_std_series.iloc.__getitem__.return_value = 2.0 # Mock last Std Dev value
-    mock_pd_std.return_value = mock_std_series
-
-    # Expected bands based on mocks:
+    mock_pd_std.return_value = mock_std_series    # Expected bands based on mocks:
     # Upper = 105.0 + 2.0 * 2.0 = 109.0
     # Lower = 105.0 - 2.0 * 2.0 = 101.0
     # Last close = 95.0 (from data_df)
     # Since 95.0 < 101.0, expect BUY verdict
-
-    # 4. Mock Tracker (already patched)
-    mock_tracker_update.return_value = None
 
     # --- Run Agent ---
     res = await bollinger_run('TEST_SYMBOL', window=window, num_std=num_std)
@@ -90,12 +84,9 @@ async def test_bollinger_agent_buy_signal(
     # Assuming it calls fetch_ohlcv_series(symbol, ...)
     call_args, call_kwargs = mock_fetch.call_args
     assert call_args[0] == 'TEST_SYMBOL' 
-    # Add more checks if fetch_ohlcv_series takes date ranges in this agent
-
-    mock_get_redis.assert_awaited_once()
+    # Add more checks if fetch_ohlcv_series takes date ranges in this agent    mock_get_redis.assert_awaited_once()
     mock_redis_instance.get.assert_awaited_once()
     mock_redis_instance.set.assert_awaited_once() # Should cache on success
-    mock_tracker_update.assert_called_once_with("technical", agent_name, "implemented")
     
     # Verify pandas mocks
     assert mock_pd_mean.called

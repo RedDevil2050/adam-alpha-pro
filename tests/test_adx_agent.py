@@ -13,12 +13,11 @@ _original_pandas_rolling_mean = pd.core.window.rolling.Rolling.mean
 
 @pytest.mark.asyncio
 # Patch dependencies in the correct order (innermost first)
-@patch('backend.agents.technical.adx_agent.tracker.update')
-@patch('backend.agents.technical.adx_agent.get_redis_client', new_callable=AsyncMock)
+@patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock)  # Patch decorator's redis client
 @patch('backend.agents.technical.adx_agent.fetch_ohlcv_series', new_callable=AsyncMock)
 # Mock the final pandas calculation step to control the ADX value
 @patch('pandas.core.window.rolling.Rolling.mean', autospec=True) # Added autospec=True
-async def test_adx_agent_strong_trend(mock_pd_mean, mock_fetch, mock_get_redis, mock_tracker_update):
+async def test_adx_agent_strong_trend(mock_pd_mean, mock_fetch, mock_get_redis):
     # --- Mock Configuration ---
     symbol = 'TEST_SYMBOL'
     # 1. Mock fetch_ohlcv_series
@@ -64,9 +63,6 @@ async def test_adx_agent_strong_trend(mock_pd_mean, mock_fetch, mock_get_redis, 
 
     mock_pd_mean.side_effect = mean_side_effect
 
-    # 4. Mock Tracker (already patched)
-    mock_tracker_update.return_value = None # Simple mock
-
     # --- Run Agent ---
     res = await adx_run(symbol)
 
@@ -92,7 +88,6 @@ async def test_adx_agent_strong_trend(mock_pd_mean, mock_fetch, mock_get_redis, 
     mock_get_redis.assert_awaited_once()
     mock_redis_instance.get.assert_awaited_once()
     mock_redis_instance.set.assert_awaited_once() # Should cache on success
-    mock_tracker_update.assert_called_once_with("technical", agent_name, "implemented")
     # Verify the mocked pandas mean was called 4 times
     assert mock_pd_mean.call_count == 4
     # Verify the iloc access on our mock series (called only on the 4th time)

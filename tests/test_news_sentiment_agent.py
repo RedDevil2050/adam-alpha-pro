@@ -16,7 +16,7 @@ mock_settings_for_news_agent.news_api_key = "test_key_mocked"
 # Patch the settings object in the news_sentiment_agent module with our mock instance
 # The mock objects are passed to the test function in order from the bottom decorator upwards.
 @patch('backend.agents.sentiment.news_sentiment_agent.settings', mock_settings_for_news_agent)
-@patch('backend.agents.sentiment.news_sentiment_agent.get_redis_client', new_callable=AsyncMock)
+@patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock)  # Patch decorator's redis client
 @patch('backend.agents.sentiment.news_sentiment_agent.httpx.AsyncClient')
 @patch('backend.agents.sentiment.news_sentiment_agent.analyzer')
 async def test_news_sentiment_agent(mock_analyzer, mock_async_httpx_client, mock_get_redis_client): # Removed mock_settings_patched_ref parameter

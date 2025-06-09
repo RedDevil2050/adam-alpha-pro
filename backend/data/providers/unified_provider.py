@@ -774,7 +774,9 @@ class UnifiedDataProvider(BaseDataProvider):
         result = await self.fetch_data_resilient(symbol, data_type)
         return result.get("data", {}) # Return empty dict as default
 
-    # --- End of implementations for new abstract methods ---    def _normalize_symbol_for_provider(self, symbol: str, provider: str) -> str:
+    # --- End of implementations for new abstract methods ---
+    
+    def _normalize_symbol_for_provider(self, symbol: str, provider: str) -> str:
         """
         Normalize symbol for specific data provider.
         

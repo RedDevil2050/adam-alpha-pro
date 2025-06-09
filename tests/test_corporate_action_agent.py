@@ -9,8 +9,8 @@ import httpx
 from backend.agents.event.corporate_actions_agent import run as ca_run, agent_name
 
 @pytest.mark.asyncio
-# Patch get_redis_client used by the agent/decorator
-@patch('backend.agents.event.corporate_actions_agent.get_redis_client', new_callable=AsyncMock)
+# Patch get_redis_client used by the decorator
+@patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock)
 # Patch fetch_corporate_actions directly where it's used by the agent
 @patch('backend.agents.event.corporate_actions_agent.fetch_corporate_actions', new_callable=AsyncMock)
 # Remove the unnecessary patch for httpx.AsyncClient.get
