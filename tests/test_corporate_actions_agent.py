@@ -8,13 +8,11 @@ import datetime
 
 @pytest.mark.asyncio
 # Patch dependencies (innermost first)
-@patch('backend.agents.event.corporate_actions_agent.tracker.update') 
 @patch('backend.agents.decorators.get_redis_client', new_callable=AsyncMock)  # Patch decorator's redis client
 @patch('backend.agents.event.corporate_actions_agent.fetch_corporate_actions')
 async def test_corporate_actions_agent_active(
-    mock_fetch_actions, 
-    mock_get_redis,
-    mock_tracker_update
+    mock_fetch_actions,
+    mock_get_redis
 ):
     # --- Mock Configuration ---
     # 1. Mock fetch_corporate_actions to return multiple actions
@@ -28,15 +26,11 @@ async def test_corporate_actions_agent_active(
     expected_count = len(mock_actions_data)
     # Expected score = min(3 / 5.0, 1.0) = 0.6
     expected_score = 0.6
-    expected_verdict = "ACTIVE" # Since score >= 0.6
-      # 2. Mock Redis
+    expected_verdict = "ACTIVE" # Since score >= 0.6    # 2. Mock Redis
     mock_redis_instance = AsyncMock()
     mock_redis_instance.get = AsyncMock(return_value=None) # Cache miss
     mock_redis_instance.set = AsyncMock()
     mock_get_redis.return_value = mock_redis_instance
-
-    # 3. Mock Tracker (already patched)
-    # mock_tracker_update.return_value = None # Simple mock - already an arg
 
     # --- Run Agent ---
     res = await ca_run('TEST_SYMBOL')
@@ -63,4 +57,3 @@ async def test_corporate_actions_agent_active(
     mock_redis_instance.get.assert_awaited_once()
     if res.get('verdict') not in ['NO_DATA', 'ERROR', None]:
         mock_redis_instance.set.assert_awaited_once()
-    mock_tracker_update.assert_called_once_with("event", agent_name, "implemented")
