@@ -39,6 +39,19 @@ def pytest_configure(config):
         message=r"coroutine '.*' was never awaited"
     )
     
+    # Suppress additional async mock warnings
+    warnings.filterwarnings(
+        "ignore",
+        category=RuntimeWarning,
+        message=r".*AsyncMockMixin._execute_mock_call.*was never awaited"
+    )
+    
+    # Suppress general pytest unraisable exception warnings
+    warnings.filterwarnings("ignore", category=pytest.PytestUnraisableExceptionWarning)
+    
+    # Suppress resource warnings
+    warnings.filterwarnings("ignore", category=ResourceWarning)
+    
     try:
         # Check if the resource exists to avoid repeated downloads
         nltk.data.find('sentiment/vader_lexicon.zip')

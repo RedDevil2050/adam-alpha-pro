@@ -1,6 +1,4 @@
-import httpx
 import datetime
-from backend.utils.cache_utils import get_redis_client
 from backend.agents.event.utils import tracker
 # Import the specific data provider function
 from backend.utils.data_provider import fetch_corporate_actions
@@ -14,12 +12,8 @@ AGENT_CATEGORY = "event"
     agent_name=agent_name, category=AGENT_CATEGORY, cache_ttl=86400
 )
 async def run(symbol: str, agent_outputs: dict = None) -> dict:
-    redis_client = await get_redis_client() # Ensure redis client is awaited
-    cache_key = f"{agent_name}:{symbol}"
-    cached = await redis_client.get(cache_key)
-    if cached:
-        return cached
-
+    # Decorator handles caching, so remove manual cache logic
+    
     # Fetch corporate actions using the data_provider function
     actions = []
     error_message = None

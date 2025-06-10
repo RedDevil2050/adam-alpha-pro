@@ -54,6 +54,7 @@ async def test_corporate_action_agent(
     # assert mock_httpx_get.await_count > 0, "Expected httpx.AsyncClient.get to have been awaited at least once."
     mock_agent_get_redis.assert_awaited_once() # Check that the get_redis_client mock was called
     mock_redis_instance.get.assert_awaited_once_with(f"{agent_name}:ABC")
-    # Cache SET is called by the agent if actions were found or even if not (to cache NO_DATA/ERROR)
-    mock_redis_instance.set.assert_awaited_once()
+    # Cache SET is NOT called for NO_DATA or ERROR verdicts according to decorator logic
+    # NO_DATA and ERROR results are not cached to avoid caching transient failures
+    mock_redis_instance.set.assert_not_awaited()
     mock_fetch_corporate_actions.assert_awaited_once_with('ABC') # Check fetch_corporate_actions was called

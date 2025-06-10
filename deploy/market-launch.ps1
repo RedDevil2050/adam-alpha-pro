@@ -57,6 +57,7 @@ Get-AzureKeyVaultSecret -SecretName "FinnhubApiKey" -EnvVarName "FINNHUB_API_KEY
 Get-AzureKeyVaultSecret -SecretName "PolygonApiKey" -EnvVarName "POLYGON_API_KEY"
 Get-AzureKeyVaultSecret -SecretName "SlackWebhookUrl" -EnvVarName "SLACK_WEBHOOK_URL"
 Get-AzureKeyVaultSecret -SecretName "AlertEmail" -EnvVarName "ALERT_EMAIL"
+Get-AzureKeyVaultSecret -SecretName "ApiPass" -EnvVarName "API_PASS"
 
 Write-Host "🔒 All secrets have been retrieved from Azure Key Vault" -ForegroundColor Green
 
@@ -201,8 +202,7 @@ $token = $authResponse.access_token
 
 foreach ($pair in $allowedPairs) {
     Write-Host "🔄 Starting market feed for $pair" -ForegroundColor Yellow
-    
-    $initBody = @{
+      $initBody = @{
         symbol = $pair
         active = $true
     } | ConvertTo-Json
@@ -212,16 +212,9 @@ foreach ($pair in $allowedPairs) {
         
         # Verify data flow
         Write-Host "Verifying market data for $pair..." -ForegroundColor Yellow
-        Start-Sleep -Seconds 5  # Stagger starts to prevent flooding
+        Write-Host "✅ $pair successfully initialized" -ForegroundColor Green        Start-Sleep -Seconds 5  # Stagger starts to prevent flooding
     } catch {
-        Write-Host "❌ Market data initialization failed for $pair: ${_}" -ForegroundColor Red
-        exit 1
-    }
-}
-        Write-Host "✅ $pair successfully initialized" -ForegroundColor Green
-        Start-Sleep -Seconds 5  # Stagger starts to prevent flooding
-    } catch {
-        Write-Host "❌ Market data initialization failed for $pair: $_" -ForegroundColor Red
+        Write-Host "❌ Market data initialization failed for $pair : $($_)" -ForegroundColor Red
         exit 1
     }
 }
