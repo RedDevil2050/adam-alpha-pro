@@ -6,7 +6,7 @@ from backend.orchestrator import run_full_cycle
 from prometheus_client import generate_latest
 import os
 import pandas as pd
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, MagicMock
 from datetime import datetime
 import pandas as pd
 
@@ -47,7 +47,7 @@ async def test_orchestrator_generic():
     # Mock the global provider instance to avoid external API calls
     with patch('backend.utils.data_provider.provider') as mock_provider:
         # Mock all the commonly used provider methods
-        mock_provider.fetch_data_resilient.return_value = {
+        mock_provider.fetch_data_resilient = AsyncMock(return_value={
             "source": "mock",
             "data": {
                 "price": 2500.0,
@@ -56,16 +56,16 @@ async def test_orchestrator_generic():
                 "pe_ratio": 18.5
             },
             "confidence": "high"
-        }
-        mock_provider.fetch_price_data.return_value = pd.DataFrame({
+        })
+        mock_provider.fetch_price_data = AsyncMock(return_value=pd.DataFrame({
             'open': [2400.0, 2450.0, 2500.0],
             'high': [2420.0, 2470.0, 2520.0],
             'low': [2380.0, 2430.0, 2480.0],
             'close': [2410.0, 2460.0, 2510.0],
             'volume': [1000000, 1100000, 1200000]
-        })
-        mock_provider.fetch_quote.return_value = {"price": 2500.0, "volume": 1000000}
-        mock_provider.fetch_company_info.return_value = {"market_cap": 500000000000, "pe_ratio": 18.5}
+        }))
+        mock_provider.fetch_quote = AsyncMock(return_value={"price": 2500.0, "volume": 1000000})
+        mock_provider.fetch_company_info = AsyncMock(return_value={"market_cap": 500000000000, "pe_ratio": 18.5})
         
         # Also patch the UnifiedDataProvider class for direct instantiation
         with patch('backend.data.providers.unified_provider.UnifiedDataProvider') as mock_provider_class:
