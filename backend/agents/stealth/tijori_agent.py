@@ -78,11 +78,6 @@ class TijoriAgent(StealthAgentBase):
     def _calculate_confidence(self, price: float) -> float:
         return round(min(price / 200, 1.0), 2)
 
-    async def execute(self, symbol: str, agent_outputs: dict = {}) -> dict:
-        """Public method to execute the agent's logic."""
-        return await self._execute(symbol, agent_outputs)
-
-
 async def run(symbol: str, agent_outputs: dict = {}) -> dict:
     agent = TijoriAgent()
     return await agent.execute(symbol, agent_outputs=agent_outputs)

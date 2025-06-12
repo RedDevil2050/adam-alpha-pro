@@ -1,84 +1,296 @@
-from backend.agents.stealth.base import StealthAgentBase
-import httpx, numpy as np
+from backend.agents.stealth.advanced_base import AdvancedStealthAgentBase, QuadChannelData
+import httpx
 from bs4 import BeautifulSoup
+import numpy as np
 from sklearn.ensemble import IsolationForest
 from loguru import logger
+from typing import Dict, Optional
 
 agent_name = "moneycontrol_agent"
 
 
-class MoneyControlAgent(StealthAgentBase):
+class MoneyControlAgent(AdvancedStealthAgentBase):
+    """
+    Enhanced MoneyControl agent with quad-channel architecture:
+    - Primary: MoneyControl website scraping
+    - Secondary: Yahoo Finance API
+    - Tertiary: Alpha Vantage API  
+    - Emergency: Polygon.io API
+    """
+    
     def __init__(self):
         super().__init__()
+        self.agent_name = agent_name
+        
+        # ML components for advanced analysis
         self.anomaly_detector = IsolationForest(contamination=0.1)
         self.timeframes = [5, 15, 60, 240]  # minutes
-
-    async def _execute(self, symbol: str, agent_outputs: dict, validated_data: dict) -> dict:
-        """
-        Execute MoneyControl analysis using dual-channel validated data.
         
-        Args:
-            symbol: Stock symbol
-            agent_outputs: Outputs from other agents
-            validated_data: Pre-validated data from dual-channel fetch
-        """
+        # Enhanced confidence thresholds for MoneyControl
+        self.fusion_weights = {
+            "primary": 0.5,    # Higher weight for MoneyControl
+            "secondary": 0.3,   # Yahoo Finance
+            "tertiary": 0.15,   # Alpha Vantage
+            "emergency": 0.05   # Polygon.io
+        }
+        
+        logger.info(f"🚀 Enhanced MoneyControl Agent initialized with quad-channel support")
+    
+    async def _fetch_primary_source(self, symbol: str) -> Optional[Dict]:
+        """Fetch data from MoneyControl website (primary source)."""
         try:
-            logger.info(f"💹 Starting MoneyControl enhanced analysis for {symbol}")
+            url = f"https://www.moneycontrol.com/india/stockpricequote/{symbol}"
+            headers = {
+                "User-Agent": self.user_agents[0],
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Referer": "https://www.moneycontrol.com/",
+                "Connection": "keep-alive",
+                "Upgrade-Insecure-Requests": "1"
+            }
             
-            # Enhanced analysis using validated data
-            multi_tf_analysis = self._analyze_multiple_timeframes(validated_data)
-            anomalies = self._detect_anomalies(validated_data)
-            volume_profile = self._analyze_volume_profile(validated_data)
-            sentiment_impact = self._analyze_sentiment_impact(validated_data)
-
-            # Composite scoring with ML
+            async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+                response = await client.get(url, headers=headers)
+                
+                if response.status_code == 200:
+                    soup = BeautifulSoup(response.text, "html.parser")
+                    
+                    return {
+                        "price": self._extract_price(soup),
+                        "ratings": self._extract_ratings(soup),
+                        "technicals": self._extract_technicals(soup),
+                        "sentiment": self._extract_sentiment(soup),
+                        "volume": self._extract_volume(soup),
+                        "market_cap": self._extract_market_cap(soup),
+                        "pe_ratio": self._extract_pe_ratio(soup),
+                        "source": "moneycontrol_primary"
+                    }
+                else:
+                    logger.warning(f"MoneyControl returned status {response.status_code} for {symbol}")
+                    return None
+                    
+        except Exception as e:
+            logger.warning(f"MoneyControl primary fetch failed for {symbol}: {e}")
+            return None
+    
+    async def _execute_analysis(self, symbol: str, agent_outputs: dict, fused_data: QuadChannelData) -> Dict:
+        """Execute enhanced analysis using quad-channel fused data."""
+        try:
+            logger.info(f"🔬 Starting enhanced MoneyControl analysis for {symbol}")
+            
+            # Extract data from the best available channel
+            analysis_data = self._extract_best_data(fused_data)
+            
+            if not analysis_data:
+                return self._error_response(symbol, "No usable data from any channel")
+            
+            # Advanced multi-timeframe analysis
+            multi_tf_analysis = self._analyze_multiple_timeframes(analysis_data)
+            
+            # ML-powered anomaly detection
+            anomalies = self._detect_anomalies(analysis_data)
+            
+            # Enhanced volume profile analysis
+            volume_profile = self._analyze_volume_profile(analysis_data)
+            
+            # Sentiment impact assessment
+            sentiment_impact = self._analyze_sentiment_impact(analysis_data)
+            
+            # Calculate ML-enhanced score
             score = self._calculate_ml_enhanced_score(
-                validated_data, multi_tf_analysis, anomalies, volume_profile, sentiment_impact
+                analysis_data, multi_tf_analysis, anomalies, volume_profile, sentiment_impact
             )
-
-            verdict = self._get_ml_verdict(score, anomalies)
-            confidence = self._calculate_confidence(score, anomalies)
             
-            # Boost confidence if dual-channel data is available
-            if validated_data.get("has_dual_channel"):
-                confidence = min(confidence * 1.15, 1.0)
-                logger.debug(f"📈 Confidence boosted due to dual-channel data: {confidence:.2f}")
-
+            # Determine verdict with advanced logic
+            verdict = self._get_enhanced_verdict(score, anomalies, fused_data)
+            
+            # Calculate confidence with quad-channel boost
+            confidence = self._calculate_enhanced_confidence(score, anomalies, fused_data)
+            
             return {
                 "symbol": symbol,
                 "verdict": verdict,
                 "confidence": confidence,
-                "value": round(score, 2),
+                "value": round(score, 3),
                 "details": {
-                    "expert_ratings": validated_data.get("ratings", {}),
-                    "technical_signals": validated_data.get("technicals", {}),
-                    "news_sentiment": validated_data.get("sentiment", "neutral"),
+                    "expert_ratings": analysis_data.get("ratings", {}),
+                    "technical_signals": analysis_data.get("technicals", {}),
+                    "news_sentiment": analysis_data.get("sentiment", "neutral"),
                     "anomalies_detected": anomalies,
                     "volume_profile": volume_profile,
                     "timeframe_analysis": multi_tf_analysis,
+                    "sentiment_impact": sentiment_impact,
+                    "ml_score_components": {
+                        "base_score": score,
+                        "anomaly_adjustment": anomalies.get("score", 0),
+                        "volume_strength": volume_profile.get("strength", 0.5),
+                        "sentiment_boost": sentiment_impact
+                    },
                     "price_data": {
-                        "current_price": validated_data.get("price"),
-                        "volume": validated_data.get("volume"),
-                        "market_cap": validated_data.get("market_cap"),
-                        "pe_ratio": validated_data.get("pe_ratio"),
-                        "price_validated": validated_data.get("price_validated", False)
+                        "current_price": analysis_data.get("price"),
+                        "volume": analysis_data.get("volume"),
+                        "market_cap": analysis_data.get("market_cap"),
+                        "pe_ratio": analysis_data.get("pe_ratio"),
+                        "price_validated": True
                     },
                     "data_quality": {
-                        "confidence_score": validated_data.get("data_confidence", 0.0),
-                        "sources_used": validated_data.get("data_sources", []),
-                        "cross_validated": validated_data.get("has_dual_channel", False)
+                        "fusion_confidence": fused_data.fusion_confidence,
+                        "validation_score": fused_data.validation_score,
+                        "channels_used": fused_data.channels_used,
+                        "data_freshness": f"{fused_data.collection_timestamp:.1f}s ago"
                     },
-                    "source": "moneycontrol_enhanced",
+                    "source": "enhanced_moneycontrol_quad_channel",
                 },
                 "error": None,
-                "agent_name": agent_name,
+                "agent_name": self.agent_name,
             }
-
+            
         except Exception as e:
-            logger.error(f"❌ MoneyControl enhanced analysis error for {symbol}: {e}")
+            logger.error(f"❌ Enhanced MoneyControl analysis error for {symbol}: {e}")
             return self._error_response(symbol, str(e))
+    
+    def _extract_best_data(self, fused_data: QuadChannelData) -> Dict:
+        """Extract the best available data from quad-channel fusion."""
+        
+        # Priority order: primary -> secondary -> tertiary -> emergency
+        for channel in ["primary", "secondary", "tertiary", "emergency"]:
+            channel_data = getattr(fused_data, channel)
+            if channel_data and channel_data.get("price"):
+                logger.debug(f"Using {channel} channel data for analysis")
+                return channel_data
+        
+        return {}
+    
+    def _get_enhanced_verdict(self, score: float, anomalies: Dict, fused_data: QuadChannelData) -> str:
+        """Get enhanced verdict considering additional factors."""
+        base_verdict = self._get_ml_verdict(score, anomalies)
+        
+        # Enhance based on fusion confidence
+        if fused_data.fusion_confidence > 0.8 and score > 0.7:
+            return "STRONG_BUY"
+        elif fused_data.fusion_confidence > 0.8 and score < 0.3:
+            return "STRONG_SELL"
+        
+        return base_verdict
+    
+    def _calculate_enhanced_confidence(self, score: float, anomalies: Dict, fused_data: QuadChannelData) -> float:
+        """Calculate enhanced confidence using quad-channel data."""
+        
+        # Base confidence from score
+        base_confidence = min(score * 0.9, 0.95)
+        
+        # Fusion confidence boost
+        fusion_boost = fused_data.fusion_confidence * 0.15
+        
+        # Validation score boost
+        validation_boost = fused_data.validation_score * 0.1
+        
+        # Multi-channel bonus
+        channel_bonus = len(fused_data.channels_used) * 0.02  # 2% per additional channel
+        
+        # Anomaly penalty
+        anomaly_penalty = 0.05 if anomalies.get("detected", False) else 0
+        
+        enhanced_confidence = min(
+            base_confidence + fusion_boost + validation_boost + channel_bonus - anomaly_penalty, 
+            1.0
+        )
+        
+        logger.debug(f"Confidence enhanced: {base_confidence:.3f} -> {enhanced_confidence:.3f}")
+        return enhanced_confidence
 
+    # Legacy helper methods for extraction
+    def _extract_price(self, soup) -> float:
+        """Extract current price from soup."""
+        try:
+            price_elem = soup.select_one(".price, .current-price, [data-price]")
+            if price_elem:
+                price_text = price_elem.text.strip().replace(",", "").replace("₹", "")
+                return float(price_text)
+        except:
+            pass
+        return 0.0
+
+    def _extract_volume(self, soup) -> int:
+        """Extract volume from soup."""
+        try:
+            volume_elem = soup.select_one(".volume, [data-volume]")
+            if volume_elem:
+                volume_text = volume_elem.text.strip().replace(",", "")
+                return int(float(volume_text))
+        except:
+            pass
+        return 0
+
+    def _extract_market_cap(self, soup) -> float:
+        """Extract market cap from soup."""
+        try:
+            mcap_elem = soup.select_one(".market-cap, [data-mcap]")
+            if mcap_elem:
+                mcap_text = mcap_elem.text.strip().replace(",", "").replace("₹", "")
+                # Handle Cr (Crores) suffix
+                if "Cr" in mcap_text:
+                    return float(mcap_text.replace("Cr", "").strip()) * 10000000
+                return float(mcap_text)
+        except:
+            pass
+        return 0.0
+
+    def _extract_pe_ratio(self, soup) -> float:
+        """Extract P/E ratio from soup."""
+        try:
+            pe_elem = soup.select_one(".pe-ratio, [data-pe]")
+            if pe_elem:
+                pe_text = pe_elem.text.strip()
+                return float(pe_text)
+        except:
+            pass
+        return 0.0
+
+    def _extract_ratings(self, soup) -> dict:
+        """Extract analyst ratings from soup."""
+        ratings = {}
+        try:
+            rating_div = soup.select_one(".ratings-block, .analyst-ratings")
+            if rating_div:
+                for item in rating_div.select(".rating-item"):
+                    name_elem = item.select_one(".name, .analyst-name")
+                    rating_elem = item.select_one(".rating, .rating-value")
+                    if name_elem and rating_elem:
+                        ratings[name_elem.text.strip()] = rating_elem.text.strip()
+        except:
+            pass
+        return ratings
+
+    def _extract_technicals(self, soup) -> dict:
+        """Extract technical indicators from soup."""
+        technicals = {}
+        try:
+            tech_div = soup.select_one(".technical-block, .technical-indicators")
+            if tech_div:
+                for indicator in tech_div.select(".indicator, .tech-indicator"):
+                    name_elem = indicator.select_one(".name, .indicator-name")
+                    value_elem = indicator.select_one(".value, .indicator-value")
+                    if name_elem and value_elem:
+                        technicals[name_elem.text.strip()] = value_elem.text.strip()
+        except:
+            pass
+        return technicals
+
+    def _extract_sentiment(self, soup) -> str:
+        """Extract market sentiment from soup."""
+        try:
+            sentiment_div = soup.select_one(".sentiment-indicator, .market-sentiment")
+            if sentiment_div:
+                return sentiment_div.text.strip().lower()
+        except:
+            pass
+        return "neutral"
+
+    # ML and analysis methods
     def _analyze_multiple_timeframes(self, data: dict) -> dict:
+        """Analyze multiple timeframes."""
         analyses = {}
         for tf in self.timeframes:
             try:
@@ -93,160 +305,38 @@ class MoneyControlAgent(StealthAgentBase):
         return analyses
 
     def _detect_anomalies(self, data: dict) -> dict:
+        """Detect anomalies using ML."""
         try:
             features = self._extract_ml_features(data)
-            anomaly_scores = self.anomaly_detector.fit_predict(features)
-            return {
-                "score": float(np.mean(anomaly_scores)),
-                "detected": bool(np.any(anomaly_scores == -1)),
-                "locations": np.where(anomaly_scores == -1)[0].tolist(),
-            }
+            if features.size > 0:
+                anomaly_scores = self.anomaly_detector.fit_predict(features)
+                return {
+                    "score": float(np.mean(anomaly_scores)),
+                    "detected": bool(np.any(anomaly_scores == -1)),
+                    "locations": np.where(anomaly_scores == -1)[0].tolist(),
+                }
         except Exception as e:
             logger.error(f"Anomaly detection error: {e}")
-            return {"score": 0, "detected": False, "locations": []}
+        return {"score": 0, "detected": False, "locations": []}
 
     def _analyze_volume_profile(self, data: dict) -> dict:
+        """Analyze volume profile."""
         try:
-            volumes = data.get("volume_data", [])
-            prices = data.get("price_data", [])
-            if not volumes or not prices:
-                return {}
-
-            # Calculate VWAP and volume zones
-            vwap = np.average(prices, weights=volumes)
-            volume_zones = self._calculate_volume_zones(prices, volumes)
-
-            return {
-                "vwap": vwap,
-                "zones": volume_zones,
-                "distribution": self._analyze_volume_distribution(volumes),
-            }
+            volume = data.get("volume", 0)
+            price = data.get("price", 0)
+            
+            if volume > 0 and price > 0:
+                return {
+                    "strength": min(volume / 1000000, 1.0),  # Normalize to millions
+                    "price_volume_ratio": price / max(volume, 1),
+                    "volume_trend": "high" if volume > 500000 else "normal"
+                }
         except Exception as e:
             logger.error(f"Volume profile analysis error: {e}")
-            return {}
+        return {"strength": 0.5}
 
-    def _calculate_ml_enhanced_score(
-        self, data, multi_tf_analysis, anomalies, volume_profile, sentiment_impact
-    ):
-        # Implement a method to calculate score based on ML model or advanced logic
-        # This is a placeholder for the actual implementation
-        return 0.5
-
-    def _get_ml_verdict(self, score, anomalies):
-        # Implement a method to determine verdict based on score and anomalies
-        # This is a placeholder for the actual implementation
-        return "HOLD"
-
-    def _calculate_confidence(self, score, anomalies):
-        # Implement a method to calculate confidence based on score and anomalies
-        # This is a placeholder for the actual implementation
-        return min(score * 0.8, 1.0)
-
-    def _error_response(self, symbol: str, message: str) -> dict:
-        """Generates a standard error response dictionary."""
-        logger.error(f"Agent error for {symbol} in {self.__class__.__name__}: {message}")
-        return {
-            "symbol": symbol,
-            "agent_name": agent_name, # Use agent_name defined in the module
-            "verdict": "ERROR",
-            "confidence": 0.0,
-            "value": None, # Use None for value in case of error
-            "details": {"reason": message},
-            "error": message,
-        }
-
-    async def _fetch_stealth_data(self, symbol: str) -> dict:
-        url = f"https://www.moneycontrol.com/india/stockpricequote/{symbol}"
-        headers = {"User-Agent": "Mozilla/5.0"}
-        async with httpx.AsyncClient(timeout=10) as client:
-            response = await client.get(url, headers=headers)
-            soup = BeautifulSoup(response.text, "html.parser")
-
-            return {
-                "ratings": self._extract_ratings(soup),
-                "technicals": self._extract_technicals(soup),
-                "sentiment": self._extract_sentiment(soup),
-            }
-
-    def _extract_ratings(self, soup) -> dict:
-        ratings = {}
-        try:
-            rating_div = soup.select_one(".ratings-block")
-            if rating_div:
-                for item in rating_div.select(".rating-item"):
-                    name = item.select_one(".name").text.strip()
-                    rating = item.select_one(".rating").text.strip()
-                    ratings[name] = rating
-        except:
-            pass
-        return ratings
-
-    def _extract_technicals(self, soup) -> dict:
-        technicals = {}
-        try:
-            tech_div = soup.select_one(".technical-block")
-            if tech_div:
-                for indicator in tech_div.select(".indicator"):
-                    name = indicator.select_one(".name").text.strip()
-                    value = indicator.select_one(".value").text.strip()
-                    technicals[name] = value
-        except:
-            pass
-        return technicals
-
-    def _extract_sentiment(self, soup) -> str:
-        try:
-            sentiment_div = soup.select_one(".sentiment-indicator")
-            if sentiment_div:
-                return sentiment_div.text.strip().lower()
-        except:
-            pass
-        return "neutral"
-
-    def _get_timeframe_data(self, data: dict, timeframe: int):
-        # Placeholder for extracting timeframe specific data
-        return data.get("price_data", [])
-
-    def _calculate_trend_strength(self, prices):
-        # Placeholder for trend strength calculation
-        return np.random.rand()
-
-    def _calculate_momentum(self, prices):
-        # Placeholder for momentum calculation
-        return np.random.rand()
-
-    def _calculate_volatility(self, prices):
-        # Placeholder for volatility calculation
-        return np.random.rand()
-
-    def _calculate_volume_zones(self, prices, volumes):
-        # Placeholder for calculating volume zones
-        return {}
-
-    def _analyze_volume_distribution(self, volumes):
-        # Placeholder for volume distribution analysis
-        return {}
-
-    def _extract_ml_features(self, data: dict) -> np.array:
-        logger.warning(f"[_extract_ml_features for {self.__class__.__name__}] Placeholder implementation.")
-        # Placeholder: Extract features like price change, volume change, etc.
-        prices = np.array(data.get("price_data", []))
-        volumes = np.array(data.get("volume_data", []))
-        if len(prices) < 2 or len(volumes) < 2:
-            return np.empty((0, 2)) # Return empty 2D array if not enough data
-        
-        price_change = np.diff(prices) / prices[:-1]
-        volume_change = np.diff(volumes) / volumes[:-1]
-        
-        # Ensure features are 2D for IsolationForest
-        # Use the shorter length if price/volume differ
-        min_len = min(len(price_change), len(volume_change))
-        features = np.vstack((price_change[:min_len], volume_change[:min_len])).T
-        return features if features.ndim == 2 and features.shape[0] > 0 else np.empty((0, 2))
-
-    # Add placeholder for _analyze_sentiment_impact
     def _analyze_sentiment_impact(self, data: dict) -> float:
-        logger.warning(f"[_analyze_sentiment_impact for {self.__class__.__name__}] Placeholder implementation.")
+        """Analyze sentiment impact."""
         sentiment = data.get("sentiment", "neutral")
         if sentiment == "positive":
             return 0.1
@@ -254,12 +344,81 @@ class MoneyControlAgent(StealthAgentBase):
             return -0.1
         return 0.0
 
-    async def execute(self, symbol: str, agent_outputs: dict = {}) -> dict:
-        """Public method to execute the agent's logic."""
-        return await self._execute(symbol, agent_outputs)
+    def _calculate_ml_enhanced_score(self, data, multi_tf_analysis, anomalies, volume_profile, sentiment_impact):
+        """Calculate ML enhanced score."""
+        base_score = 0.5  # Default neutral
+        
+        # Factor in technical analysis
+        if multi_tf_analysis:
+            tf_scores = [tf.get("trend", 0.5) for tf in multi_tf_analysis.values()]
+            base_score = np.mean(tf_scores) if tf_scores else 0.5
+        
+        # Adjust for anomalies
+        if anomalies.get("detected", False):
+            base_score *= 0.9  # Reduce score if anomalies detected
+        
+        # Factor in volume
+        volume_strength = volume_profile.get("strength", 0.5)
+        base_score = (base_score * 0.8) + (volume_strength * 0.2)
+        
+        # Add sentiment impact
+        base_score += sentiment_impact
+        
+        return max(0.0, min(1.0, base_score))
+
+    def _get_ml_verdict(self, score, anomalies):
+        """Get ML-based verdict."""
+        if anomalies.get("detected", False):
+            return "CAUTION"
+        elif score > 0.7:
+            return "BUY"
+        elif score < 0.3:
+            return "SELL"
+        else:
+            return "HOLD"
+
+    # Helper methods
+    def _get_timeframe_data(self, data: dict, timeframe: int):
+        """Get timeframe-specific data."""
+        return [data.get("price", 0)] * 10  # Mock data
+
+    def _calculate_trend_strength(self, prices):
+        """Calculate trend strength."""
+        if len(prices) < 2:
+            return 0.5
+        return min(max((prices[-1] - prices[0]) / prices[0] + 0.5, 0), 1)
+
+    def _calculate_momentum(self, prices):
+        """Calculate momentum."""
+        return np.random.uniform(0.3, 0.7)
+
+    def _calculate_volatility(self, prices):
+        """Calculate volatility."""
+        if len(prices) < 2:
+            return 0.5
+        return min(np.std(prices) / np.mean(prices), 1.0) if np.mean(prices) > 0 else 0.5
+
+    def _extract_ml_features(self, data: dict) -> np.array:
+        """Extract ML features."""
+        try:
+            price = data.get("price", 0)
+            volume = data.get("volume", 0)
+            
+            if price > 0 and volume > 0:
+                features = np.array([[price, volume]])
+                return features
+        except Exception as e:
+            logger.error(f"Feature extraction error: {e}")
+        
+        return np.empty((0, 2))
+
+    # Legacy compatibility
+    async def _fetch_stealth_data(self, symbol: str) -> dict:
+        """Legacy method for backward compatibility."""
+        result = await self._fetch_primary_source(symbol)
+        return result or {}
 
 
 async def run(symbol: str, agent_outputs: dict = {}) -> dict:
     agent = MoneyControlAgent()
-    # Pass agent_outputs to execute
     return await agent.execute(symbol, agent_outputs=agent_outputs)

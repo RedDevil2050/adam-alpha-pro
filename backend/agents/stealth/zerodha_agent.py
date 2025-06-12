@@ -8,9 +8,6 @@ agent_name = "zerodha_agent"
 
 
 class ZerodhaAgent(StealthAgentBase):
-    async def execute(self, symbol: str, agent_outputs: dict = {}) -> dict:  # Modified signature
-        return await self._execute(symbol, agent_outputs=agent_outputs) # Pass agent_outputs
-
     async def _execute(self, symbol: str, agent_outputs: dict, validated_data: dict) -> dict:
         try:
             # Use pre-validated dual-channel data instead of fetching again

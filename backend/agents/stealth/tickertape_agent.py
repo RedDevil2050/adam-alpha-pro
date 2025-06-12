@@ -98,11 +98,6 @@ class TickertapeAgent(StealthAgentBase):
             pass
         return recs
 
-    async def execute(self, symbol: str, agent_outputs: dict = {}) -> dict:
-        """Public method to execute the agent's logic."""
-        return await self._execute(symbol, agent_outputs)
-
-
 async def run(symbol: str, agent_outputs: dict = {}) -> dict:
     agent = TickertapeAgent()
     # Pass agent_outputs to execute

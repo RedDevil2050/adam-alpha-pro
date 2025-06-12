@@ -22,8 +22,7 @@ async def test_all_stealth_agents():
         ('StockEdge', StockEdgeAgent()),
         ('Tickertape', TickertapeAgent()),
         ('Tijori', TijoriAgent()),
-        ('TradingView', TradingViewAgent())
-    ]
+        ('TradingView', TradingViewAgent())    ]
     
     test_symbols = ['RELIANCE', 'TCS', 'INFY']
     results = {}
@@ -32,11 +31,11 @@ async def test_all_stealth_agents():
         print(f'\n📊 Testing symbol: {symbol}')
         print('-' * 40)
         results[symbol] = {}
-        
         for agent_name, agent in agents:
             try:
                 print(f'  🔍 Testing {agent_name}...', end=' ')
-                result = await agent._execute(symbol, {})
+                # Use execute method instead of _execute to get proper data handling
+                result = await agent.execute(symbol, {})
                 
                 verdict = result.get('verdict', 'N/A')
                 confidence = result.get('confidence', 0)
