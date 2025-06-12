@@ -65,8 +65,10 @@ const MarketOverviewCard = ({ data, isLoading, error }) => {
     marketStatus: 'OPEN',
     lastUpdate: new Date().toLocaleTimeString(),
   };
-
   const marketData = data?.data || mockMarketData;
+
+  // Ensure indices is always an array
+  const indices = Array.isArray(marketData?.indices) ? marketData.indices : [];
 
   return (
     <MotionBox
@@ -93,10 +95,9 @@ const MarketOverviewCard = ({ data, isLoading, error }) => {
               </Text>
             </HStack>
           </HStack>
-        </CardHeader>
-        <CardBody pt={0}>
+        </CardHeader>        <CardBody pt={0}>
           <Grid templateColumns={{ base: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }} gap={4}>
-            {marketData.indices.map((index, i) => (
+            {indices.map((index, i) => (
               <MotionBox
                 key={index.name}
                 initial={{ opacity: 0, y: 20 }}

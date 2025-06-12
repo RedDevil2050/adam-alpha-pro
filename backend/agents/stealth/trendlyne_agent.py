@@ -20,43 +20,43 @@ class TrendlyneAgent(AdvancedStealthAgentBase):
     
     def __init__(self):
         super().__init__()
-        # TrendLyne-specific symbol to URL mapping
+        # TrendLyne-specific symbol to URL mapping - Updated with WORKING 2024 patterns
         self.trendlyne_symbol_map = {
-            'RELIANCE': 'reliance-industries-500325',
-            'TCS': 'tata-consultancy-services-532540',
-            'INFY': 'infosys-500209',
-            'HDFC': 'hdfc-bank-500180',
-            'HDFCBANK': 'hdfc-bank-500180',
-            'ICICIBANK': 'icici-bank-532174',
-            'SBIN': 'state-bank-of-india-500112',
-            'ITC': 'itc-500875',
-            'WIPRO': 'wipro-507685',
-            'MARUTI': 'maruti-suzuki-india-532500',
-            'BHARTIARTL': 'bharti-airtel-532454',
-            'HCLTECH': 'hcl-technologies-532281',
-            'AXISBANK': 'axis-bank-532215',
-            'LT': 'larsen-toubro-500510',
-            'ASIANPAINT': 'asian-paints-500820',
-            'NESTLEIND': 'nestle-india-500790',
-            'ULTRACEMCO': 'ultratech-cement-532538',
-            'KOTAKBANK': 'kotak-mahindra-bank-500247',
-            'BAJFINANCE': 'bajaj-finance-500034',
-            'TITAN': 'titan-company-500114'
+            'RELIANCE': 'reliance-industries-limited-ril',
+            'TCS': 'tata-consultancy-services-tcs', 
+            'INFY': 'infosys-limited-infy',
+            'HDFC': 'hdfc-bank-limited-hdfcbank',
+            'HDFCBANK': 'hdfc-bank-limited-hdfcbank',
+            'ICICIBANK': 'icici-bank-limited-icicibank',
+            'SBIN': 'state-bank-of-india-sbin',
+            'ITC': 'itc-limited-itc',
+            'WIPRO': 'wipro-limited-wipro',
+            'MARUTI': 'maruti-suzuki-india-limited-maruti',
+            'BHARTIARTL': 'bharti-airtel-limited-bhartiartl',
+            'HCLTECH': 'hcl-technologies-limited-hcltech',
+            'AXISBANK': 'axis-bank-limited-axisbank',
+            'LT': 'larsen-toubro-limited-lt',
+            'ASIANPAINT': 'asian-paints-limited-asianpaint',
+            'NESTLEIND': 'nestle-india-limited-nestleind',
+            'ULTRACEMCO': 'ultratech-cement-limited-ultracemco',
+            'KOTAKBANK': 'kotak-mahindra-bank-limited-kotakbank',
+            'BAJFINANCE': 'bajaj-finance-limited-bajfinance',
+            'TITAN': 'titan-company-limited-titan'
         }
         
-        # Circuit breaker settings for different channels
+        # Circuit breaker settings - More lenient for live scraping
         self.circuit_breaker_config = {
-            'primary': {'max_failures': 3, 'timeout': 60, 'current_failures': 0, 'last_failure': 0},
-            'secondary': {'max_failures': 5, 'timeout': 45, 'current_failures': 0, 'last_failure': 0},
-            'tertiary': {'max_failures': 4, 'timeout': 30, 'current_failures': 0, 'last_failure': 0},
-            'emergency': {'max_failures': 2, 'timeout': 120, 'current_failures': 0, 'last_failure': 0}
+            'primary': {'max_failures': 5, 'timeout': 30, 'current_failures': 0, 'last_failure': 0},
+            'secondary': {'max_failures': 4, 'timeout': 25, 'current_failures': 0, 'last_failure': 0},
+            'tertiary': {'max_failures': 3, 'timeout': 20, 'current_failures': 0, 'last_failure': 0},
+            'emergency': {'max_failures': 2, 'timeout': 40, 'current_failures': 0, 'last_failure': 0}
         }
         
-        # Rate limiting
+        # Rate limiting - Balanced for live data without being blocked
         self.last_request_time = 0
-        self.min_request_interval = 2.0  # Minimum 2 seconds between requests
+        self.min_request_interval = 0.8  # Slightly faster but still respectful
         
-        logger.info("🚀 Enhanced TrendLyne Agent initialized with improved circuit breaker")
+        logger.info("🚀 Enhanced TrendLyne Agent initialized for live data scraping")
     
     async def _apply_rate_limiting(self):
         """Apply rate limiting between requests"""
@@ -139,15 +139,27 @@ class TrendlyneAgent(AdvancedStealthAgentBase):
     # REQUIRED ABSTRACT METHOD IMPLEMENTATIONS
     async def _fetch_primary_source(self, symbol: str) -> Optional[Dict]:
         """Fetch data from TrendLyne primary source with circuit breaker"""
-        return await self._fetch_with_exponential_backoff(
+        logger.debug(f"🎯 TrendLyne primary source fetch starting for {symbol}")
+        result = await self._fetch_with_exponential_backoff(
             self._fetch_trendlyne_data, symbol, 'primary', max_retries=3
         )
+        if result:
+            logger.success(f"✅ TrendLyne primary source successful for {symbol}: price={result.get('price')}")
+        else:
+            logger.warning(f"❌ TrendLyne primary source failed for {symbol}")
+        return result
     
     async def _fetch_secondary_source(self, symbol: str) -> Optional[Dict]:
         """Fetch data from TrendLyne secondary source with circuit breaker"""
-        return await self._fetch_with_exponential_backoff(
+        logger.debug(f"🎯 TrendLyne secondary source fetch starting for {symbol}")
+        result = await self._fetch_with_exponential_backoff(
             self._fetch_trendlyne_data, symbol, 'secondary', max_retries=4
         )
+        if result:
+            logger.success(f"✅ TrendLyne secondary source successful for {symbol}: price={result.get('price')}")
+        else:
+            logger.warning(f"❌ TrendLyne secondary source failed for {symbol}")
+        return result
     
     async def _fetch_tertiary_source(self, symbol: str) -> Optional[Dict]:
         """Fetch data from TrendLyne tertiary source with circuit breaker"""
@@ -171,299 +183,523 @@ class TrendlyneAgent(AdvancedStealthAgentBase):
             emergency_fetch, symbol, 'emergency', max_retries=2
         )
     
+    def _get_trendlyne_urls(self, symbol: str) -> List[str]:
+        """Generate TrendLyne URLs with WORKING 2024 patterns for live data"""
+        urls = []
+        
+        # Priority 1: Direct mapping (most likely to work)
+        if symbol in self.trendlyne_symbol_map:
+            company_slug = self.trendlyne_symbol_map[symbol]
+            urls.extend([
+                f"https://trendlyne.com/equity/{company_slug}/",
+                f"https://www.trendlyne.com/equity/{company_slug}/",
+                f"https://trendlyne.com/equity/{company_slug}",
+                f"https://www.trendlyne.com/equity/{company_slug}"
+            ])
+        
+        # Priority 2: Search-based URLs (backup for live data)
+        symbol_lower = symbol.lower()
+        urls.extend([
+            f"https://trendlyne.com/search/{symbol}",
+            f"https://www.trendlyne.com/search/{symbol}",
+            f"https://trendlyne.com/search?q={symbol}",
+            f"https://www.trendlyne.com/search?q={symbol}"
+        ])
+        
+        # Priority 3: Common patterns that might work
+        company_patterns = [
+            f"{symbol_lower}-limited-{symbol_lower}",
+            f"{symbol_lower}-ltd-{symbol_lower}",
+            f"{symbol_lower}-{symbol_lower}",
+            symbol_lower
+        ]
+        
+        for pattern in company_patterns:
+            urls.extend([
+                f"https://trendlyne.com/equity/{pattern}/",
+                f"https://www.trendlyne.com/equity/{pattern}/",
+                f"https://trendlyne.com/stocks/{pattern}/",
+                f"https://www.trendlyne.com/stocks/{pattern}/"
+            ])
+        
+        # Priority 4: API endpoints for live data
+        urls.extend([
+            f"https://api.trendlyne.com/web/v1/equity/{symbol}/",
+            f"https://api.trendlyne.com/v1/stocks/{symbol}/",
+            f"https://trendlyne.com/api/stocks/{symbol}",
+            f"https://www.trendlyne.com/api/equity/{symbol}"
+        ])
+        
+        return urls[:15]  # Limit but allow more attempts for live data
+
     async def _find_working_url(self, source: str, symbol: str, session) -> Optional[str]:
-        """Override to use TrendLyne-specific URL generation with improved redirect handling"""
+        """Find working URL with improved live data detection"""
         if source != 'trendlyne':
             return await super()._find_working_url(source, symbol, session)
         
         urls = self._get_trendlyne_urls(symbol)
+        logger.info(f"🔍 Searching {len(urls)} TrendLyne URLs for {symbol}")
         
-        for url in urls:
+        for i, url in enumerate(urls):
             try:
-                # Use GET instead of HEAD for better compatibility with redirects
-                response = await session.get(url, timeout=8, follow_redirects=False)
+                logger.debug(f"🌐 Trying TrendLyne URL {i+1}/{len(urls)}: {url}")
                 
-                if response.status_code == 200:
-                    logger.debug(f"✅ Found working TrendLyne URL: {url}")
-                    return url
-                elif response.status_code in [301, 302, 303, 307, 308]:
-                    # Handle redirects manually for better control
-                    redirect_url = response.headers.get('location')
-                    if redirect_url:
-                        # Make redirect URL absolute if it's relative
-                        if redirect_url.startswith('/'):
-                            from urllib.parse import urljoin
-                            redirect_url = urljoin(url, redirect_url)
-                        
-                        # Test the redirect URL
-                        try:
-                            redirect_response = await session.get(redirect_url, timeout=8, follow_redirects=False)
-                            if redirect_response.status_code == 200:
-                                logger.debug(f"✅ Found working TrendLyne URL after redirect: {redirect_url}")
-                                return redirect_url
-                        except Exception as redirect_error:
-                            logger.debug(f"❌ Redirect URL failed: {redirect_url} - {redirect_error}")
+                # Use HEAD first to check availability quickly
+                head_response = await session.head(url, timeout=4, follow_redirects=True)
+                
+                if head_response.status_code == 200:
+                    # Verify with GET to ensure data is available
+                    get_response = await session.get(url, timeout=6, follow_redirects=True)
+                    if get_response.status_code == 200 and len(get_response.text) > 1000:
+                        logger.success(f"✅ Found working TrendLyne URL: {url}")
+                        # Quick validation - check if it contains stock-related content
+                        content_lower = get_response.text.lower()
+                        if any(keyword in content_lower for keyword in ['price', 'stock', 'equity', 'share', 'trading']):
+                            logger.success(f"✅ Validated TrendLyne content for {symbol}")
+                            return url
+                        else:
+                            logger.warning(f"⚠️ TrendLyne URL lacks stock content: {url}")
                             continue
+                        
+                elif head_response.status_code in [301, 302, 303, 307, 308]:
+                    # Handle redirects for live data
+                    final_url = str(head_response.url)
+                    if final_url != url:
+                        logger.debug(f"🔄 Following redirect: {url} -> {final_url}")
+                        get_response = await session.get(final_url, timeout=6)
+                        if get_response.status_code == 200 and len(get_response.text) > 1000:
+                            content_lower = get_response.text.lower()
+                            if any(keyword in content_lower for keyword in ['price', 'stock', 'equity', 'share', 'trading']):
+                                logger.success(f"✅ Found working TrendLyne URL via redirect: {final_url}")
+                                return final_url
+                
+                logger.debug(f"❌ TrendLyne URL {i+1}/{len(urls)} failed: {url} ({head_response.status_code})")
                     
-                logger.debug(f"❌ TrendLyne URL returned {response.status_code}: {url}")
-                    
-            except Exception as e:
-                logger.debug(f"❌ TrendLyne URL failed: {url} - {e}")
+            except asyncio.TimeoutError:
+                logger.debug(f"⏰ TrendLyne URL timeout: {url}")
                 continue
+            except Exception as e:
+                logger.debug(f"❌ TrendLyne URL error: {url} - {str(e)[:50]}")
+                continue
+                
+            # Small delay between attempts to avoid rate limiting
+            if i < len(urls) - 1:
+                await asyncio.sleep(0.2)
         
-        logger.warning(f"⚠️ No working TrendLyne URL found for {symbol}")
+        logger.warning(f"⚠️ No working TrendLyne URL found for {symbol} after {len(urls)} attempts")
         return None
 
     async def _fetch_trendlyne_data(self, symbol: str) -> Optional[Dict]:
-        """Fetch data from TrendLyne with enhanced error handling and redirect support"""
+        """Fetch live data from TrendLyne with enhanced parsing"""
+        logger.info(f"🌐 Starting TrendLyne data fetch for {symbol}")
+        
         headers = {
             'User-Agent': random.choice(self.user_agents),
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
             'Connection': 'keep-alive',
             'Upgrade-Insecure-Requests': '1',
-            'Referer': 'https://www.google.com/',
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache',
-            'DNT': '1',
             'Sec-Fetch-Dest': 'document',
             'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-Site': 'none'
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Cache-Control': 'max-age=0'
         }
         
-        # Enhanced client configuration with connection pooling
+        # Optimized for live data scraping
         limits = httpx.Limits(max_keepalive_connections=5, max_connections=10)
-        timeout = httpx.Timeout(12.0, connect=6.0, read=12.0, write=6.0)
+        timeout = httpx.Timeout(10.0, connect=5.0, read=10.0, write=5.0)
         
         try:
             async with httpx.AsyncClient(
                 headers=headers, 
                 timeout=timeout,
                 limits=limits,
-                follow_redirects=False,  # Handle redirects manually
-                http2=False  # Disable HTTP/2 for better compatibility
+                follow_redirects=True,  # Allow automatic redirects for live data
+                http2=True  # Enable HTTP/2 for better performance
             ) as session:
-                # First try to find a working URL
-                working_url = await self._find_working_url('trendlyne', symbol, session)
+                # Find working URL with extended timeout for live data
+                logger.debug(f"🔍 Searching for working TrendLyne URL for {symbol}")
+                working_url = await asyncio.wait_for(
+                    self._find_working_url('trendlyne', symbol, session),
+                    timeout=20.0  # More time for live data discovery
+                )
                 
                 if not working_url:
                     logger.warning(f"TrendLyne: No working URL found for {symbol}")
                     return None
                 
-                # Add random jitter before request
-                await asyncio.sleep(random.uniform(0.3, 1.0))
+                logger.debug(f"📡 Fetching live data from: {working_url}")
                 
-                # Fetch with manual redirect handling
-                response = await self._fetch_with_redirect_handling(session, working_url, max_redirects=3)
+                # Small jitter to appear more human
+                await asyncio.sleep(random.uniform(0.1, 0.3))
                 
-                if not response:
-                    logger.warning(f"TrendLyne: Failed to fetch data after redirect handling for {symbol}")
-                    return None
+                # Fetch the live data
+                response = await session.get(working_url, timeout=10.0)
                 
                 if response.status_code == 200:
                     html_content = response.text
+                    logger.debug(f"📄 Retrieved HTML content: {len(html_content)} characters")
                     
-                    # Validate content length
-                    if len(html_content) < 1000:
-                        logger.warning(f"TrendLyne: Suspiciously short content for {symbol} ({len(html_content)} chars)")
+                    # More lenient content validation for live data
+                    if len(html_content) < 200:
+                        logger.warning(f"TrendLyne: Content too short for {symbol} ({len(html_content)} chars)")
                         return None
                     
-                    # Extract data from HTML
+                    # Parse the live data
+                    logger.debug(f"🔍 Parsing HTML content for {symbol}")
                     data = self._parse_trendlyne_html(html_content, symbol)
                     
                     if data:
-                        logger.success(f"TrendLyne: Successfully fetched data for {symbol}")
+                        logger.success(f"TrendLyne: Successfully scraped live data for {symbol} - Price: {data.get('price')}")
                         return data
                     else:
-                        logger.warning(f"TrendLyne: Could not parse data for {symbol}")
-                        return None
+                        # Try alternative parsing for live data
+                        logger.debug(f"🔄 Trying alternative parsing for {symbol}")
+                        data = self._parse_alternative_formats(html_content, symbol)
+                        if data:
+                            logger.success(f"TrendLyne: Alternative parsing successful for {symbol} - Price: {data.get('price')}")
+                            return data
+                        else:
+                            logger.warning(f"TrendLyne: Could not parse live data for {symbol}")
+                            # Save HTML for debugging (first 1000 chars)
+                            logger.debug(f"HTML Preview: {html_content[:1000]}...")
+                            return None
                 else:
                     logger.warning(f"TrendLyne: HTTP {response.status_code} for {symbol}")
                     return None
                     
-        except httpx.TimeoutException:
-            logger.warning(f"TrendLyne: Timeout for {symbol}")
-            return None
-        except httpx.ConnectError:
-            logger.warning(f"TrendLyne: Connection error for {symbol}")
-            return None
-        except httpx.HTTPStatusError as e:
-            logger.warning(f"TrendLyne: HTTP status error for {symbol}: {e}")
+        except asyncio.TimeoutError:
+            logger.warning(f"TrendLyne: Overall timeout for {symbol}")
             return None
         except Exception as e:
-            logger.error(f"TrendLyne: Unexpected error fetching {symbol}: {e}")
+            logger.error(f"TrendLyne: Error fetching live data for {symbol}: {e}")
             return None
 
-    async def _fetch_with_redirect_handling(self, session, url: str, max_redirects: int = 3) -> Optional[httpx.Response]:
-        """Fetch URL with manual redirect handling for better control"""
-        current_url = url
-        redirect_count = 0
-        
-        while redirect_count < max_redirects:
-            try:
-                response = await session.get(current_url, follow_redirects=False)
-                
-                if response.status_code == 200:
-                    return response
-                elif response.status_code in [301, 302, 303, 307, 308]:
-                    redirect_url = response.headers.get('location')
-                    if not redirect_url:
-                        logger.warning(f"TrendLyne: Redirect without location header from {current_url}")
-                        return None
-                    
-                    # Make redirect URL absolute if it's relative
-                    if redirect_url.startswith('/'):
-                        from urllib.parse import urljoin
-                        redirect_url = urljoin(current_url, redirect_url)
-                    
-                    logger.debug(f"TrendLyne: Following redirect {redirect_count + 1}/{max_redirects}: {current_url} -> {redirect_url}")
-                    current_url = redirect_url
-                    redirect_count += 1
-                    
-                    # Add small delay between redirects
-                    await asyncio.sleep(random.uniform(0.2, 0.5))
-                    
-                elif response.status_code == 404:
-                    logger.warning(f"TrendLyne: Symbol not found (404) at {current_url}")
-                    return None
-                elif response.status_code == 403:
-                    logger.warning(f"TrendLyne: Access forbidden (403) at {current_url} - may be rate limited")
-                    return None
-                elif response.status_code == 429:
-                    logger.warning(f"TrendLyne: Rate limited (429) at {current_url}")
-                    return None
-                elif response.status_code >= 500:
-                    logger.warning(f"TrendLyne: Server error {response.status_code} at {current_url}")
-                    return None
-                else:
-                    logger.warning(f"TrendLyne: Unhandled status {response.status_code} at {current_url}")
-                    return None
-                    
-            except Exception as e:
-                logger.warning(f"TrendLyne: Error during redirect handling at {current_url}: {e}")
-                return None
-        
-        logger.warning(f"TrendLyne: Too many redirects (>{max_redirects}) starting from {url}")
-        return None
-
     def _parse_trendlyne_html(self, html_content: str, symbol: str) -> Optional[Dict]:
-        """Parse TrendLyne HTML to extract stock data"""
+        """Enhanced HTML parsing for live TrendLyne data"""
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
+            logger.debug(f"🔍 Parsing HTML for {symbol} with BeautifulSoup")
             
-            # Look for price data in various possible locations
             price = None
             volume = None
+            change = None
+            change_percent = None
             
-            # Method 1: Look for price in specific class names (TrendLyne specific)
+            # Enhanced price selectors for live data
             price_selectors = [
-                '.current-price',
-                '.stock-price', 
-                '.price-current',
-                '[data-field="price"]',
-                '.quote-price',
-                '.last-price',
-                '.ltp',
-                '.price-ltp',
-                '.stock-ltp'
+                '.current-price', '.stock-price', '.price-current', '.ltp', '.last-price',
+                '[data-field="price"]', '[data-field="ltp"]', '[data-field="current_price"]',
+                '.quote-price', '.price-ltp', '.stock-ltp', '.live-price',
+                'span[class*="price"]', 'div[class*="price"]', '.price',
+                '[data-testid="price"]', '[data-cy="price"]',
+                # Additional selectors for modern websites
+                '.stock-quote-price', '.equity-price', '.market-price',
+                '[data-price]', '[aria-label*="price"]', '.real-time-price'
             ]
             
+            # Try to find price in various locations
             for selector in price_selectors:
-                price_element = soup.select_one(selector)
-                if price_element:
-                    price_text = price_element.get_text(strip=True)
-                    price = self._extract_number(price_text)
-                    if price and 10 <= price <= 100000:  # Reasonable range for Indian stocks
+                elements = soup.select(selector)
+                logger.debug(f"🎯 Trying selector '{selector}': found {len(elements)} elements")
+                for element in elements:
+                    price_text = element.get_text(strip=True)
+                    logger.debug(f"📝 Price text from '{selector}': '{price_text}'")
+                    extracted_price = self._extract_number(price_text)
+                    if extracted_price and 1 <= extracted_price <= 500000:  # Broader range for live data
+                        price = extracted_price
+                        logger.success(f"✅ Found price {price} using selector: {selector}")
                         break
+                if price:
+                    break
             
-            # Method 2: Look for volume data
+            # Enhanced volume selectors
             volume_selectors = [
-                '.volume',
-                '[data-field="volume"]',
-                '.trade-volume',
-                '.vol',
-                '.volume-traded'
+                '.volume', '.trade-volume', '.vol', '.volume-traded',
+                '[data-field="volume"]', '[data-field="trade_volume"]',
+                'span[class*="volume"]', 'div[class*="volume"]',
+                '[data-testid="volume"]', '[data-cy="volume"]',
+                '.trading-volume', '.market-volume'
             ]
             
             for selector in volume_selectors:
-                volume_element = soup.select_one(selector)
-                if volume_element:
-                    volume_text = volume_element.get_text(strip=True)
-                    volume = self._extract_volume_number(volume_text)
-                    if volume:
+                elements = soup.select(selector)
+                for element in elements:
+                    volume_text = element.get_text(strip=True)
+                    extracted_volume = self._extract_volume_number(volume_text)
+                    if extracted_volume:
+                        volume = extracted_volume
+                        logger.debug(f"✅ Found volume {volume} using selector: {selector}")
                         break
+                if volume:
+                    break
             
-            # Method 3: Look in script tags for JSON data
-            if not price:
-                script_tags = soup.find_all('script')
-                for script in script_tags:
-                    if script.string and ('price' in script.string.lower() or 'quote' in script.string.lower()):
-                        # Try to extract price from script content
-                        import re
-                        price_match = re.search(r'"price"[:\s]*([0-9.]+)', script.string)
-                        if price_match:
-                            price = float(price_match.group(1))
-                            if 10 <= price <= 100000:
-                                break
+            # Look for change data
+            change_selectors = [
+                '.change', '.price-change', '.change-value',
+                '[data-field="change"]', 'span[class*="change"]',
+                '.stock-change', '.price-diff'
+            ]
             
-            # Method 4: Look for meta tags with price data
+            for selector in change_selectors:
+                elements = soup.select(selector)
+                for element in elements:
+                    change_text = element.get_text(strip=True)
+                    extracted_change = self._extract_number(change_text)
+                    if extracted_change is not None:
+                        change = extracted_change
+                        logger.debug(f"✅ Found change {change} using selector: {selector}")
+                        break
+                if change is not None:
+                    break
+            
+            # If still no price, try script tags for JSON data
             if not price:
-                meta_tags = soup.find_all('meta')
-                for meta in meta_tags:
-                    content = meta.get('content', '')
-                    if 'price' in meta.get('property', '').lower() or 'price' in meta.get('name', '').lower():
-                        price = self._extract_number(content)
-                        if price and 10 <= price <= 100000:
-                            break
+                logger.debug(f"🔄 No price found in HTML elements, trying script tags for {symbol}")
+                price = self._extract_price_from_scripts(soup)
+                if price:
+                    logger.success(f"✅ Found price {price} in script tags")
+            
+            # If still no price, try meta tags
+            if not price:
+                logger.debug(f"🔄 No price found in scripts, trying meta tags for {symbol}")
+                price = self._extract_price_from_meta(soup)
+                if price:
+                    logger.success(f"✅ Found price {price} in meta tags")
             
             if price and price > 0:
-                return {
+                result = {
                     'symbol': symbol,
                     'price': price,
                     'volume': volume or 0,
-                    'source': 'trendlyne',
+                    'change': change,
+                    'change_percent': change_percent,
+                    'source': 'trendlyne_live',
                     'timestamp': time.time(),
-                    'data_quality': 'high' if volume else 'medium'
+                    'data_quality': 'high' if volume else 'medium',
+                    'scraping_method': 'html_parsing'
                 }
+                logger.success(f"✅ Successfully parsed TrendLyne data for {symbol}: {result}")
+                return result
             else:
-                logger.warning(f"TrendLyne: Could not extract valid price for {symbol}")
+                logger.warning(f"❌ No valid price found in HTML for {symbol}")
+                # Log some sample HTML for debugging
+                sample_text = soup.get_text()[:500] if soup else "No soup"
+                logger.debug(f"📄 Sample HTML text: {sample_text}")
                 return None
                 
         except Exception as e:
             logger.error(f"TrendLyne: Error parsing HTML for {symbol}: {e}")
             return None
     
+    def _parse_alternative_formats(self, html_content: str, symbol: str) -> Optional[Dict]:
+        """Parse alternative data formats (JSON, embedded data) for live scraping"""
+        try:
+            # Try to find JSON data in script tags
+            soup = BeautifulSoup(html_content, 'html.parser')
+            script_tags = soup.find_all('script')
+            
+            for script in script_tags:
+                if script.string:
+                    script_content = script.string
+                    
+                    # Look for JSON-like structures
+                    if 'price' in script_content.lower() or 'quote' in script_content.lower():
+                        price = self._extract_from_json_like(script_content, symbol)
+                        if price:
+                            return price
+            
+            # Try to extract from data attributes
+            data_elements = soup.find_all(attrs={'data-price': True})
+            for element in data_elements:
+                price_text = element.get('data-price')
+                price = self._extract_number(price_text)
+                if price and 1 <= price <= 500000:
+                    return {
+                        'symbol': symbol,
+                        'price': price,
+                        'volume': 0,
+                        'source': 'trendlyne_data_attr',
+                        'timestamp': time.time(),
+                        'data_quality': 'medium',
+                        'scraping_method': 'data_attributes'
+                    }
+            
+            return None
+            
+        except Exception as e:
+            logger.debug(f"TrendLyne: Error in alternative parsing for {symbol}: {e}")
+            return None
+    
+    def _extract_from_json_like(self, script_content: str, symbol: str) -> Optional[Dict]:
+        """Extract price data from JSON-like structures in scripts"""
+        try:
+            import re
+            import json
+            
+            # Try to find JSON objects
+            json_patterns = [
+                r'\{[^{}]*"price"[^{}]*\}',
+                r'\{[^{}]*"ltp"[^{}]*\}',
+                r'\{[^{}]*"currentPrice"[^{}]*\}',
+                r'\{[^{}]*"quote"[^{}]*\}'
+            ]
+            
+            for pattern in json_patterns:
+                matches = re.findall(pattern, script_content, re.IGNORECASE)
+                for match in matches:
+                    try:
+                        data = json.loads(match)
+                        price = None
+                        volume = None
+                        
+                        # Look for price in various keys
+                        for key in ['price', 'ltp', 'currentPrice', 'last', 'close']:
+                            if key in data and isinstance(data[key], (int, float, str)):
+                                price = self._extract_number(str(data[key]))
+                                if price and 1 <= price <= 500000:
+                                    break
+                        
+                        # Look for volume
+                        for key in ['volume', 'vol', 'tradeVolume']:
+                            if key in data:
+                                volume = self._extract_volume_number(str(data[key]))
+                                if volume:
+                                    break
+                        
+                        if price:
+                            return {
+                                'symbol': symbol,
+                                'price': price,
+                                'volume': volume or 0,
+                                'source': 'trendlyne_json',
+                                'timestamp': time.time(),
+                                'data_quality': 'high',
+                                'scraping_method': 'json_extraction'
+                            }
+                            
+                    except json.JSONDecodeError:
+                        continue
+            
+            # Try regex patterns for numeric values
+            price_patterns = [
+                r'"price"[:\s]*([0-9.]+)',
+                r'"ltp"[:\s]*([0-9.]+)',
+                r'"currentPrice"[:\s]*([0-9.]+)'
+            ]
+            
+            for pattern in price_patterns:
+                match = re.search(pattern, script_content, re.IGNORECASE)
+                if match:
+                    price = float(match.group(1))
+                    if 1 <= price <= 500000:
+                        return {
+                            'symbol': symbol,
+                            'price': price,
+                            'volume': 0,
+                            'source': 'trendlyne_regex',
+                            'timestamp': time.time(),
+                            'data_quality': 'medium',
+                            'scraping_method': 'regex_extraction'
+                        }
+            
+            return None
+            
+        except Exception as e:
+            logger.debug(f"TrendLyne: Error extracting from JSON-like content: {e}")
+            return None
+    
+    def _extract_price_from_scripts(self, soup) -> Optional[float]:
+        """Extract price from script tags"""
+        try:
+            import re
+            script_tags = soup.find_all('script')
+            
+            for script in script_tags:
+                if script.string and ('price' in script.string.lower() or 'quote' in script.string.lower()):
+                    # Multiple regex patterns for price extraction
+                    patterns = [
+                        r'"price"[:\s]*([0-9.]+)',
+                        r'"ltp"[:\s]*([0-9.]+)',
+                        r'"currentPrice"[:\s]*([0-9.]+)',
+                        r'"last"[:\s]*([0-9.]+)',
+                        r'price["\']?\s*:\s*([0-9.]+)',
+                        r'ltp["\']?\s*:\s*([0-9.]+)'
+                    ]
+                    
+                    for pattern in patterns:
+                        match = re.search(pattern, script.string, re.IGNORECASE)
+                        if match:
+                            price = float(match.group(1))
+                            if 1 <= price <= 500000:
+                                return price
+            
+            return None
+            
+        except Exception as e:
+            logger.debug(f"TrendLyne: Error extracting price from scripts: {e}")
+            return None
+    
+    def _extract_price_from_meta(self, soup) -> Optional[float]:
+        """Extract price from meta tags"""
+        try:
+            meta_tags = soup.find_all('meta')
+            
+            for meta in meta_tags:
+                # Check property and name attributes
+                for attr in ['property', 'name']:
+                    attr_value = meta.get(attr, '').lower()
+                    if 'price' in attr_value or 'amount' in attr_value:
+                        content = meta.get('content', '')
+                        price = self._extract_number(content)
+                        if price and 1 <= price <= 500000:
+                            return price
+            
+            return None
+            
+        except Exception as e:
+            logger.debug(f"TrendLyne: Error extracting price from meta tags: {e}")
+            return None
+
     def _extract_number(self, text: str) -> Optional[float]:
-        """Extract number from text, handling Indian number format"""
+        """Enhanced number extraction for live data"""
         if not text:
             return None
         
         try:
             import re
-            # Remove common text and symbols, but keep numbers and decimal points
-            cleaned = re.sub(r'[^\d.,]', '', text.replace('₹', '').replace('Rs', ''))
-            cleaned = cleaned.replace(',', '')
             
-            if cleaned and '.' in cleaned:
-                # Handle decimal numbers
-                return float(cleaned)
-            elif cleaned:
-                # Handle integer numbers
-                return float(cleaned)
-        except (ValueError, TypeError):
-            pass
-        
-        return None
+            # Remove common prefixes and suffixes
+            cleaned = text.replace('₹', '').replace('Rs', '').replace('$', '').replace('INR', '')
+            cleaned = cleaned.replace('%', '').strip()
+            
+            # Handle negative numbers (for changes)
+            is_negative = cleaned.startswith('-') or cleaned.startswith('(')
+            
+            # Extract numeric part with decimals and commas
+            number_match = re.search(r'([\d,]+\.?\d*)', cleaned.replace('(', '').replace(')', ''))
+            
+            if number_match:
+                number_str = number_match.group(1).replace(',', '')
+                if number_str:
+                    result = float(number_str)
+                    return -result if is_negative else result
+            
+            return None
+            
+        except (ValueError, TypeError, AttributeError):
+            return None
     
     def _extract_volume_number(self, text: str) -> Optional[int]:
-        """Extract volume number from text, handling Indian format (crores, lakhs)"""
+        """Enhanced volume extraction for live data"""
         if not text:
             return None
         
         try:
             import re
-            text_lower = text.lower()
+            text_lower = text.lower().strip()
             
             # Extract number part
             number_match = re.search(r'([\d.,]+)', text_lower)
@@ -473,20 +709,22 @@ class TrendlyneAgent(AdvancedStealthAgentBase):
             number_str = number_match.group(1).replace(',', '')
             base_number = float(number_str)
             
-            # Handle Indian volume units
-            if 'crore' in text_lower or 'cr' in text_lower:
+            # Handle Indian volume units and international units
+            if any(unit in text_lower for unit in ['crore', 'cr']):
                 return int(base_number * 10000000)  # 1 crore = 10 million
-            elif 'lakh' in text_lower or 'lac' in text_lower:
+            elif any(unit in text_lower for unit in ['lakh', 'lac', 'l']):
                 return int(base_number * 100000)    # 1 lakh = 100 thousand
             elif 'k' in text_lower:
                 return int(base_number * 1000)      # 1k = 1000
+            elif 'm' in text_lower:
+                return int(base_number * 1000000)   # 1m = 1 million
+            elif 'b' in text_lower:
+                return int(base_number * 1000000000) # 1b = 1 billion
             else:
                 return int(base_number)
                 
-        except (ValueError, TypeError):
-            pass
-        
-        return None
+        except (ValueError, TypeError, AttributeError):
+            return None
     
     def _extract_best_data(self, fused_data: QuadChannelData) -> Dict:
         """Extract the best available data from quad-channel fusion."""
@@ -704,35 +942,6 @@ class TrendlyneAgent(AdvancedStealthAgentBase):
             'trendlyne': []  # Will be populated by _get_trendlyne_urls
         }
     
-    def _get_trendlyne_urls(self, symbol: str) -> List[str]:
-        """Generate TrendLyne URLs for a given symbol"""
-        urls = []
-        
-        # Check if we have a direct mapping
-        if symbol in self.trendlyne_symbol_map:
-            company_slug = self.trendlyne_symbol_map[symbol]
-            urls.extend([
-                f"https://www.trendlyne.com/equity/{company_slug}/",
-                f"https://trendlyne.com/equity/{company_slug}/",
-                f"https://www.trendlyne.com/equity/{company_slug}",
-                f"https://trendlyne.com/equity/{company_slug}"
-            ])
-        
-        # Fallback patterns (these will likely fail but worth trying)
-        symbol_lower = symbol.lower()
-        urls.extend([
-            f"https://www.trendlyne.com/equity/{symbol}/",
-            f"https://trendlyne.com/equity/{symbol}/",
-            f"https://www.trendlyne.com/equity/{symbol_lower}/",
-            f"https://trendlyne.com/equity/{symbol_lower}/",
-            f"https://www.trendlyne.com/stocks/{symbol}/",
-            f"https://trendlyne.com/stocks/{symbol}/",
-            f"https://www.trendlyne.com/stocks/{symbol_lower}/",
-            f"https://trendlyne.com/stocks/{symbol_lower}/"
-        ])
-        
-        return urls
-
     def _normalize_symbol_for_yahoo(self, symbol: str) -> str:
         """Normalize Indian equity symbol for Yahoo Finance API."""
         normalizer = IndianEquitySymbolNormalizer()

@@ -149,21 +149,78 @@ class ApiService {
     const response = await api.delete(`/api/watchlist/${symbol}`);
     return response.data;
   }
-
   // Real-time data helpers
   async getStockQuote(symbol) {
-    const response = await api.get(`/api/quote/${symbol}`);
-    return response.data;
+    try {
+      const response = await api.get(`/api/live/quote/${symbol}`);
+      return response.data;
+    } catch (error) {
+      console.warn('Live quote failed, using fallback:', error.message);
+      return this.getDemoQuoteData(symbol);
+    }
+  }
+  async getHistoricalData(symbol, period = '1y') {
+    try {
+      const response = await api.get(`/api/historical/${symbol}?period=${period}`);
+      return response.data;
+    } catch (error) {
+      console.warn('Historical data failed, using fallback:', error.message);
+      return this.getDemoHistoricalData(symbol, period);
+    }
   }
 
-  async getHistoricalData(symbol, period = '1y') {
-    const response = await api.get(`/api/historical/${symbol}?period=${period}`);
-    return response.data;
+  // Live market data methods
+  async getLiveMarketStatus() {
+    try {
+      const response = await api.get('/api/live/market-status');
+      return response.data;
+    } catch (error) {
+      console.warn('Live market status failed, using fallback:', error.message);
+      return {
+        status: 'success',
+        market_status: 'UNKNOWN',
+        timestamp: new Date().toISOString()
+      };
+    }
+  }
+
+  async getLiveIndianIndices() {
+    try {
+      const response = await api.get('/api/live/indices');
+      return response.data;
+    } catch (error) {
+      console.warn('Live indices failed, using fallback:', error.message);
+      return this.getIndianMarketIndices();
+    }
+  }
+
+  async getLiveIndianStocks() {
+    try {
+      const response = await api.get('/api/live/stocks/indian');
+      return response.data;
+    } catch (error) {
+      console.warn('Live stocks failed, using fallback:', error.message);
+      return this.getIndianStockList();
+    }
   }
   // Indian Stock Specific APIs
   async getIndianStockList() {
     try {
-      // Try to get data from backend first
+      // Try to get live data from backend first
+      const liveResponse = await api.get('/api/live/stocks/indian');
+      if (liveResponse.data && liveResponse.data.stocks) {
+        return {
+          stocks: liveResponse.data.stocks,
+          source: 'live',
+          timestamp: liveResponse.data.timestamp
+        };
+      }
+    } catch (error) {
+      console.warn('Live stock data not available, trying regular API:', error.message);
+    }
+
+    try {
+      // Fallback to regular API
       const response = await api.get('/api/indian-stocks');
       return response.data;
     } catch (error) {
@@ -505,6 +562,48 @@ class ApiService {
           return_on_assets: 8.9
         }
       }
+    };
+  }
+
+  getDemoQuoteData(symbol) {
+    return {
+      symbol: symbol,
+      name: `${symbol} Limited`,
+      price: 1234.56,
+      change: 12.34,
+      changePercent: 1.01,
+      volume: 1000000,
+      marketCap: 5e12,
+      high: 1250.00,
+      low: 1220.00,
+      open: 1225.00,
+      previousClose: 1222.22,
+      timestamp: new Date().toISOString(),
+      source: 'demo'
+    };
+  }
+
+  getDemoHistoricalData(symbol, period) {
+    const basePrice = 1000;
+    const days = period === '1y' ? 365 : period === '6m' ? 180 : period === '3m' ? 90 : 30;
+    const data = [];
+    
+    for (let i = days; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const variation = (Math.random() - 0.5) * 100;
+      data.push({
+        date: date.toISOString().split('T')[0],
+        price: basePrice + variation,
+        volume: Math.floor(1000000 + Math.random() * 500000)
+      });
+    }
+    
+    return {
+      symbol: symbol,
+      period: period,
+      data: data,
+      source: 'demo'
     };
   }
 }

@@ -36,7 +36,8 @@ import {
   Menu as MenuIcon,
   LogOut,
   User,
-  Home
+  Home,
+  Activity
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -56,10 +57,10 @@ const MainLayout = ({ children }) => {
 
   const bg = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
-  const textColor = useColorModeValue('gray.600', 'gray.300');
-  const navigationItems = [
+  const textColor = useColorModeValue('gray.600', 'gray.300');  const navigationItems = [
     { name: 'Dashboard', path: '/dashboard', icon: Home },
     { name: 'Analysis', path: '/analysis', icon: BarChart3 },
+    { name: 'Live Data', path: '/live-data', icon: Activity },
     { name: 'Screener', path: '/screener', icon: TrendingUp },
     { name: 'Portfolio', path: '/portfolio', icon: Briefcase },
     { name: 'Watchlist', path: '/watchlist', icon: Star },

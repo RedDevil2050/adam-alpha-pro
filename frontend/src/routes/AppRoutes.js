@@ -21,6 +21,9 @@ import NotFoundPage from '../pages/NotFoundPage';
 import IndianStockScreener from '../components/screener/IndianStockScreener';
 import StockDetailPage from '../components/stocks/StockDetailPage';
 
+// Live Data Components
+import LiveDataDashboard from '../components/dashboard/LiveDataDashboard';
+
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
@@ -154,14 +157,23 @@ const AppRoutes = () => {
             </MainLayout>
           </ProtectedRoute>
         }
-      />
-
-      <Route
+      />      <Route
         path="/stock/:symbol"
         element={
           <ProtectedRoute>
             <MainLayout>
               <StockDetailPage />
+            </MainLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/live-data"
+        element={
+          <ProtectedRoute>
+            <MainLayout>
+              <LiveDataDashboard />
             </MainLayout>
           </ProtectedRoute>
         }

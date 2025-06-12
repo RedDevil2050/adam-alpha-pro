@@ -68,13 +68,8 @@ class BackgroundStealthManager:
         # Streaming and events
         self.data_subscribers: List[Callable] = []
         self.performance_subscribers: List[Callable] = []
-        
-        # Redis for coordination and caching
-        try:
-            self.redis_client = get_redis_client()
-        except Exception as e:
-            logger.warning(f"Redis unavailable for coordination: {e}")
-            self.redis_client = None
+          # Redis for coordination and caching (initialize later)
+        self.redis_client = None
         
         # Performance monitoring task
         self.monitoring_task = None
@@ -500,6 +495,16 @@ class BackgroundStealthManager:
             task.cancel()
         
         logger.success("✅ Background Stealth Manager shutdown complete")
+    
+    async def _initialize_redis(self):
+        """Initialize Redis client asynchronously"""
+        if self.redis_client is None:
+            try:
+                self.redis_client = await get_redis_client()
+                logger.info("✅ Redis client initialized for background manager")
+            except Exception as e:
+                logger.warning(f"⚠️ Redis unavailable for coordination: {e}")
+                self.redis_client = None
 
 # Global instance
 background_manager = BackgroundStealthManager()

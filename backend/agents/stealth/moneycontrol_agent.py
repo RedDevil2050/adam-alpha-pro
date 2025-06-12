@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 import numpy as np
 from sklearn.ensemble import IsolationForest
 from loguru import logger
+import asyncio
 from typing import Dict, Optional
 
 agent_name = "moneycontrol_agent"
@@ -26,8 +27,7 @@ class MoneyControlAgent(AdvancedStealthAgentBase):
         # ML components for advanced analysis
         self.anomaly_detector = IsolationForest(contamination=0.1)
         self.timeframes = [5, 15, 60, 240]  # minutes
-        
-        # Enhanced confidence thresholds for MoneyControl
+          # Enhanced confidence thresholds for MoneyControl
         self.fusion_weights = {
             "primary": 0.5,    # Higher weight for MoneyControl
             "secondary": 0.3,   # Yahoo Finance
@@ -38,42 +38,89 @@ class MoneyControlAgent(AdvancedStealthAgentBase):
         logger.info(f"🚀 Enhanced MoneyControl Agent initialized with quad-channel support")
     
     async def _fetch_primary_source(self, symbol: str) -> Optional[Dict]:
-        """Fetch data from MoneyControl website (primary source)."""
-        try:
-            url = f"https://www.moneycontrol.com/india/stockpricequote/{symbol}"
-            headers = {
-                "User-Agent": self.user_agents[0],
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Accept-Encoding": "gzip, deflate, br",
-                "Referer": "https://www.moneycontrol.com/",
-                "Connection": "keep-alive",
-                "Upgrade-Insecure-Requests": "1"
-            }
-            
-            async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
-                response = await client.get(url, headers=headers)
+        """Fetch data from MoneyControl website (primary source) with updated URL patterns."""
+        
+        # Try multiple URL patterns for MoneyControl
+        url_patterns = [
+            f"https://www.moneycontrol.com/india/stockpricequote/{symbol}",
+            f"https://www.moneycontrol.com/stocks/company_info/stock_comp_result.php?sc_id={symbol}",
+            f"https://www.moneycontrol.com/stocks/marketstats/indexcomp.php?optex=NSE&opttopic=indexcomp&symbol={symbol}",
+            f"https://www.moneycontrol.com/shares-stock-price/{symbol}",
+            f"https://www.moneycontrol.com/stock-price/{symbol}",
+            f"https://www.moneycontrol.com/equity/{symbol}",
+            # Search fallback
+            f"https://www.moneycontrol.com/search/all?search={symbol}"
+        ]
+        
+        for url in url_patterns:
+            try:
+                # Enhanced headers to avoid bot detection
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                    "Accept-Language": "en-US,en;q=0.9",
+                    "Accept-Encoding": "gzip, deflate, br",
+                    "Referer": "https://www.moneycontrol.com/",
+                    "Connection": "keep-alive",
+                    "Upgrade-Insecure-Requests": "1",
+                    "Sec-Fetch-Dest": "document",
+                    "Sec-Fetch-Mode": "navigate",
+                    "Sec-Fetch-Site": "same-origin",
+                    "Cache-Control": "max-age=0",
+                    "Sec-CH-UA": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+                    "Sec-CH-UA-Mobile": "?0",
+                    "Sec-CH-UA-Platform": '"Windows"'
+                }
                 
-                if response.status_code == 200:
-                    soup = BeautifulSoup(response.text, "html.parser")
+                async with httpx.AsyncClient(
+                    timeout=15, 
+                    follow_redirects=True,
+                    headers=headers
+                ) as client:
+                    logger.debug(f"Trying MoneyControl URL: {url}")
+                    response = await client.get(url)
                     
-                    return {
-                        "price": self._extract_price(soup),
-                        "ratings": self._extract_ratings(soup),
-                        "technicals": self._extract_technicals(soup),
-                        "sentiment": self._extract_sentiment(soup),
-                        "volume": self._extract_volume(soup),
-                        "market_cap": self._extract_market_cap(soup),
-                        "pe_ratio": self._extract_pe_ratio(soup),
-                        "source": "moneycontrol_primary"
-                    }
-                else:
-                    logger.warning(f"MoneyControl returned status {response.status_code} for {symbol}")
-                    return None
+                    if response.status_code == 200:
+                        soup = BeautifulSoup(response.text, "html.parser")
+                        
+                        # Basic validation - check if we got actual stock data
+                        if len(response.text) > 1000 and any(term in response.text.lower() for term in ['stock', 'price', 'market', 'nse', 'bse']):
+                            logger.success(f"MoneyControl: Successfully fetched data from {url}")
+                            return {
+                                "price": self._extract_price(soup),
+                                "ratings": self._extract_ratings(soup),
+                                "technicals": self._extract_technicals(soup),
+                                "sentiment": self._extract_sentiment(soup),
+                                "volume": self._extract_volume(soup),
+                                "market_cap": self._extract_market_cap(soup),
+                                "pe_ratio": self._extract_pe_ratio(soup),
+                                "source": "moneycontrol_primary"
+                            }
+                        else:
+                            logger.warning(f"MoneyControl: Invalid content from {url}")
                     
-        except Exception as e:
-            logger.warning(f"MoneyControl primary fetch failed for {symbol}: {e}")
-            return None
+                    elif response.status_code == 503:
+                        logger.warning(f"MoneyControl: Service unavailable (503) - possible rate limiting")
+                        # Add delay for 503 errors to handle rate limiting
+                        await asyncio.sleep(8)  # Fixed 8 second delay
+                        continue
+                    
+                    elif response.status_code == 403:
+                        logger.warning(f"MoneyControl: Access forbidden (403) - possible bot detection")
+                        continue
+                    
+                    else:
+                        logger.debug(f"MoneyControl: Status {response.status_code} for {url}")
+                        
+            except httpx.TimeoutException:
+                logger.warning(f"MoneyControl: Timeout for {url}")
+                continue
+            except Exception as e:
+                logger.warning(f"MoneyControl: Error with {url}: {e}")
+                continue
+        
+        logger.error(f"MoneyControl: All URL patterns failed for {symbol}")
+        return None
     
     async def _execute_analysis(self, symbol: str, agent_outputs: dict, fused_data: QuadChannelData) -> Dict:
         """Execute enhanced analysis using quad-channel fused data."""

@@ -48,6 +48,7 @@ import MarketPulse from '../components/dashboard/MarketPulse';
 import SystemHealthWidget from '../components/widgets/SystemHealthWidget';
 import SmartWatchlist from '../components/widgets/SmartWatchlist';
 import FloatingActionButton from '../components/common/FloatingActionButton';
+import LiveDataWidget from '../components/widgets/LiveDataWidget';
 
 const MotionCard = motion(Card);
 
@@ -257,10 +258,16 @@ const DashboardPage = () => {
 
             {/* Market Pulse - New Component */}
             <MarketPulse />
-          </VStack>
-
-          {/* Right Column */}
+          </VStack>          {/* Right Column */}
           <VStack spacing={6} align="stretch">
+            {/* Live Data Widget */}
+            <LiveDataWidget 
+              symbols={['RELIANCE', 'TCS', 'INFY', 'HDFCBANK']}
+              maxUpdates={8}
+              autoConnect={true}
+              showStats={true}
+            />
+            
             {/* Enhanced System Health */}
             <SystemHealthWidget data={healthData} />
             

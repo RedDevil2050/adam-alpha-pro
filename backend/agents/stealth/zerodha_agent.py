@@ -103,9 +103,8 @@ class ZerodhaAgent(AdvancedStealthAgentBase):
             # Extract basic information from Zerodha pages
             title = soup.find('title')
             title_text = title.get_text() if title else ""
-            
-            # Look for any price or financial data
-            price_elements = soup.find_all(text=lambda t: t and '₹' in str(t))
+              # Look for any price or financial data
+            price_elements = soup.find_all(string=lambda t: t and '₹' in str(t))
             price = None
             
             if price_elements:

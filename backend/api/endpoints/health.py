@@ -18,6 +18,7 @@ async def health_check(
     Performs health checks on critical system components (DB, Cache).
     """
     start_time = time.monotonic()
+    total_latency = None
     db_ok = False
     redis_ok = False
     db_latency = None
@@ -50,25 +51,29 @@ async def health_check(
         logger.debug("Redis connection successful.")
     except Exception as e:
         logger.error(f"Redis health check failed: {e}")
-    redis_latency = (time.monotonic() - redis_check_start) * 1000  # milliseconds
+    redis_latency = (time.monotonic() - redis_check_start) * 1000  # milliseconds    total_latency = (time.monotonic() - start_time) * 1000
 
-    total_latency = (time.monotonic() - start_time) * 1000
-
-    status_code = 200 if db_ok and redis_ok else 503  # Service Unavailable
+    # System is healthy if database is working (Redis is optional for basic functionality)
+    system_healthy = db_ok
+    status_code = 200 if system_healthy else 503
 
     response = {
-        "status": "healthy" if db_ok and redis_ok else "unhealthy",
+        "status": "healthy" if system_healthy else "unhealthy",
         "services": {
             "database": {
                 "status": "healthy" if db_ok else "unhealthy",
                 "latency_ms": f"{db_latency:.2f}"
             },
             "redis": {
-                "status": "healthy" if redis_ok else "unhealthy",
-                "latency_ms": f"{redis_latency:.2f}"
+                "status": "healthy" if redis_ok else "degraded",
+                "latency_ms": f"{redis_latency:.2f}",
+                "note": "Optional service - system functional without Redis"
             }
         },
-        "total_latency_ms": f"{total_latency:.2f}"
+        "total_latency_ms": f"{total_latency:.2f}",
+        "notes": {
+            "redis_status": "Redis unavailable - caching disabled, core functionality maintained"
+        } if not redis_ok else {}
     }
 
     if status_code != 200:

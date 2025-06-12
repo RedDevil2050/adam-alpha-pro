@@ -17,6 +17,7 @@ import time
 import random
 import redis
 import json
+import os
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List, Tuple, Union, AsyncGenerator
 from abc import ABC, abstractmethod
@@ -102,13 +103,12 @@ class AdvancedStealthAgentBase(ABC):
     Next-generation stealth agent base with quad-channel architecture
     and continuous background data collection capabilities.
     """
-    def __init__(self):
-        # Channel configurations
+    def __init__(self):        # Channel configurations - Increased timeouts for Indian market reliability
         self.channels = {
-            "primary": DataChannelConfig("primary", timeout=8, max_retries=3, priority=1),
-            "secondary": DataChannelConfig("secondary", timeout=12, max_retries=2, priority=2),
-            "tertiary": DataChannelConfig("tertiary", timeout=15, max_retries=2, priority=3),
-            "emergency": DataChannelConfig("emergency", timeout=20, max_retries=1, priority=4)
+            "primary": DataChannelConfig("primary", timeout=15, max_retries=2, priority=1),
+            "secondary": DataChannelConfig("secondary", timeout=20, max_retries=3, priority=2),
+            "tertiary": DataChannelConfig("tertiary", timeout=25, max_retries=3, priority=3),
+            "emergency": DataChannelConfig("emergency", timeout=30, max_retries=2, priority=4)
         }
         
         # Circuit breakers for each channel
@@ -140,11 +140,10 @@ class AdvancedStealthAgentBase(ABC):
         # Data fusion settings
         self.fusion_weights = {"primary": 0.4, "secondary": 0.3, "tertiary": 0.2, "emergency": 0.1}
         self.validation_threshold = 0.3  # Further reduced for Indian market volatility
-        
-        # Cache settings
+          # Cache settings - Increased TTL for Indian market stability
         self.cache_ttl = {
-            "primary": 60,      # 1 minute for primary data
-            "secondary": 120,   # 2 minutes for secondary
+            "primary": 90,      # 1.5 minutes for primary data
+            "secondary": 180,   # 3 minutes for secondary
             "tertiary": 300,    # 5 minutes for tertiary
             "emergency": 600    # 10 minutes for emergency
         }
@@ -523,8 +522,7 @@ class AdvancedStealthAgentBase(ABC):
                         base_prices = {
                             'RELIANCE': 2500, 'TCS': 3500, 'INFY': 1800, 'HDFCBANK': 1600,
                             'ICICIBANK': 1100, 'HDFC': 2800, 'SBIN': 750, 'BHARTIARTL': 1100,
-                            'ITC': 450, 'HINDUNILVR': 2400, 'LT': 3400, 'ASIANPAINT': 3200
-                        }
+                            'ITC': 450, 'HINDUNILVR': 2400, 'LT': 3400, 'ASIANPAINT': 3200                        }
                         
                         if symbol in base_prices:
                             price = base_prices[symbol] + random.uniform(-50, 50)
@@ -543,40 +541,99 @@ class AdvancedStealthAgentBase(ABC):
                             "source": "alpha_vantage",
                             "fallback_used": price not in [float(str(quote.get(key, 0)).replace(',', '')) for key in ["05. price", "price", "last_price", "close"] if quote.get(key)]
                         }
+                        
         except Exception as e:
             logger.warning(f"Alpha Vantage fetch failed for {symbol}: {e}")
             return None
-    
+
+    async def _fetch_polygon_fallback(self, symbol: str) -> Optional[Dict]:
+        """Fetch data from Polygon.io API as fallback source."""
+        try:
+            # Note: This is the polygon.io code that was misplaced
+            async with httpx.AsyncClient(timeout=10) as client:
+                # Try to get polygon.io data if API key is available
+                api_key = os.getenv('POLYGON_API_KEY')
+                if api_key and api_key != 'demo':
+                    url = f"https://api.polygon.io/v2/last/trade/{symbol}"
+                    headers = {"Authorization": f"Bearer {api_key}"}
+                    
+                    response = await client.get(url, headers=headers)
+                    if response.status_code == 200:
+                        data = response.json()
+                        results = data.get("results", {})
+                        
+                        if results:
+                            return {
+                                "price": results.get("P", 0),  # Ask price
+                                "bid": results.get("p", 0),    # Bid price
+                                "timestamp": results.get("t", 0),
+                                "source": "polygon_io"
+                            }
+        except Exception as e:
+            logger.warning(f"Polygon.io fallback failed for {symbol}: {e}")
+        
+        return None
+
     async def _fetch_emergency_source(self, symbol: str) -> Optional[Dict]:
         """Fetch data from emergency source with multiple URL patterns and fallbacks."""
         
-        # Multiple URL patterns to try for tijori.com
-        tijori_urls = [
+        # Updated URL patterns for various working sources
+        emergency_urls = [
+            # Try MoneyControl (often more reliable)
+            f"https://www.moneycontrol.com/india/stockpricequote/{symbol}",
+            f"https://www.moneycontrol.com/stocks/stockpricequote/{symbol}",
+            f"https://m.moneycontrol.com/stocks/stock_quote/{symbol}",
+            
+            # Try TickerTape (modern financial data)
+            f"https://www.tickertape.in/stocks/{symbol}",
+            f"https://tickertape.in/stocks/{symbol.lower()}",
+            f"https://api.tickertape.in/stocks/{symbol}",
+            
+            # Try NSE India official
+            f"https://www.nseindia.com/get-quotes/equity?symbol={symbol}",
+            f"https://www.nseindia.com/api/quote-derivative?symbol={symbol}",
+            
+            # Try updated Tijori patterns (new domain structure)
+            f"https://tijori.com/company/{symbol}",
+            f"https://www.tijori.com/company/{symbol}",
+            f"https://tijori.com/stocks/{symbol}",
+            f"https://www.tijori.com/equity/{symbol}",
+            
+            # Try Screener.in (popular among Indian investors)
+            f"https://www.screener.in/company/{symbol}/",
+            f"https://screener.in/company/{symbol}/consolidated/",
+            
+            # Try BSE official
+            f"https://www.bseindia.com/stock-share-price/{symbol}/",
+            f"https://api.bseindia.com/BseIndiaAPI/api/StockReachGraph/w?stock={symbol}",
+            
+            # Original tijori patterns as fallback
             f"https://www.tijori.com/stock/{symbol}",
-            f"https://tijori.com/stock/{symbol}",
-            f"https://www.tijori.com/nse/{symbol}",
-            f"https://tijori.com/nse/{symbol}",
-            f"https://www.tijori.com/equity/{symbol}.html",
-            f"https://tijori.com/equity/{symbol}.html",
-            f"https://www.tijori.com/stocks/{symbol}",  # Original failing URL
-            f"https://tijori.com/equity/{symbol}"       # Original failing URL
+            f"https://tijori.com/nse/{symbol}"
         ]
         
-        # Try Tijori.com first with multiple URL patterns
+        # Try emergency sources with improved error handling
         async with httpx.AsyncClient(
-            timeout=20,
-            headers={"User-Agent": random.choice(self.user_agents)},
+            timeout=httpx.Timeout(15.0, connect=5.0),
+            headers={
+                "User-Agent": random.choice(self.user_agents),
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.5",
+                "Accept-Encoding": "gzip, deflate",
+                "Connection": "keep-alive",
+                "Upgrade-Insecure-Requests": "1"
+            },
             follow_redirects=True
         ) as client:
             
-            for url in tijori_urls:
+            for url in emergency_urls:
                 try:
                     logger.debug(f"🎯 Trying emergency URL: {url}")
                     response = await client.get(url)
                     
                     if response.status_code == 200:
-                        # Try to parse tijori response
-                        data = await self._parse_tijori_response(response, symbol)
+                        # Try to parse response from different sources
+                        data = await self._parse_emergency_response(response, symbol, url)
                         if data:
                             logger.info(f"✅ Emergency fetch successful from {url}")
                             return data
@@ -590,32 +647,310 @@ class AdvancedStealthAgentBase(ABC):
                     logger.debug(f"Request failed for {url}: {str(e)}")
                     continue
         
-        # Fallback to Polygon.io API if tijori.com fails
-        try:
-            logger.debug(f"🔄 Falling back to Polygon.io for {symbol}")
-            async with httpx.AsyncClient(timeout=20) as client:
-                response = await client.get(
-                    f"https://api.polygon.io/v2/last/nbbo/{symbol}",
-                    params={"apikey": "demo"}  # Replace with actual API key
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    results = data.get("results", {})
-                    
-                    if results:
-                        return {
-                            "price": results.get("P", 0),  # Ask price
-                            "bid": results.get("p", 0),    # Bid price
-                            "timestamp": results.get("t", 0),
-                            "source": "polygon_io"
-                        }
-        except Exception as e:
-            logger.warning(f"Polygon.io fallback failed for {symbol}: {e}")
+        # Fallback to demo data if all emergency sources fail
+        logger.warning(f"⚠️ All emergency sources failed for {symbol}, using fallback")
+        base_price = 1000 + hash(symbol) % 1000
+        variation = random.uniform(-0.02, 0.02)
+        price = base_price * (1 + variation)
         
-        # Final fallback with synthetic data based on symbol
-        logger.warning(f"⚠️ All emergency sources failed for {symbol}, generating fallback data")
-        return await self._generate_emergency_fallback_data(symbol)
+        return {
+            'symbol': symbol,
+            'price': round(price, 2),
+            'source': 'emergency_fallback',
+            'timestamp': time.time(),
+            'data_quality': 'low'
+        }
+
+    async def _parse_emergency_response(self, response, symbol: str, url: str) -> Optional[Dict]:
+        """Parse emergency response from various sources"""
+        try:
+            content = response.text
+            
+            if len(content) < 500:
+                logger.debug(f"Content too short from {url}: {len(content)} chars")
+                return None
+            
+            # Determine source type from URL
+            if "moneycontrol.com" in url:
+                return self._parse_moneycontrol_response(content, symbol)
+            elif "tickertape.in" in url:
+                return self._parse_tickertape_response(content, symbol)
+            elif "nseindia.com" in url:
+                return self._parse_nse_response(content, symbol)
+            elif "screener.in" in url:
+                return self._parse_screener_response(content, symbol)
+            elif "tijori.com" in url:
+                return self._parse_tijori_response(content, symbol)
+            else:
+                # Generic parsing for unknown sources
+                return self._parse_generic_response(content, symbol)
+                
+        except Exception as e:
+            logger.debug(f"Failed to parse emergency response from {url}: {e}")
+            return None
+
+    def _parse_moneycontrol_response(self, content: str, symbol: str) -> Optional[Dict]:
+        """Parse MoneyControl response"""
+        try:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(content, 'html.parser')
+            
+            # MoneyControl specific selectors
+            price_selectors = [
+                '.pcnstkprc', '.inprice', '.pricechange', '#Bse_Prc_tick', 
+                '[data-field="last_price"]', '.BSE_lastRate'
+            ]
+            
+            price = None
+            for selector in price_selectors:
+                element = soup.select_one(selector)
+                if element:
+                    price_text = element.get_text(strip=True).replace('₹', '').replace(',', '')
+                    try:
+                        price = float(price_text)
+                        if 10 <= price <= 100000:
+                            break
+                    except ValueError:
+                        continue
+            
+            if price:
+                return {
+                    'symbol': symbol,
+                    'price': price,
+                    'source': 'moneycontrol_emergency',
+                    'timestamp': time.time(),
+                    'data_quality': 'high'
+                }
+            return None
+            
+        except Exception as e:
+            logger.debug(f"MoneyControl parsing failed: {e}")
+            return None
+
+    def _parse_tickertape_response(self, content: str, symbol: str) -> Optional[Dict]:
+        """Parse TickerTape response"""
+        try:
+            from bs4 import BeautifulSoup
+            import re
+            
+            soup = BeautifulSoup(content, 'html.parser')
+            
+            # Look for price in script tags or data attributes
+            price = None
+            
+            # Try JSON data in script tags
+            script_tags = soup.find_all('script')
+            for script in script_tags:
+                if script.string and 'price' in script.string.lower():
+                    price_match = re.search(r'"(?:price|last_price|ltp)"[:\s]*([0-9.]+)', script.string)
+                    if price_match:
+                        try:
+                            price = float(price_match.group(1))
+                            if 10 <= price <= 100000:
+                                break
+                        except ValueError:
+                            continue
+            
+            if price:
+                return {
+                    'symbol': symbol,
+                    'price': price,
+                    'source': 'tickertape_emergency',
+                    'timestamp': time.time(),
+                    'data_quality': 'medium'
+                }
+            return None
+            
+        except Exception as e:
+            logger.debug(f"TickerTape parsing failed: {e}")
+            return None
+
+    def _parse_generic_response(self, content: str, symbol: str) -> Optional[Dict]:
+        """Generic parsing for unknown sources"""
+        try:
+            from bs4 import BeautifulSoup
+            import re
+            
+            soup = BeautifulSoup(content, 'html.parser')
+            
+            # Generic price extraction patterns
+            price_patterns = [
+                r'(?:price|ltp|last|current)["\']?\s*[:\=]\s*["\']?([0-9,]+\.?[0-9]*)',
+                r'₹\s*([0-9,]+\.?[0-9]*)',
+                r'Rs\.?\s*([0-9,]+\.?[0-9]*)',
+                r'\b([0-9]{3,6}\.[0-9]{2})\b'  # Price-like numbers
+            ]
+            
+            for pattern in price_patterns:
+                matches = re.findall(pattern, content, re.IGNORECASE)
+                for match in matches:
+                    try:
+                        price = float(match.replace(',', ''))
+                        if 10 <= price <= 100000:
+                            return {
+                                'symbol': symbol,
+                                'price': price,
+                'source': 'generic_emergency',
+                                'timestamp': time.time(),
+                                'data_quality': 'low'
+                            }
+                    except ValueError:
+                        continue
+            return None
+            
+        except Exception as e:
+            logger.debug(f"Generic parsing failed: {e}")
+            return None
+
+    def _parse_nse_response(self, content: str, symbol: str) -> Optional[Dict]:
+        """Parse NSE India response"""
+        try:
+            # Try to parse JSON response from NSE API
+            import json
+            try:
+                data = json.loads(content)
+                if 'data' in data and isinstance(data['data'], dict):
+                    quote_data = data['data']
+                    price = quote_data.get('lastPrice') or quote_data.get('price') or quote_data.get('ltp')
+                    if price:
+                        return {
+                            'symbol': symbol,
+                            'price': float(price),
+                            'source': 'nse_emergency',
+                            'timestamp': time.time(),
+                            'data_quality': 'high'
+                        }
+            except json.JSONDecodeError:
+                pass
+            
+            # Fallback to HTML parsing
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(content, 'html.parser')
+            
+            # NSE specific selectors
+            price_selectors = [
+                '[data-field="lastPrice"]', '.lastPrice', '#lastPrice',
+                '.quote-price', '.current-price'
+            ]
+            
+            for selector in price_selectors:
+                element = soup.select_one(selector)
+                if element:
+                    price_text = element.get_text(strip=True).replace('₹', '').replace(',', '')
+                    try:
+                        price = float(price_text)
+                        if 10 <= price <= 100000:
+                            return {
+                                'symbol': symbol,
+                                'price': price,
+                                'source': 'nse_emergency',
+                                'timestamp': time.time(),
+                                'data_quality': 'medium'
+                            }
+                    except ValueError:
+                        continue
+            return None
+            
+        except Exception as e:
+            logger.debug(f"NSE parsing failed: {e}")
+            return None
+
+    def _parse_screener_response(self, content: str, symbol: str) -> Optional[Dict]:
+        """Parse Screener.in response"""
+        try:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(content, 'html.parser')
+            
+            # Screener.in specific selectors
+            price_selectors = [
+                '.price', '.current-price', '[data-field="price"]',
+                '.stock-price', '.quote-price'
+            ]
+            
+            for selector in price_selectors:
+                element = soup.select_one(selector)
+                if element:
+                    price_text = element.get_text(strip=True).replace('₹', '').replace(',', '')
+                    try:
+                        price = float(price_text)
+                        if 10 <= price <= 100000:
+                            return {
+                                'symbol': symbol,
+                                'price': price,
+                                'source': 'screener_emergency',
+                                'timestamp': time.time(),
+                                'data_quality': 'medium'
+                            }
+                    except ValueError:
+                        continue
+            return None
+            
+        except Exception as e:
+            logger.debug(f"Screener parsing failed: {e}")
+            return None
+
+    def _parse_tijori_response_html(self, content: str, symbol: str) -> Optional[Dict]:
+        """Parse Tijori.com HTML response"""
+        try:
+            # Try JSON parsing first
+            import json
+            try:
+                data = json.loads(content)
+                if isinstance(data, dict):
+                    price = None
+                    for price_field in ["price", "current_price", "ltp", "last_price", "close_price"]:
+                        if price_field in data and data[price_field]:
+                            try:
+                                price = float(str(data[price_field]).replace(',', ''))
+                                if price > 0:
+                                    break
+                            except (ValueError, TypeError):
+                                continue
+                    
+                    if price and price > 0:
+                        return {
+                            "symbol": symbol,
+                            "price": round(price, 2),
+                            "volume": data.get("volume", 0),
+                            "source": "tijori_emergency",
+                            "timestamp": time.time(),
+                            "data_quality": "medium"
+                        }
+            except json.JSONDecodeError:
+                pass
+            
+            # Fallback to HTML parsing
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(content, 'html.parser')
+            
+            # Common price patterns in HTML
+            price_patterns = [
+                r'price["\s:]+([0-9,]+\.?[0-9]*)',
+                r'₹\s*([0-9,]+\.?[0-9]*)',
+                r'Rs\.?\s*([0-9,]+\.?[0-9]*)'
+            ]
+            
+            for pattern in price_patterns:
+                import re
+                matches = re.findall(pattern, content, re.IGNORECASE)
+                if matches:
+                    try:
+                        price_str = matches[0].replace(',', '')
+                        price = float(price_str)
+                        if 10 <= price <= 100000:
+                            return {
+                                "symbol": symbol,
+                                "price": round(price, 2),
+                                "source": "tijori_emergency",
+                                "timestamp": time.time(),
+                                "data_quality": "low"                            }
+                    except (ValueError, TypeError):
+                        continue
+            return None
+            
+        except Exception as e:
+            logger.debug(f"Tijori parsing failed: {e}")
+            return None
     
     async def _parse_tijori_response(self, response: httpx.Response, symbol: str) -> Optional[Dict]:
         """Parse tijori.com response and extract stock data."""
@@ -694,8 +1029,7 @@ class AdvancedStealthAgentBase(ABC):
             'MARUTI': 10250.30, 'BAJFINANCE': 6890.75, 'KOTAKBANK': 1720.85, 'WIPRO': 565.40,
             'ULTRACEMCO': 8950.60, 'NESTLEIND': 21500.25, 'TITAN': 3240.15, 'POWERGRID': 285.70
         }
-        
-        # Generate price with realistic variation
+          # Generate price with realistic variation
         if symbol in base_prices:
             base_price = base_prices[symbol]
             # Add ±2% random variation
@@ -707,7 +1041,8 @@ class AdvancedStealthAgentBase(ABC):
                 price = random.uniform(500, 4000)
             else:  # Likely smaller stock
                 price = random.uniform(50, 1500)
-          # Generate other realistic data
+        
+        # Generate other realistic data
         volume = random.randint(50000, 2000000)
         change_percent = random.uniform(-3.0, 3.0)
         change = price * (change_percent / 100)
@@ -718,8 +1053,8 @@ class AdvancedStealthAgentBase(ABC):
             "change": round(change, 2),
             "change_percent": f"{change_percent:.2f}%",
             "source": "emergency_fallback",
-            "symbol": symbol,
-            "fallback_reason": "all_sources_failed",            "confidence": 0.3  # Lower confidence for fallback data
+            "symbol": symbol,            "fallback_reason": "all_sources_failed",
+            "confidence": 0.3  # Lower confidence for fallback data
         }
 
     def _normalize_symbol_for_yahoo(self, symbol: str) -> str:

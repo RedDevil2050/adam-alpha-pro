@@ -231,9 +231,8 @@ class EnhancedMoneyControlAgent(AdvancedStealthAgentBase):
                 if price_elem:
                     price_text = price_elem.text.strip().replace(',', '').replace('₹', '')
                     return float(price_text)
-            
-            # Fallback to any element with price-like content
-            for elem in soup.find_all(text=True):
+              # Fallback to any element with price-like content
+            for elem in soup.find_all(string=True):
                 if '₹' in elem and any(c.isdigit() for c in elem):
                     import re
                     price_match = re.search(r'₹?[\d,]+\.?\d*', elem)
