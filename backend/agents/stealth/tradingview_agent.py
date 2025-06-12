@@ -12,6 +12,10 @@ category = "stealth"
 
 
 class TradingViewAgent(AdvancedStealthAgentBase):
+    def __init__(self):
+        super().__init__()
+        self.agent_name = agent_name
+    
     async def _fetch_primary_source(self, symbol: str) -> Optional[Dict]:
         """Fetch data from TradingView primary source with stealth scraping."""
         try:
@@ -294,6 +298,21 @@ class TradingViewAgent(AdvancedStealthAgentBase):
                 price = channel_data["price"]
                 if isinstance(price, (int, float)) and price > 0:
                     return float(price)
+        
+        # If no valid price found, try to extract from any available data
+        for channel in ["primary", "secondary", "tertiary", "emergency"]:
+            channel_data = getattr(fused_data, channel)
+            if channel_data:
+                # Look for any numeric value that could be a price
+                for key, value in channel_data.items():
+                    if key in ['close', 'last', 'current_price', 'ltp', 'quote'] and value:
+                        try:
+                            price = float(str(value).replace(',', '').replace('₹', '').replace('$', ''))
+                            if 10 <= price <= 100000:  # Reasonable price range for Indian stocks
+                                return price
+                        except (ValueError, TypeError):
+                            continue
+        
         return None
     
     def _extract_best_volume(self, fused_data: QuadChannelData) -> Optional[int]:
@@ -521,9 +540,9 @@ class TradingViewAgent(AdvancedStealthAgentBase):
                 if ma_value and isinstance(ma_value, (int, float)):
                     # Compare with current price (approximate)
                     current_price = self._extract_best_price(fused_data)
-                    if current_price and current_price > ma_value:
+                    if current_price is not None and current_price > ma_value:
                         ma_signals += 1
-                    else:
+                    elif current_price is not None:
                         ma_signals -= 1
             
             if len(mas) > 0:

@@ -10,6 +10,10 @@ agent_name = "stockedge_agent"
 
 
 class StockEdgeAgent(AdvancedStealthAgentBase):
+    def __init__(self):
+        super().__init__()
+        self.agent_name = agent_name
+    
     async def _fetch_primary_source(self, symbol: str) -> Optional[Dict]:
         """Fetch data from StockEdge primary source with stealth scraping."""
         try:
@@ -199,6 +203,21 @@ class StockEdgeAgent(AdvancedStealthAgentBase):
                 price = channel_data["price"]
                 if isinstance(price, (int, float)) and price > 0:
                     return float(price)
+        
+        # If no valid price found, try to extract from any available data
+        for channel in ["primary", "secondary", "tertiary", "emergency"]:
+            channel_data = getattr(fused_data, channel)
+            if channel_data:
+                # Look for any numeric value that could be a price
+                for key, value in channel_data.items():
+                    if key in ['close', 'last', 'current_price', 'ltp', 'quote'] and value:
+                        try:
+                            price = float(str(value).replace(',', '').replace('₹', '').replace('$', ''))
+                            if 10 <= price <= 100000:  # Reasonable price range for Indian stocks
+                                return price
+                        except (ValueError, TypeError):
+                            continue
+        
         return None
     
     def _extract_best_volume(self, fused_data: QuadChannelData) -> Optional[int]:
@@ -247,9 +266,9 @@ class StockEdgeAgent(AdvancedStealthAgentBase):
             score += 0.1
             
         # Volume analysis
-        if volume and volume > 100000:
+        if volume is not None and volume > 100000:
             score += 0.1
-        if volume and volume > 1000000:
+        if volume is not None and volume > 1000000:
             score += 0.1
             
         # Technical indicators boost

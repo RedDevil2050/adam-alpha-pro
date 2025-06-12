@@ -120,8 +120,54 @@ class TrendlyneAgent(AdvancedStealthAgentBase):
         # Priority order: primary -> secondary -> tertiary -> emergency
         for channel in ["primary", "secondary", "tertiary", "emergency"]:
             channel_data = getattr(fused_data, channel)
-            if channel_data and channel_data.get("price"):
-                logger.debug(f"Using {channel} channel data for analysis")
+            if channel_data:
+                # Check for price data in various formats
+                price = None
+                for price_key in ["price", "close", "last", "current_price", "ltp"]:
+                    if price_key in channel_data and channel_data[price_key]:
+                        try:
+                            price = float(str(channel_data[price_key]).replace(',', '').replace('₹', '').replace('$', ''))
+                            if 10 <= price <= 100000:  # Reasonable range for Indian stocks
+                                break
+                        except (ValueError, TypeError):
+                            continue
+                
+                if price:
+                    logger.debug(f"Using {channel} channel data for analysis with price {price}")
+                    # Ensure we have the price field
+                    enriched_data = dict(channel_data)
+                    enriched_data["price"] = price
+                    return enriched_data
+    def _extract_best_data(self, fused_data: QuadChannelData) -> Dict:
+        """Extract the best available data from quad-channel fusion."""
+        
+        # Priority order: primary -> secondary -> tertiary -> emergency
+        for channel in ["primary", "secondary", "tertiary", "emergency"]:
+            channel_data = getattr(fused_data, channel)
+            if channel_data:
+                # Check for price data in various formats
+                price = None
+                for price_key in ["price", "close", "last", "current_price", "ltp"]:
+                    if price_key in channel_data and channel_data[price_key]:
+                        try:
+                            price = float(str(channel_data[price_key]).replace(',', '').replace('₹', '').replace('$', ''))
+                            if 10 <= price <= 100000:  # Reasonable range for Indian stocks
+                                break
+                        except (ValueError, TypeError):
+                            continue
+                
+                if price:
+                    logger.debug(f"Using {channel} channel data for analysis with price {price}")
+                    # Ensure we have the price field
+                    enriched_data = dict(channel_data)
+                    enriched_data["price"] = price
+                    return enriched_data
+        
+        # If no price found, still return the first available data for other analysis
+        for channel in ["primary", "secondary", "tertiary", "emergency"]:
+            channel_data = getattr(fused_data, channel)
+            if channel_data:
+                logger.debug(f"Using {channel} channel data for analysis (no price found)")
                 return channel_data
         
         return {}

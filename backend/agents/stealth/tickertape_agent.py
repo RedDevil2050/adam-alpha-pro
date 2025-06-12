@@ -240,6 +240,21 @@ class TickertapeAgent(AdvancedStealthAgentBase):
                 price = channel_data["price"]
                 if isinstance(price, (int, float)) and price > 0:
                     return float(price)
+        
+        # If no valid price found, try to extract from any available data
+        for channel in ["primary", "secondary", "tertiary", "emergency"]:
+            channel_data = getattr(fused_data, channel)
+            if channel_data:
+                # Look for any numeric value that could be a price
+                for key, value in channel_data.items():
+                    if key in ['close', 'last', 'current_price', 'ltp', 'quote'] and value:
+                        try:
+                            price = float(str(value).replace(',', '').replace('₹', '').replace('$', ''))
+                            if 10 <= price <= 100000:  # Reasonable price range for Indian stocks
+                                return price
+                        except (ValueError, TypeError):
+                            continue
+        
         return None
     
     def _extract_best_volume(self, fused_data: QuadChannelData) -> Optional[int]:
@@ -350,7 +365,7 @@ class TickertapeAgent(AdvancedStealthAgentBase):
         if price > 500:
             momentum += 0.1
             
-        if volume:
+        if volume is not None:
             if volume > 100000:
                 momentum += 0.1
             if volume > 1000000:

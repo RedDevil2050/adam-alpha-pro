@@ -388,7 +388,7 @@ class TijoriAgent(AdvancedStealthAgentBase):
     
     def _analyze_volume_strength(self, volume: Optional[int]) -> str:
         """Analyze volume strength."""
-        if not volume:
+        if volume is None:
             return "Unknown"
         elif volume > 2000000:
             return "Very High"
