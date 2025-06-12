@@ -133,14 +133,13 @@ class MoneyControlAgent(AdvancedStealthAgentBase):
                         "market_cap": analysis_data.get("market_cap"),
                         "pe_ratio": analysis_data.get("pe_ratio"),
                         "price_validated": True
-                    },
-                    "data_quality": {
+                    },                    "data_quality": {
                         "fusion_confidence": fused_data.fusion_confidence,
                         "validation_score": fused_data.validation_score,
                         "channels_used": fused_data.channels_used,
                         "data_freshness": f"{fused_data.collection_timestamp:.1f}s ago"
                     },
-                    "source": "enhanced_moneycontrol_quad_channel",                },
+                    "source": "enhanced_moneycontrol_quad_channel"                },
                 "error": None,
                 "agent_name": self.agent_name,
             }
@@ -172,7 +171,8 @@ class MoneyControlAgent(AdvancedStealthAgentBase):
                     enriched_data = dict(channel_data)
                     enriched_data["price"] = price
                     return enriched_data
-          # If no price found, still return the first available data for other analysis
+        
+        # If no price found, still return the first available data for other analysis
         for channel in ["primary", "secondary", "tertiary", "emergency"]:
             channel_data = getattr(fused_data, channel)
             if channel_data:
