@@ -113,43 +113,44 @@ async def test_continuous_data_system():
             print(f"⚠️ Shutdown error: {e}")
 
 async def test_data_source_failover():
-    """Test failover between different data sources"""
-    
-    print("\n🔄 Testing Data Source Failover")
-    print("=" * 40)
-    
-    try:
-        # Initialize service
-        await continuous_data_service.initialize()
+        """Test failover between different data sources"""
         
-        # Create session with specific source order
-        failover_sources = [
-            'alpha_vantage_api',  # Will likely hit rate limits
-            'yahoo_finance_api',  # Fallback API
-            'enhanced_moneycontrol',  # Stealth fallback
-            'moneycontrol'  # Final fallback
-        ]
+        print("\n🔄 Testing Data Source Failover")
+        print("=" * 40)
         
-        success = await continuous_data_service.start_custom_session(
-            session_id="failover_test",
-            symbols=['RELIANCE'],
-            data_sources=failover_sources,
-            collection_interval=5  # Fast collection to trigger rate limits
-        )
-        
-        if success:
-            print("✅ Failover test session started")
+        try:
+            # Initialize service
+            await continuous_data_service.initialize()
             
-            # Monitor for 30 seconds to see failover in action
-            print("⏳ Monitoring failover behavior for 30 seconds...")
-            await asyncio.sleep(30)
+            # Create session with specific source order including TrendLyne
+            failover_sources = [
+                'alpha_vantage_api',  # Will likely hit rate limits
+                'yahoo_finance_api',  # Fallback API
+                'enhanced_moneycontrol',  # Stealth fallback
+                'trendlyne',  # Updated TrendLyne agent
+                'moneycontrol'  # Final fallback
+            ]
             
-            # Stop session
-            await continuous_data_service.stop_session("failover_test")
-            print("✅ Failover test completed")
-        
-    except Exception as e:
-        print(f"❌ Failover test failed: {e}")
+            success = await continuous_data_service.start_custom_session(
+                session_id="failover_test",
+                symbols=['RELIANCE', 'TCS'],  # Test multiple symbols
+                data_sources=failover_sources,
+                collection_interval=5  # Fast collection to trigger rate limits
+            )
+            
+            if success:
+                print("✅ Failover test session started")
+                
+                # Monitor for 30 seconds to see failover in action
+                print("⏳ Monitoring failover behavior for 30 seconds...")
+                await asyncio.sleep(30)
+                
+                # Stop session
+                await continuous_data_service.stop_session("failover_test")
+                print("✅ Failover test completed")
+            
+        except Exception as e:
+            print(f"❌ Failover test failed: {e}")
 
 async def test_system_health_monitoring():
     """Test system health monitoring and alerts"""

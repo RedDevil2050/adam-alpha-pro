@@ -66,23 +66,50 @@
 
 #### Critical Alerts (Immediate Response)
 
-- API response time > 2s for 5 minutes
-- Error rate > 5% for 2 minutes
-- System down (health check failing)
-- Database connection failures
+- **System Down**: All data sources failed - no data collection possible
+- **API Failure**: Response time > 2s for 5 minutes consistently
+- **Database Issues**: Connection failures or query timeouts
+- **Authentication Problems**: API key failures or authorization errors
 
 #### Warning Alerts (Monitor & Plan)
 
-- CPU usage > 80% for 10 minutes
-- Memory usage > 85% for 10 minutes
-- Disk usage > 90%
-- Cache hit rate < 60% for 15 minutes
+- **Primary Source Down**: Main data provider failed, using backup sources
+- **Resource Usage**: CPU > 80% or Memory > 85% for 10+ minutes
+- **Performance Degradation**: Cache hit rate < 60% for 15+ minutes
+- **Rate Limiting**: API rate limits being hit frequently
 
-#### Info Alerts (Awareness)
+#### Info Alerts (Awareness Only)
 
-- High traffic volumes
-- New error patterns
-- Unusual agent execution times
+- **Backup Source Issues**: Secondary sources having problems while primary works
+- **High Traffic**: Unusual volumes or usage patterns
+- **Data Quality**: Minor quality issues that don't affect core functionality
+
+#### Suppressed (No Alerts)
+
+- **Idle Backup Sources**: When primary source is working, backup sources naturally idle
+- **Expected Downtime**: Planned maintenance windows
+- **Transient Issues**: Brief network hiccups that self-resolve
+
+### 📊 Smart Alert Logic
+
+```yaml
+Alert Scenarios:
+  critical:
+    - all_sources_failed: "No data collection possible"
+    - system_down: "Health check failures"
+  
+  warning:
+    - primary_failed_backup_working: "Using failover source"
+    - resource_critical: "System resources at limit"
+  
+  info:
+    - backup_degradation: "Non-critical source issues"
+    - performance_notes: "Minor performance observations"
+  
+  suppressed:
+    - idle_backups: "Backup sources idle while primary healthy"
+    - duplicate_alerts: "Same alert within 5 minutes"
+```
 
 ### 📱 Alert Channels
 

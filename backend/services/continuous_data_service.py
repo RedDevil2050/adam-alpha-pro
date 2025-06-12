@@ -341,46 +341,60 @@ class ContinuousDataCollectionService:
         current_time = time.time()
         
         # Check data source health
-        unhealthy_sources = []
+        failing_sources = []
         primary_source_working = False
+        working_sources = []
         
         for source in session.data_sources:
             if source.last_success:
                 time_since_success = current_time - source.last_success
-                if time_since_success > 300:  # 5 minutes without success
-                    unhealthy_sources.append(source.name)
-                else:
-                    # Check if this is the primary source (priority 1)
-                    if source.priority == 1:
+                if time_since_success <= 300:  # Success within last 5 minutes
+                    working_sources.append(source.name)
+                    if source.priority == 1:  # Primary source
                         primary_source_working = True
-            elif source.enabled:  # Never had success but enabled
-                unhealthy_sources.append(source.name)
+                else:
+                    # Only consider it failing if it's been trying and failing
+                    if source.consecutive_failures > 0:
+                        failing_sources.append(source.name)
+            elif source.enabled and source.consecutive_failures > 0:
+                # Never had success but has been failing
+                failing_sources.append(source.name)
         
-        # Only alert about unhealthy sources if:
-        # 1. Primary source is not working, OR
-        # 2. More than half of all sources are unhealthy, OR  
-        # 3. All sources are unhealthy
-        should_alert = (
-            not primary_source_working or 
-            len(unhealthy_sources) > len(session.data_sources) / 2 or
-            len(unhealthy_sources) == len(session.data_sources)
-        )
+        # Improved alert logic: Only alert if there's a real problem
+        should_alert = False
+        alert_level = "session_health"
+        alert_msg = ""
         
-        if unhealthy_sources and should_alert:
-            alert_level = "critical" if not primary_source_working else "session_health"
-            alert_msg = f"Session {session_id} has unhealthy sources: {unhealthy_sources}"
-            if primary_source_working:
-                alert_msg += " (Primary source working, backup sources idle)"
+        if not primary_source_working and len(working_sources) == 0:
+            # CRITICAL: No sources working at all
+            should_alert = True
+            alert_level = "critical"
+            alert_msg = f"Session {session_id} has NO working sources - all data collection failed"
             
+        elif not primary_source_working and len(working_sources) > 0:
+            # WARNING: Primary failed but backups working
+            should_alert = True
+            alert_level = "warning"
+            alert_msg = f"Session {session_id} primary source failed, using backup: {working_sources[0]}"
+            
+        elif primary_source_working and len(failing_sources) > len(session.data_sources) * 0.7:
+            # INFO: Primary working but most backups failing (not critical)
+            should_alert = True
+            alert_level = "info"
+            alert_msg = f"Session {session_id} backup sources degraded: {failing_sources} (Primary source healthy)"
+        
+        # Don't alert about idle backup sources when primary is working fine
+        
+        if should_alert:
             await self._send_alert(alert_msg, alert_level)
         
         # Auto-restart if needed and all sources are failing
-        if session.auto_restart and len(unhealthy_sources) == len(session.data_sources):
-            logger.warning(f"🔄 Auto-restarting session {session_id} due to source failures")
+        if session.auto_restart and len(working_sources) == 0 and len(failing_sources) > 0:
+            logger.warning(f"🔄 Auto-restarting session {session_id} due to complete source failure")
             await self._restart_session(session_id)
         
-        # Return True if session is healthy (primary working or no critical issues)
-        return primary_source_working or len(unhealthy_sources) < len(session.data_sources) / 2
+        # Return True if session is healthy (has at least one working source)
+        return len(working_sources) > 0
     
     async def _check_system_health(self):
         """Check overall system health"""
