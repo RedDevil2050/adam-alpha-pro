@@ -14,7 +14,7 @@ from pathlib import Path
 backend_path = Path(__file__).parent / "backend"
 sys.path.insert(0, str(backend_path))
 
-async def test_single_agent(agent_class, agent_name, symbol, timeout=30):
+async def _test_single_agent(agent_class, agent_name, symbol, timeout=30):
     """Test a single agent with timeout protection"""
     try:
         agent = agent_class()
@@ -85,10 +85,9 @@ async def main():
                 # Import agent class
                 module = __import__(module_path, fromlist=[agent_name])
                 agent_class = getattr(module, agent_name)
-                
-                # Test the agent
+                  # Test the agent
                 total_tests += 1
-                success = await test_single_agent(agent_class, agent_name, symbol)
+                success = await _test_single_agent(agent_class, agent_name, symbol)
                 if success:
                     successful_tests += 1
                     
@@ -120,3 +119,8 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+
+async def test_stealth_agents_simple():
+    """Pytest test function for stealth agents"""
+    await main()

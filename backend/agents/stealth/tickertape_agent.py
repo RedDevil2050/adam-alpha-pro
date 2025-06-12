@@ -1,4 +1,4 @@
-from backend.agents.stealth.enhanced_stealth_base import EnhancedStealthAgentBase
+from backend.agents.stealth.advanced_base import AdvancedStealthAgentBase, QuadChannelData
 from backend.agents.stealth.advanced_base import QuadChannelData
 from backend.agents.stealth.safe_data_utils import (
     safe_numeric_compare, safe_get_price, safe_get_volume, safe_get_float,
@@ -9,12 +9,12 @@ import asyncio
 import random
 from bs4 import BeautifulSoup
 from loguru import logger
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 
 agent_name = "tickertape_agent"
 
 
-class TickertapeAgent(EnhancedStealthAgentBase):
+class TickertapeAgent(AdvancedStealthAgentBase):
     def __init__(self):
         super().__init__()
         self.agent_name = agent_name
@@ -496,6 +496,87 @@ class TickertapeAgent(EnhancedStealthAgentBase):
         except:
             pass
         return recs
+
+    async def _fetch_tickertape_data(self, symbol: str) -> Dict[str, Any]:
+        """Fetch data from TickerTape with proper redirect handling"""
+        headers = {
+            "User-Agent": random.choice(self.user_agents),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Accept-Encoding": "gzip, deflate",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+            "Referer": "https://www.tickertape.in/",
+        }
+        
+        # Try multiple URL patterns
+        url_patterns = [
+            f"https://tickertape.in/stocks/{symbol}",  # Try without www first
+            f"https://www.tickertape.in/stocks/{symbol}",
+            f"https://tickertape.in/stocks/{symbol.lower()}",
+        ]
+        
+        for url in url_patterns:
+            try:
+                async with httpx.AsyncClient(
+                    timeout=30.0,
+                    follow_redirects=True,
+                    headers=headers
+                ) as client:
+                    response = await client.get(url)
+                    
+                    # Log redirect information
+                    if response.history:
+                        logger.info(f"Tickertape: Redirected from {url} to {response.url}")
+                    
+                    if response.status_code == 200:
+                        soup = BeautifulSoup(response.text, "html.parser")
+                        
+                        # Enhanced data extraction with validation
+                        price = self._extract_price_from_tickertape(soup)
+                        volume = self._extract_volume_from_tickertape(soup)
+                        ratios = self._extract_ratios_from_tickertape(soup)
+                        recommendations = self._extract_recommendations_from_tickertape(soup)
+                        
+                        # Validate extracted data
+                        if price is None or price <= 0:
+                            logger.warning(f"Tickertape: Invalid price data for {symbol} from {url}")
+                            continue  # Try next URL pattern
+                        
+                        result = {
+                            "price": price,
+                            "volume": volume,
+                            "ratios": ratios,
+                            "recommendations": recommendations,
+                            "market_cap": ratios.get("market_cap") if ratios else None,
+                            "pe_ratio": ratios.get("pe_ratio") if ratios else None,
+                            "source": "tickertape_primary",
+                            "url_used": str(response.url)
+                        }
+                        
+                        logger.success(f"Tickertape: Successfully fetched data for {symbol} from {url}")
+                        return result
+                    
+                    elif response.status_code in [301, 302]:
+                        # Manual redirect handling if automatic doesn't work
+                        redirect_url = response.headers.get('location')
+                        if redirect_url:
+                            logger.info(f"Tickertape: Manual redirect for {symbol} to {redirect_url}")
+                            continue  # Try next URL pattern instead of manual redirect
+                    else:
+                        logger.warning(f"Tickertape: HTTP {response.status_code} for {symbol} from {url}")
+                        continue  # Try next URL pattern
+                
+            except httpx.RequestError as e:
+                logger.warning(f"Tickertape: Request failed for {symbol} from {url}: {e}")
+                continue  # Try next URL pattern
+            except Exception as e:
+                logger.warning(f"Tickertape: Unexpected error for {symbol} from {url}: {e}")
+                continue  # Try next URL pattern
+        
+        # If all URL patterns failed
+        logger.error(f"Tickertape: All URL patterns failed for {symbol}")
+        return {}
 
 async def run(symbol: str, agent_outputs: dict = {}) -> dict:
     agent = TickertapeAgent()

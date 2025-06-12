@@ -1,4 +1,5 @@
 from backend.agents.stealth.advanced_base import AdvancedStealthAgentBase, QuadChannelData
+from backend.agents.stealth.advanced_base import QuadChannelData
 import httpx
 import asyncio
 import random

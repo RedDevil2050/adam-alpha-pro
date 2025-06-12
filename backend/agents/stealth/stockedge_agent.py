@@ -1,5 +1,4 @@
-from backend.agents.stealth.enhanced_stealth_base import EnhancedStealthAgentBase
-from backend.agents.stealth.advanced_base import QuadChannelData
+from backend.agents.stealth.advanced_base import AdvancedStealthAgentBase, QuadChannelData
 from backend.agents.stealth.safe_data_utils import (
     safe_numeric_compare, safe_get_price, safe_get_volume, safe_get_float,
     safe_rsi_score, validate_indian_market_data
@@ -14,7 +13,7 @@ from typing import Optional, Dict, List
 agent_name = "stockedge_agent"
 
 
-class StockEdgeAgent(EnhancedStealthAgentBase):
+class StockEdgeAgent(AdvancedStealthAgentBase):
     def __init__(self):
         super().__init__()
         self.agent_name = agent_name

@@ -1,4 +1,5 @@
 from backend.agents.stealth.advanced_base import AdvancedStealthAgentBase, QuadChannelData
+from backend.utils.symbol_normalizer_fixed import IndianEquitySymbolNormalizer
 import httpx
 from bs4 import BeautifulSoup
 import numpy as np
@@ -430,13 +431,33 @@ class MoneyControlAgent(AdvancedStealthAgentBase):
         except Exception as e:
             logger.error(f"Feature extraction error: {e}")
         
-        return np.empty((0, 2))
-
-    # Legacy compatibility
+        return np.empty((0, 2))    # Legacy compatibility
     async def _fetch_stealth_data(self, symbol: str) -> dict:
         """Legacy method for backward compatibility."""
         result = await self._fetch_primary_source(symbol)
         return result or {}
+    
+    def _normalize_symbol_for_yahoo(self, symbol: str) -> str:
+        """Normalize symbol for Yahoo Finance API."""
+        return IndianEquitySymbolNormalizer.normalize_for_yahoo_finance(symbol)
+    
+    def _enhance_with_quad_metadata(self, result: dict, fused_data: QuadChannelData) -> dict:
+        """Enhance result with quad-channel metadata."""
+        if not isinstance(result, dict):
+            return result
+            
+        result["quad_channel_metadata"] = {
+            "channels_used": fused_data.channels_used,
+            "fusion_confidence": fused_data.fusion_confidence,
+            "validation_score": fused_data.validation_score,
+            "collection_timestamp": fused_data.collection_timestamp,
+            "data_quality_metrics": {
+                "total_channels": len(fused_data.channels_used),
+                "successful_channels": len([c for c in fused_data.channels_used if getattr(fused_data, c)]),
+                "fusion_method": "weighted_average"
+            }
+        }
+        return result
 
 
 async def run(symbol: str, agent_outputs: dict = {}) -> dict:

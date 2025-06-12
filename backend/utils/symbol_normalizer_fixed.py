@@ -172,9 +172,21 @@ class IndianEquitySymbolNormalizer:
         # For regular equity symbols, add .NS (NSE default)
         if IndianEquitySymbolNormalizer.is_indian_symbol(symbol):
             return f"{symbol}.NS"
-            
-        # If not identified as Indian, return as is (might be international)
+              # If not identified as Indian, return as is (might be international)
         return symbol
+
+    @staticmethod
+    def normalize_for_yahoo(symbol: str) -> str:
+        """
+        Alias for normalize_for_yahoo_finance for backwards compatibility.
+        
+        Args:
+            symbol: Symbol to normalize
+            
+        Returns:
+            str: Symbol formatted for Yahoo Finance
+        """
+        return IndianEquitySymbolNormalizer.normalize_for_yahoo_finance(symbol)
     
     @staticmethod
     def normalize_for_alpha_vantage(symbol: str) -> str:
