@@ -9,12 +9,17 @@ import AuthLayout from '../components/layout/AuthLayout';
 
 // Page Components
 import LoginPage from '../pages/LoginPage';
+import LandingPage from '../pages/LandingPage';
 import DashboardPage from '../pages/DashboardPage';
 import AnalysisPage from '../pages/AnalysisPage';
 import PortfolioPage from '../pages/PortfolioPage';
 import WatchlistPage from '../pages/WatchlistPage';
 import SettingsPage from '../pages/SettingsPage';
 import NotFoundPage from '../pages/NotFoundPage';
+
+// Indian Stock Components
+import IndianStockScreener from '../components/screener/IndianStockScreener';
+import StockDetailPage from '../components/stocks/StockDetailPage';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -46,10 +51,35 @@ const PublicRoute = ({ children }) => {
   return !isAuthenticated ? children : <Navigate to="/dashboard" replace />;
 };
 
+// Root Route Component (handles authentication-based redirects)
+const RootRoute = () => {
+  const { isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <Center h="100vh">
+        <Spinner size="xl" color="brand.500" thickness="4px" />
+      </Center>
+    );
+  }
+
+  return isAuthenticated ? 
+    <Navigate to="/dashboard" replace /> : 
+    <Navigate to="/landing" replace />;
+};
+
 const AppRoutes = () => {
-  return (
-    <Routes>
+  return (    <Routes>
       {/* Public Routes */}
+      <Route
+        path="/landing"
+        element={
+          <PublicRoute>
+            <LandingPage />
+          </PublicRoute>
+        }
+      />
+      
       <Route
         path="/login"
         element={
@@ -104,14 +134,34 @@ const AppRoutes = () => {
             </MainLayout>
           </ProtectedRoute>
         }
-      />
-
-      <Route
+      />      <Route
         path="/watchlist"
         element={
           <ProtectedRoute>
             <MainLayout>
               <WatchlistPage />
+            </MainLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/screener"
+        element={
+          <ProtectedRoute>
+            <MainLayout>
+              <IndianStockScreener />
+            </MainLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/stock/:symbol"
+        element={
+          <ProtectedRoute>
+            <MainLayout>
+              <StockDetailPage />
             </MainLayout>
           </ProtectedRoute>
         }
@@ -128,8 +178,8 @@ const AppRoutes = () => {
         }
       />
 
-      {/* Redirect root to dashboard */}
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      {/* Redirect root based on authentication */}
+      <Route path="/" element={<RootRoute />} />
 
       {/* 404 Page */}
       <Route path="*" element={<NotFoundPage />} />

@@ -53,7 +53,7 @@ import {
   FiTrendingDown,
   FiStar,
   FiEye,
-  FiBarChart3
+  FiBarChart2
 } from 'react-icons/fi';
 
 const MotionBox = motion(Box);
@@ -398,9 +398,8 @@ const WatchlistPage = () => {
                             size="sm"
                             variant="ghost"
                             aria-label="View details"
-                          />
-                          <IconButton
-                            icon={<FiBarChart3 />}
+                          />                          <IconButton
+                            icon={<FiBarChart2 />}
                             size="sm"
                             variant="ghost"
                             aria-label="Analyze"

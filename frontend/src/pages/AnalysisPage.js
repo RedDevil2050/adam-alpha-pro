@@ -48,6 +48,9 @@ import AnalysisResults from '../components/analysis/AnalysisResults';
 import AgentBreakdown from '../components/analysis/AgentBreakdown';
 import TechnicalChart from '../components/analysis/TechnicalChart';
 import RiskAssessment from '../components/analysis/RiskAssessment';
+// Import new components
+import AnimatedBackground from '../components/common/AnimatedBackground';
+import RealTimeAnalysisStream from '../components/analysis/RealTimeAnalysisStream';
 
 const MotionCard = motion(Card);
 
@@ -139,187 +142,161 @@ const AnalysisPage = () => {
   ];
 
   return (
-    <VStack spacing={8} align="stretch">
-      {/* Header */}
-      <Box>
-        <Heading size="lg" mb={2}>
-          Stock Analysis
-        </Heading>
-        <Text color="gray.500">
-          Comprehensive market analysis powered by AI agents
-        </Text>
-      </Box>
+    <AnimatedBackground>
+      <VStack spacing={8} align="stretch" p={6}>
+        {/* Header */}
+        <Box>
+          <Heading size="lg" mb={2} color={useColorModeValue('gray.800', 'white')}>
+            Stock Analysis
+          </Heading>
+          <Text color={useColorModeValue('gray.600', 'gray.300')}>
+            Comprehensive market analysis powered by AI agents
+          </Text>
+        </Box>
 
-      {/* Symbol Search */}
-      <MotionCard
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        bg={cardBg}
-        borderColor={borderColor}
-        borderWidth="1px"
-      >
-        <CardBody>
-          <form onSubmit={handleSymbolSubmit}>
-            <HStack spacing={4}>
-              <InputGroup size="lg" flex={1}>
-                <Input
-                  placeholder="Enter stock symbol (e.g., AAPL, TSLA, RELIANCE.NS)"
-                  value={symbol}
-                  onChange={(e) => setSymbol(e.target.value.toUpperCase())}
-                  bg={useColorModeValue('gray.50', 'gray.700')}
-                  border="1px"
-                  borderColor={useColorModeValue('gray.300', 'gray.600')}
-                  _hover={{ borderColor: 'brand.400' }}
-                  _focus={{ borderColor: 'brand.500' }}
-                />
-                <InputRightElement>
-                  <Search size={20} color="gray.400" />
-                </InputRightElement>
-              </InputGroup>
-              <Button
-                type="submit"
-                colorScheme="brand"
-                size="lg"
-                leftIcon={<BarChart3 size={20} />}
-                isLoading={isValidatingSymbol || isAnalyzing}
-                loadingText="Analyzing..."
-                isDisabled={!symbol.trim()}
+        {/* Symbol Search */}
+        <MotionCard
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          bg={cardBg}
+          borderColor={borderColor}
+          borderWidth="1px"
+          boxShadow="xl"
+        >
+          <CardBody>
+            <form onSubmit={handleSymbolSubmit}>
+              <HStack spacing={4}>
+                <InputGroup size="lg" flex={1}>
+                  <Input
+                    placeholder="Enter stock symbol (e.g., AAPL, TSLA, RELIANCE.NS)"
+                    value={symbol}
+                    onChange={(e) => setSymbol(e.target.value.toUpperCase())}
+                    bg={useColorModeValue('gray.50', 'gray.700')}
+                    border="1px"
+                    borderColor={useColorModeValue('gray.300', 'gray.600')}
+                    _hover={{ borderColor: 'brand.400' }}
+                    _focus={{ borderColor: 'brand.500', boxShadow: '0 0 0 1px var(--chakra-colors-brand-500)' }}
+                  />
+                  <InputRightElement>
+                    <Search size={20} color="gray.400" />
+                  </InputRightElement>
+                </InputGroup>
+                <Button
+                  type="submit"
+                  colorScheme="brand"
+                  size="lg"
+                  leftIcon={<BarChart3 size={20} />}
+                  isLoading={isValidatingSymbol || isAnalyzing}
+                  loadingText="Analyzing..."
+                  isDisabled={!symbol.trim()}
+                  boxShadow="lg"
+                  _hover={{ transform: 'translateY(-2px)', boxShadow: 'xl' }}
+                  transition="all 0.2s"
+                >
+                  Analyze
+                </Button>
+              </HStack>
+            </form>
+          </CardBody>
+        </MotionCard>
+
+        {/* Analysis Categories Overview */}
+        {!analysisSymbol && (
+          <Grid templateColumns={{ base: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }} gap={6}>
+            {analysisCategories.map((category, index) => (
+              <MotionCard
+                key={category.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.1 }}
+                bg={cardBg}
+                borderColor={borderColor}
+                borderWidth="1px"
+                boxShadow="lg"
+                _hover={{ 
+                  transform: 'translateY(-4px)', 
+                  boxShadow: 'xl',
+                  borderColor: `${category.color}.300`
+                }}
+                cursor="pointer"
               >
-                Analyze
-              </Button>
-            </HStack>
-          </form>
-        </CardBody>
-      </MotionCard>
-
-      {/* Analysis Categories Overview */}
-      {!analysisSymbol && (
-        <Grid templateColumns={{ base: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }} gap={6}>
-          {analysisCategories.map((category, index) => (
-            <MotionCard
-              key={category.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-              bg={cardBg}
-              borderColor={borderColor}
-              borderWidth="1px"
-              _hover={{ 
-                transform: 'translateY(-4px)', 
-                boxShadow: 'lg',
-                borderColor: `${category.color}.300`
-              }}
-              cursor="pointer"
-            >
-              <CardBody>
-                <VStack spacing={4}>
-                  <Box
-                    p={4}
-                    borderRadius="xl"
-                    bg={`${category.color}.100`}
-                    color={`${category.color}.600`}
-                  >
-                    <category.icon size={32} />
-                  </Box>
-                  <VStack spacing={2}>
-                    <Heading size="md" textAlign="center">
-                      {category.name}
-                    </Heading>
-                    <Text fontSize="sm" color="gray.500" textAlign="center">
-                      {category.description}
-                    </Text>
-                  </VStack>
-                </VStack>
-              </CardBody>
-            </MotionCard>
-          ))}
-        </Grid>
-      )}
-
-      {/* Analysis Results */}
-      {analysisSymbol && (
-        <>
-          {isAnalyzing && (
-            <Card bg={cardBg} borderColor={borderColor} borderWidth="1px">
-              <CardBody>
-                <VStack spacing={6}>
+                <CardBody>
                   <VStack spacing={4}>
-                    <Spinner size="xl" color="brand.500" thickness="4px" />
-                    <Heading size="md">Analyzing {analysisSymbol}</Heading>
-                    <Text color="gray.500" textAlign="center">
-                      Running comprehensive analysis across multiple AI agents...
-                    </Text>
+                    <Box
+                      p={4}
+                      borderRadius="xl"
+                      bg={`${category.color}.100`}
+                      color={`${category.color}.600`}
+                    >
+                      <category.icon size={32} />
+                    </Box>
+                    <VStack spacing={2}>
+                      <Heading size="md" textAlign="center">
+                        {category.name}
+                      </Heading>
+                      <Text fontSize="sm" color="gray.500" textAlign="center">
+                        {category.description}
+                      </Text>
+                    </VStack>
                   </VStack>
-                  
-                  <Box w="full" maxW="md">
-                    <Progress 
-                      size="lg" 
-                      colorScheme="brand" 
-                      isIndeterminate 
-                      borderRadius="full"
-                    />
-                  </Box>
+                </CardBody>
+              </MotionCard>
+            ))}
+          </Grid>
+        )}
 
-                  <Grid templateColumns="repeat(2, 1fr)" gap={4} w="full" maxW="md">
-                    {analysisCategories.map((category) => (
-                      <HStack key={category.id} spacing={2}>
-                        <Box
-                          p={1}
-                          borderRadius="md"
-                          bg={`${category.color}.100`}
-                          color={`${category.color}.600`}
-                        >
-                          <category.icon size={16} />
-                        </Box>
-                        <Text fontSize="sm">{category.name} Agents</Text>
-                      </HStack>
-                    ))}
-                  </Grid>
-                </VStack>
-              </CardBody>
-            </Card>
-          )}
+        {/* Real-Time Analysis Stream */}
+        {isAnalyzing && analysisSymbol && (
+          <RealTimeAnalysisStream symbol={analysisSymbol} analysisData={isAnalyzing} />
+        )}
 
-          {analysisError && (
-            <Alert status="error" borderRadius="lg">
-              <AlertIcon />
-              <VStack align="start" spacing={1}>
-                <Text fontWeight="medium">Analysis Failed</Text>
-                <Text fontSize="sm">
-                  {analysisError.response?.data?.detail || analysisError.message}
-                </Text>
-              </VStack>
-            </Alert>
-          )}
+        {/* Analysis Results */}
+        {analysisSymbol && !isAnalyzing && analysisData && (
+          <VStack spacing={6} align="stretch">
+            {/* Main Analysis Results */}
+            <AnalysisResults data={analysisData} symbol={analysisSymbol} />
 
-          {analysisData && !isAnalyzing && (
-            <Tabs colorScheme="brand" variant="enclosed">
+            {/* Detailed Analysis Tabs */}
+            <Tabs variant="enclosed" colorScheme="brand">
               <TabList>
-                <Tab>Overview</Tab>
-                <Tab>Technical</Tab>
-                <Tab>Agents</Tab>
-                <Tab>Risk</Tab>
+                <Tab>Agent Breakdown</Tab>
+                <Tab>Technical Chart</Tab>
+                <Tab>Risk Assessment</Tab>
+                <Tab>Market Context</Tab>
               </TabList>
 
               <TabPanels>
-                <TabPanel px={0}>
-                  <AnalysisResults data={analysisData} symbol={analysisSymbol} />
-                </TabPanel>
-                <TabPanel px={0}>
-                  <TechnicalChart symbol={analysisSymbol} data={analysisData} />
-                </TabPanel>
-                <TabPanel px={0}>
+                <TabPanel p={0} pt={6}>
                   <AgentBreakdown data={analysisData} symbol={analysisSymbol} />
                 </TabPanel>
-                <TabPanel px={0}>
-                  <RiskAssessment data={analysisData} symbol={analysisSymbol} />
+                <TabPanel p={0} pt={6}>
+                  <TechnicalChart technicalData={analysisData?.technical} />
+                </TabPanel>
+                <TabPanel p={0} pt={6}>
+                  <RiskAssessment riskData={analysisData?.risk} />
+                </TabPanel>
+                <TabPanel p={0} pt={6}>
+                  <Box>
+                    <Text>Market context analysis coming soon...</Text>
+                  </Box>
                 </TabPanel>
               </TabPanels>
             </Tabs>
-          )}
-        </>
-      )}
-    </VStack>
+          </VStack>
+        )}
+
+        {/* Error Handling */}
+        {analysisError && (
+          <Alert status="error" borderRadius="lg" boxShadow="lg">
+            <AlertIcon />
+            <VStack align="start" spacing={1}>
+              <Text fontWeight="medium">Analysis failed</Text>
+              <Text fontSize="sm">{analysisError.message}</Text>
+            </VStack>
+          </Alert>
+        )}
+      </VStack>
+    </AnimatedBackground>
   );
 };
 

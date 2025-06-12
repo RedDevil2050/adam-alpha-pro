@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authentication Flow Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { border: 1px solid #ccc; padding: 15px; margin: 10px 0; }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+        button { padding: 10px 15px; margin: 5px; cursor: pointer; }
+        #results { white-space: pre-wrap; background: #f5f5f5; padding: 10px; }
+    </style>
+</head>
+<body>
+    <h1>🔐 Zion Indian Stock Platform - Authentication Test</h1>
+    
+    <div class="test-section">
+        <h3>Current Authentication State</h3>
+        <button onclick="checkAuthState()">Check Auth State</button>
+        <button onclick="clearAuth()">Clear Auth</button>
+        <button onclick="loginDemo()">Login as Demo</button>
+    </div>
+    
+    <div class="test-section">
+        <h3>API Test</h3>
+        <button onclick="testSymbolValidation()">Test Symbol Validation</button>
+        <button onclick="testFrontendHealth()">Test Frontend Health</button>
+    </div>
+    
+    <div class="test-section">
+        <h3>Results</h3>
+        <div id="results"></div>
+    </div>
+
+    <script>
+        const log = (message, type = 'info') => {
+            const timestamp = new Date().toLocaleTimeString();
+            const results = document.getElementById('results');
+            results.innerHTML += `[${timestamp}] ${type.toUpperCase()}: ${message}\n`;
+            console.log(`[${timestamp}] ${type.toUpperCase()}: ${message}`);
+        };
+
+        const checkAuthState = () => {
+            const token = localStorage.getItem('token');
+            log(`Token: ${token ? token.substring(0, 30) + '...' : 'None'}`, token ? 'success' : 'error');
+            
+            if (token && token.startsWith('demo-token-')) {
+                log('Demo token detected - should work for Indian stock platform', 'success');
+            } else if (token) {
+                log('Real token detected - needs backend verification', 'info');
+            } else {
+                log('No token found - user not authenticated', 'error');
+            }
+        };
+
+        const clearAuth = () => {
+            localStorage.removeItem('token');
+            log('Authentication cleared', 'info');
+        };
+
+        const loginDemo = () => {
+            const demoToken = 'demo-token-indian-stocks-' + Date.now();
+            localStorage.setItem('token', demoToken);
+            log(`Demo login successful. Token: ${demoToken}`, 'success');
+        };
+
+        const testSymbolValidation = async () => {
+            try {
+                log('Testing symbol validation for RELIANCE...', 'info');
+                const response = await fetch('http://localhost:8000/api/symbols/validate/RELIANCE');
+                const data = await response.json();
+                
+                if (response.ok) {
+                    log(`Symbol validation successful: ${JSON.stringify(data, null, 2)}`, 'success');
+                } else {
+                    log(`Symbol validation failed: ${JSON.stringify(data, null, 2)}`, 'error');
+                }
+            } catch (error) {
+                log(`Symbol validation error: ${error.message}`, 'error');
+            }
+        };
+
+        const testFrontendHealth = async () => {
+            try {
+                log('Testing frontend accessibility...', 'info');
+                const response = await fetch('http://localhost:3000');
+                
+                if (response.ok) {
+                    log(`Frontend is accessible (${response.status})`, 'success');
+                } else {
+                    log(`Frontend returned ${response.status}`, 'error');
+                }
+            } catch (error) {
+                log(`Frontend test error: ${error.message}`, 'error');
+            }
+        };
+
+        // Auto-check on load
+        window.onload = () => {
+            log('=== Authentication Flow Test Started ===', 'info');
+            checkAuthState();
+        };
+    </script>
+</body>
+</html>

@@ -24,7 +24,7 @@ import {
   FiTrendingDown, 
   FiAlertTriangle, 
   FiShield,
-  FiBarChart3,
+  FiBarChart2,
   FiPieChart
 } from 'react-icons/fi';
 
@@ -119,9 +119,8 @@ const RiskAssessment = ({ riskData }) => {
                 {/* Market Risk */}
                 {riskData.risk_factors.market_risk && (
                   <Box p={4} borderRadius="md" bg={useColorModeValue('gray.50', 'gray.700')}>
-                    <HStack justify="space-between" mb={2}>
-                      <HStack>
-                        <Icon as={FiBarChart3} color="blue.500" />
+                    <HStack justify="space-between" mb={2}>                      <HStack>
+                        <Icon as={FiBarChart2} color="blue.500" />
                         <Text fontSize="sm" fontWeight="semibold">Market Risk</Text>
                       </HStack>
                       <Badge colorScheme={getRiskColor(riskData.risk_factors.market_risk.level)}>

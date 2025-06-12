@@ -43,7 +43,7 @@ import {
   FiTrendingDown, 
   FiDollarSign,
   FiPercent,
-  FiBarChart3,
+  FiBarChart2,
   FiRefreshCw,
   FiSettings
 } from 'react-icons/fi';

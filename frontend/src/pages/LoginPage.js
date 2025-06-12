@@ -141,9 +141,7 @@ const LoginPage = () => {
                     />
                   </InputRightElement>
                 </InputGroup>
-              </FormControl>
-
-              <Button
+              </FormControl>              <Button
                 type="submit"
                 colorScheme="brand"
                 size="lg"
@@ -159,21 +157,43 @@ const LoginPage = () => {
               >
                 Sign In
               </Button>
+                <Button
+                onClick={async () => {
+                  setFormData({ username: 'demo', password: 'demo' });
+                  setIsLoading(true);
+                  setError('');
+                  
+                  const result = await login({ username: 'demo', password: 'demo' });
+                  if (!result.success) {
+                    setError(result.error);
+                  }
+                  setIsLoading(false);
+                }}
+                colorScheme="green"
+                variant="outline"
+                size="md"
+                w="full"
+                isLoading={isLoading}
+                loadingText="Signing in..."
+              >
+                🚀 Quick Demo Access (Indian Stocks)
+              </Button>
             </VStack>
           </form>
-        </Box>
-
-        <Box w="full">
+        </Box>        <Box w="full">
           <Divider mb={4} />
           <VStack spacing={3}>
             <Text fontSize="sm" color="gray.500" textAlign="center">
-              Demo Credentials for Testing
+              🇮🇳 Indian Stock Analysis Platform - Demo Access
             </Text>
             <HStack spacing={4} fontSize="xs" color="gray.400">
-              <Text>Username: <strong>admin</strong></Text>
+              <Text>Username: <strong>demo</strong></Text>
               <Text>•</Text>
-              <Text>Password: <strong>changeme</strong></Text>
+              <Text>Password: <strong>demo</strong></Text>
             </HStack>
+            <Text fontSize="xs" color="gray.400" textAlign="center">
+              Use demo credentials to access the Trendlyne-style Indian stock screener
+            </Text>
           </VStack>
         </Box>
       </VStack>

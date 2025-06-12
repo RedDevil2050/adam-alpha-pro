@@ -42,6 +42,12 @@ import MarketOverviewCard from '../components/dashboard/MarketOverviewCard';
 import QuickAnalysisCard from '../components/dashboard/QuickAnalysisCard';
 import RecentAnalyses from '../components/dashboard/RecentAnalyses';
 import SystemHealthCard from '../components/dashboard/SystemHealthCard';
+// Import new loveable components
+import AnimatedBackground from '../components/common/AnimatedBackground';
+import MarketPulse from '../components/dashboard/MarketPulse';
+import SystemHealthWidget from '../components/widgets/SystemHealthWidget';
+import SmartWatchlist from '../components/widgets/SmartWatchlist';
+import FloatingActionButton from '../components/common/FloatingActionButton';
 
 const MotionCard = motion(Card);
 
@@ -80,6 +86,26 @@ const DashboardPage = () => {
     }
   };
 
+  const handleFloatingAction = (action) => {
+    switch (action) {
+      case 'analyze':
+        navigate('/analysis');
+        break;
+      case 'alert':
+        // Open alerts modal or navigate to alerts
+        console.log('Open alerts');
+        break;
+      case 'portfolio':
+        navigate('/portfolio');
+        break;
+      case 'watchlist':
+        navigate('/watchlist');
+        break;
+      default:
+        break;
+    }
+  };
+
   const quickStats = [
     {
       label: 'Analyses Today',
@@ -112,136 +138,155 @@ const DashboardPage = () => {
   ];
 
   return (
-    <VStack spacing={8} align="stretch">
-      {/* Header Section */}
-      <Box>
-        <Heading size="lg" mb={2}>
-          Market Analysis Dashboard
-        </Heading>
-        <Text color="gray.500">
-          Real-time insights powered by advanced AI agents
-        </Text>
-      </Box>
+    <AnimatedBackground>
+      <VStack spacing={8} align="stretch" p={6}>
+        {/* Header Section */}
+        <Box>
+          <Heading size="lg" mb={2} color={useColorModeValue('gray.800', 'white')}>
+            Market Analysis Dashboard
+          </Heading>
+          <Text color={useColorModeValue('gray.600', 'gray.300')}>
+            Real-time insights powered by advanced AI agents
+          </Text>
+        </Box>
 
-      {/* Quick Search */}
-      <MotionCard
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        bg={cardBg}
-        borderColor={borderColor}
-        borderWidth="1px"
-      >
-        <CardBody>
-          <form onSubmit={handleSearch}>
-            <HStack spacing={4}>
-              <InputGroup size="lg" flex={1}>
-                <Input
-                  placeholder="Enter stock symbol (e.g., AAPL, TSLA, MSFT)"
-                  value={searchSymbol}
-                  onChange={(e) => setSearchSymbol(e.target.value.toUpperCase())}
-                  bg={useColorModeValue('gray.50', 'gray.700')}
-                  border="1px"
-                  borderColor={useColorModeValue('gray.300', 'gray.600')}
-                  _hover={{ borderColor: 'brand.400' }}
-                  _focus={{ borderColor: 'brand.500' }}
-                />
-                <InputRightElement>
-                  <Search size={20} color="gray.400" />
-                </InputRightElement>
-              </InputGroup>
-              <Button
-                type="submit"
-                colorScheme="brand"
-                size="lg"
-                leftIcon={<BarChart3 size={20} />}
-                isDisabled={!searchSymbol.trim()}
-              >
-                Analyze
-              </Button>
-            </HStack>
-          </form>
-        </CardBody>
-      </MotionCard>
+        {/* Quick Search */}
+        <MotionCard
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          bg={cardBg}
+          borderColor={borderColor}
+          borderWidth="1px"
+          boxShadow="xl"
+        >
+          <CardBody>
+            <form onSubmit={handleSearch}>
+              <HStack spacing={4}>
+                <InputGroup size="lg" flex={1}>
+                  <Input
+                    placeholder="Enter stock symbol (e.g., AAPL, TSLA, RELIANCE.NS)"
+                    value={searchSymbol}
+                    onChange={(e) => setSearchSymbol(e.target.value.toUpperCase())}
+                    bg={useColorModeValue('gray.50', 'gray.700')}
+                    border="1px"
+                    borderColor={useColorModeValue('gray.300', 'gray.600')}
+                    _hover={{ borderColor: 'brand.400' }}
+                    _focus={{ borderColor: 'brand.500', boxShadow: '0 0 0 1px var(--chakra-colors-brand-500)' }}
+                  />
+                  <InputRightElement>
+                    <Search size={20} color="gray.400" />
+                  </InputRightElement>
+                </InputGroup>
+                <Button
+                  type="submit"
+                  colorScheme="brand"
+                  size="lg"
+                  leftIcon={<BarChart3 size={20} />}
+                  isDisabled={!searchSymbol.trim()}
+                  boxShadow="lg"
+                  _hover={{ transform: 'translateY(-2px)', boxShadow: 'xl' }}
+                  transition="all 0.2s"
+                >
+                  Analyze
+                </Button>
+              </HStack>
+            </form>
+          </CardBody>
+        </MotionCard>
 
-      {/* Quick Stats Grid */}
-      <Grid templateColumns={{ base: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }} gap={6}>
-        {quickStats.map((stat, index) => (
-          <MotionCard
-            key={stat.label}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: index * 0.1 }}
-            bg={cardBg}
-            borderColor={borderColor}
-            borderWidth="1px"
-            _hover={{ transform: 'translateY(-2px)', boxShadow: 'lg' }}
-            cursor="pointer"
-          >
-            <CardBody>
-              <Stat>
-                <Flex justify="space-between" align="start">
-                  <Box>
-                    <StatLabel fontSize="sm" color="gray.500">
-                      {stat.label}
-                    </StatLabel>
-                    <StatNumber fontSize="2xl" fontWeight="bold">
-                      {stat.value}
-                    </StatNumber>
-                    {stat.change !== 0 && (
-                      <StatHelpText mb={0}>
-                        <StatArrow type={stat.change > 0 ? 'increase' : 'decrease'} />
-                        {Math.abs(stat.change)}%
-                      </StatHelpText>
-                    )}
-                  </Box>
-                  <Box
-                    p={3}
-                    borderRadius="lg"
-                    bg={`${stat.color}.100`}
-                    color={`${stat.color}.600`}
-                  >
-                    <stat.icon size={24} />
-                  </Box>
-                </Flex>
-              </Stat>
-            </CardBody>
-          </MotionCard>
-        ))}
-      </Grid>
+        {/* Enhanced Quick Stats Grid */}
+        <Grid templateColumns={{ base: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }} gap={6}>
+          {quickStats.map((stat, index) => (
+            <MotionCard
+              key={stat.label}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: index * 0.1 }}
+              bg={cardBg}
+              borderColor={borderColor}
+              borderWidth="1px"
+              boxShadow="lg"              _hover={{ 
+                transform: 'translateY(-4px)', 
+                boxShadow: 'xl',
+                borderColor: `${stat.color}.300`
+              }}
+              cursor="pointer"
+            >
+              <CardBody>
+                <Stat>
+                  <Flex justify="space-between" align="start">
+                    <Box>
+                      <StatLabel fontSize="sm" color="gray.500">
+                        {stat.label}
+                      </StatLabel>
+                      <StatNumber fontSize="2xl" fontWeight="bold">
+                        {stat.value}
+                      </StatNumber>
+                      {stat.change !== 0 && (
+                        <StatHelpText mb={0}>
+                          <StatArrow type={stat.change > 0 ? 'increase' : 'decrease'} />
+                          {Math.abs(stat.change)}%
+                        </StatHelpText>
+                      )}
+                    </Box>
+                    <Box
+                      p={3}
+                      borderRadius="xl"
+                      bg={`${stat.color}.100`}
+                      color={`${stat.color}.600`}
+                    >
+                      <stat.icon size={24} />
+                    </Box>
+                  </Flex>
+                </Stat>
+              </CardBody>
+            </MotionCard>
+          ))}
+        </Grid>
 
-      {/* Main Content Grid */}
-      <Grid templateColumns={{ base: '1fr', lg: '2fr 1fr' }} gap={8}>
-        {/* Left Column */}
-        <VStack spacing={6} align="stretch">
-          {/* Market Overview */}
-          <MarketOverviewCard data={marketData} isLoading={marketLoading} error={marketError} />
-          
-          {/* Quick Analysis */}
-          <QuickAnalysisCard />
-        </VStack>
+        {/* Main Content Grid - Enhanced Layout */}
+        <Grid templateColumns={{ base: '1fr', lg: '2fr 1fr' }} gap={8}>
+          {/* Left Column */}
+          <VStack spacing={6} align="stretch">
+            {/* Market Overview */}
+            <MarketOverviewCard data={marketData} isLoading={marketLoading} error={marketError} />
+            
+            {/* Quick Analysis */}
+            <QuickAnalysisCard />
 
-        {/* Right Column */}
-        <VStack spacing={6} align="stretch">
-          {/* System Health */}
-          <SystemHealthCard data={healthData} isLoading={healthLoading} />
-          
-          {/* Recent Analyses */}
-          <RecentAnalyses />
-        </VStack>
-      </Grid>
-
-      {/* Error Handling */}
-      {marketError && (
-        <Alert status="warning" borderRadius="lg">
-          <AlertIcon />
-          <VStack align="start" spacing={1}>
-            <Text fontWeight="medium">Market data temporarily unavailable</Text>
-            <Text fontSize="sm">Some features may be limited until connection is restored.</Text>
+            {/* Market Pulse - New Component */}
+            <MarketPulse />
           </VStack>
-        </Alert>
-      )}
-    </VStack>
+
+          {/* Right Column */}
+          <VStack spacing={6} align="stretch">
+            {/* Enhanced System Health */}
+            <SystemHealthWidget data={healthData} />
+            
+            {/* Smart Watchlist - New Component */}
+            <SmartWatchlist />
+            
+            {/* Recent Analyses */}
+            <RecentAnalyses />
+          </VStack>
+        </Grid>
+
+        {/* Error Handling */}
+        {marketError && (
+          <Alert status="warning" borderRadius="lg" boxShadow="lg">
+            <AlertIcon />
+            <VStack align="start" spacing={1}>
+              <Text fontWeight="medium">Market data temporarily unavailable</Text>
+              <Text fontSize="sm">Some features may be limited until connection is restored.</Text>
+            </VStack>
+          </Alert>
+        )}
+      </VStack>
+
+      {/* Floating Action Button */}
+      <FloatingActionButton onClick={handleFloatingAction} />
+    </AnimatedBackground>
   );
 };
 
