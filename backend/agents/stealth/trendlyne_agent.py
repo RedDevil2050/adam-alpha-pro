@@ -1,16 +1,21 @@
-from backend.agents.stealth.advanced_base import AdvancedStealthAgentBase, QuadChannelData
+from backend.agents.stealth.enhanced_stealth_base import EnhancedStealthAgentBase
+from backend.agents.stealth.advanced_base import QuadChannelData
+from backend.agents.stealth.safe_data_utils import (
+    safe_numeric_compare, safe_get_price, safe_get_volume, safe_get_float,
+    validate_indian_market_data
+)
 import httpx
 from bs4 import BeautifulSoup
 from loguru import logger
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 agent_name = "trendlyne_agent"
 
 
-class TrendlyneAgent(AdvancedStealthAgentBase):
+class TrendlyneAgent(EnhancedStealthAgentBase):
     """
-    Enhanced TrendLyne agent with quad-channel architecture:
-    - Primary: TrendLyne website scraping
+    Enhanced TrendLyne agent with quad-channel architecture and URL fallbacks:
+    - Primary: TrendLyne website scraping with multiple URL patterns
     - Secondary: Yahoo Finance API
     - Tertiary: Alpha Vantage API  
     - Emergency: Polygon.io API
@@ -30,10 +35,25 @@ class TrendlyneAgent(AdvancedStealthAgentBase):
         
         logger.info(f"🚀 Enhanced TrendLyne Agent initialized with quad-channel support")
     
+    def _get_url_patterns(self) -> Dict[str, List[str]]:
+        """URL patterns for TrendLyne with comprehensive fallbacks"""
+        return {
+            'trendlyne': [
+                'https://trendlyne.com/equity/{symbol}/',
+                'https://www.trendlyne.com/equity/{symbol}',
+                'https://trendlyne.com/stocks/{symbol}',
+                'https://www.trendlyne.com/stocks/{symbol}/',
+                'https://trendlyne.com/equity/{symbol}.NSE',
+                'https://trendlyne.com/equity/{symbol}.BSE',
+                'https://www.trendlyne.com/equity/{symbol_lower}',
+                'https://trendlyne.com/symbol/{symbol}',
+                'https://trendlyne.com/companies/{symbol_lower}'
+            ]
+        }
     async def _fetch_primary_source(self, symbol: str) -> Optional[Dict]:
-        """Fetch data from TrendLyne website (primary source)."""
-        try:
-            url = f"https://trendlyne.com/equity/{symbol}/"
+        """Enhanced TrendLyne primary source with fallback URLs and circuit breakers."""
+        
+        async def _fetch_trendlyne_data():
             headers = {
                 "User-Agent": self.user_agents[0],
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
@@ -41,30 +61,56 @@ class TrendlyneAgent(AdvancedStealthAgentBase):
                 "Accept-Encoding": "gzip, deflate, br",
                 "Referer": "https://trendlyne.com/",
                 "Connection": "keep-alive",
-                "Upgrade-Insecure-Requests": "1"
+                "Upgrade-Insecure-Requests": "1",
+                "Cache-Control": "no-cache"
             }
             
-            async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
-                response = await client.get(url, headers=headers)
+            async with httpx.AsyncClient(timeout=12, follow_redirects=True) as client:
+                # Try to find working URL with fallback
+                working_url = await self._find_working_url('trendlyne', symbol, client)
+                
+                if not working_url:
+                    # Fallback to default URL
+                    working_url = f"https://trendlyne.com/equity/{symbol}/"
+                
+                response = await client.get(working_url, headers=headers)
                 
                 if response.status_code == 200:
                     soup = BeautifulSoup(response.text, "html.parser")
                     
-                    return {
-                        "price": self._extract_price(soup),
+                    # Enhanced data extraction with validation
+                    price = self._extract_price(soup)
+                    volume = self._extract_volume(soup)
+                    
+                    # Validate extracted data
+                    if price is None or price <= 0:
+                        logger.warning(f"TrendLyne: Invalid price data for {symbol}")
+                        return None
+                    
+                    result = {
+                        "price": price,
                         "technicals": self._extract_technicals(soup),
                         "signals": self._extract_signals(soup),
-                        "volume": self._extract_volume(soup),
+                        "volume": volume,
                         "ratings": self._extract_ratings(soup),
-                        "source": "trendlyne_primary"
+                        "source": "trendlyne_primary",
+                        "url_used": working_url
                     }
+                    
+                    return result
+                elif response.status_code == 404:
+                    logger.warning(f"TrendLyne: Symbol not found {symbol} (404)")
+                    return None
+                elif response.status_code == 429:
+                    logger.warning(f"TrendLyne: Rate limited for {symbol}")
+                    raise Exception("Rate limit exceeded")
                 else:
-                    logger.warning(f"TrendLyne returned status {response.status_code} for {symbol}")
+                    logger.warning(f"TrendLyne: HTTP {response.status_code} for {symbol}")
                     return None
                     
-        except Exception as e:
-            logger.warning(f"TrendLyne primary fetch failed for {symbol}: {e}")
-            return None
+        return await self._enhanced_fetch_with_fallback(
+            "trendlyne_primary", symbol, _fetch_trendlyne_data
+        )
     
     async def _execute_analysis(self, symbol: str, agent_outputs: dict, fused_data: QuadChannelData) -> Dict:
         """Execute enhanced analysis using quad-channel fused data."""
@@ -114,30 +160,6 @@ class TrendlyneAgent(AdvancedStealthAgentBase):
             logger.error(f"❌ Enhanced TrendLyne analysis error for {symbol}: {e}")
             return self._error_response(symbol, str(e))
     
-    def _extract_best_data(self, fused_data: QuadChannelData) -> Dict:
-        """Extract the best available data from quad-channel fusion."""
-        
-        # Priority order: primary -> secondary -> tertiary -> emergency
-        for channel in ["primary", "secondary", "tertiary", "emergency"]:
-            channel_data = getattr(fused_data, channel)
-            if channel_data:
-                # Check for price data in various formats
-                price = None
-                for price_key in ["price", "close", "last", "current_price", "ltp"]:
-                    if price_key in channel_data and channel_data[price_key]:
-                        try:
-                            price = float(str(channel_data[price_key]).replace(',', '').replace('₹', '').replace('$', ''))
-                            if 10 <= price <= 100000:  # Reasonable range for Indian stocks
-                                break
-                        except (ValueError, TypeError):
-                            continue
-                
-                if price:
-                    logger.debug(f"Using {channel} channel data for analysis with price {price}")
-                    # Ensure we have the price field
-                    enriched_data = dict(channel_data)
-                    enriched_data["price"] = price
-                    return enriched_data
     def _extract_best_data(self, fused_data: QuadChannelData) -> Dict:
         """Extract the best available data from quad-channel fusion."""
         

@@ -1,4 +1,9 @@
-from backend.agents.stealth.advanced_base import AdvancedStealthAgentBase, QuadChannelData
+from backend.agents.stealth.enhanced_stealth_base import EnhancedStealthAgentBase
+from backend.agents.stealth.advanced_base import QuadChannelData
+from backend.agents.stealth.safe_data_utils import (
+    safe_numeric_compare, safe_get_price, safe_get_volume, safe_get_float,
+    validate_indian_market_data
+)
 import httpx
 import asyncio
 import random
@@ -9,10 +14,28 @@ from typing import Optional, Dict, List
 agent_name = "tickertape_agent"
 
 
-class TickertapeAgent(AdvancedStealthAgentBase):
+class TickertapeAgent(EnhancedStealthAgentBase):
+    def __init__(self):
+        super().__init__()
+        self.agent_name = agent_name
+    
+    def _get_url_patterns(self) -> Dict[str, List[str]]:
+        """URL patterns for Tickertape with fallbacks"""
+        return {
+            'tickertape': [
+                'https://www.tickertape.in/stocks/{symbol}',
+                'https://tickertape.in/stocks/{symbol}',
+                'https://www.tickertape.in/stocks/{symbol_lower}',
+                'https://tickertape.in/equity/{symbol}',
+                'https://www.tickertape.in/equity/{symbol_lower}',
+                'https://tickertape.in/stock/{symbol}',
+                'https://www.tickertape.in/screener/equity/{symbol}'
+            ]
+        }
     async def _fetch_primary_source(self, symbol: str) -> Optional[Dict]:
-        """Fetch data from Tickertape primary source with stealth scraping."""
-        try:
+        """Enhanced Tickertape primary source with fallback URLs and circuit breakers."""
+        
+        async def _fetch_tickertape_data():
             headers = {
                 "User-Agent": random.choice(self.user_agents),
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -20,40 +43,61 @@ class TickertapeAgent(AdvancedStealthAgentBase):
                 "Accept-Encoding": "gzip, deflate",
                 "Connection": "keep-alive",
                 "Upgrade-Insecure-Requests": "1",
+                "Referer": "https://www.tickertape.in/",
             }
             
-            # Add random delay for stealth
+            # Add adaptive delay
             await asyncio.sleep(random.uniform(0.3, 1.5))
             
-            async with httpx.AsyncClient(timeout=8, headers=headers) as client:
-                # Try Tickertape URL pattern
-                url = f"https://www.tickertape.in/stocks/{symbol.lower()}"
-                response = await client.get(url)
+            async with httpx.AsyncClient(timeout=12, headers=headers) as client:
+                # Try to find working URL with fallback
+                working_url = await self._find_working_url('tickertape', symbol, client)
+                
+                if not working_url:
+                    # Fallback to default URL
+                    working_url = f"https://www.tickertape.in/stocks/{symbol.lower()}"
+                
+                response = await client.get(working_url)
                 
                 if response.status_code == 200:
                     soup = BeautifulSoup(response.text, "html.parser")
                     
-                    # Extract financial data
+                    # Enhanced data extraction with validation
                     price = self._extract_price_from_tickertape(soup)
                     volume = self._extract_volume_from_tickertape(soup)
                     ratios = self._extract_ratios_from_tickertape(soup)
                     recommendations = self._extract_recommendations_from_tickertape(soup)
                     
-                    return {
+                    # Validate extracted data
+                    if price is None or price <= 0:
+                        logger.warning(f"Tickertape: Invalid price data for {symbol}")
+                        return None
+                    
+                    result = {
                         "price": price,
                         "volume": volume,
                         "ratios": ratios,
                         "recommendations": recommendations,
-                        "market_cap": ratios.get("market_cap"),
-                        "pe_ratio": ratios.get("pe_ratio"),
-                        "source": "tickertape_primary"
+                        "market_cap": ratios.get("market_cap") if ratios else None,
+                        "pe_ratio": ratios.get("pe_ratio") if ratios else None,
+                        "source": "tickertape_primary",
+                        "url_used": working_url
                     }
                     
-        except Exception as e:
-            logger.warning(f"Tickertape primary source failed for {symbol}: {e}")
-            return None
-        
-        return None
+                    return result
+                elif response.status_code == 429:
+                    logger.warning(f"Tickertape: Rate limited for {symbol}")
+                    raise Exception("Rate limit exceeded")
+                elif response.status_code == 500:
+                    logger.warning(f"Tickertape: Server error for {symbol}")
+                    raise Exception("Server error")
+                else:
+                    logger.warning(f"Tickertape: HTTP {response.status_code} for {symbol}")
+                    return None
+                    
+        return await self._enhanced_fetch_with_fallback(
+            "tickertape_primary", symbol, _fetch_tickertape_data
+        )
     
     def _extract_price_from_tickertape(self, soup) -> Optional[float]:
         """Extract current price from Tickertape page."""

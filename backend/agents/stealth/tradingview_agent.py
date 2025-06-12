@@ -1,4 +1,9 @@
-from backend.agents.stealth.advanced_base import AdvancedStealthAgentBase, QuadChannelData
+from backend.agents.stealth.enhanced_stealth_base import EnhancedStealthAgentBase
+from backend.agents.stealth.advanced_base import QuadChannelData
+from backend.agents.stealth.safe_data_utils import (
+    safe_numeric_compare, safe_get_price, safe_get_volume, safe_get_float,
+    safe_rsi_score, validate_indian_market_data
+)
 import httpx, numpy as np
 import asyncio
 import random
@@ -11,14 +16,29 @@ agent_name = "tradingview_agent"
 category = "stealth"
 
 
-class TradingViewAgent(AdvancedStealthAgentBase):
+class TradingViewAgent(EnhancedStealthAgentBase):
     def __init__(self):
         super().__init__()
         self.agent_name = agent_name
     
+    def _get_url_patterns(self) -> Dict[str, List[str]]:
+        """URL patterns for TradingView with fallbacks"""
+        return {
+            'tradingview': [
+                'https://www.tradingview.com/symbols/NSE-{symbol}/',
+                'https://tradingview.com/symbols/NSE-{symbol}',
+                'https://www.tradingview.com/symbols/BSE-{symbol}/',
+                'https://in.tradingview.com/symbols/NSE-{symbol}/',
+                'https://www.tradingview.com/chart/NSE:{symbol}/',
+                'https://tradingview.com/chart/{symbol}',
+                'https://www.tradingview.com/symbols/{symbol_lower}'
+            ]
+        }
+    
     async def _fetch_primary_source(self, symbol: str) -> Optional[Dict]:
-        """Fetch data from TradingView primary source with stealth scraping."""
-        try:
+        """Enhanced TradingView primary source with fallback URLs and circuit breakers."""
+        
+        async def _fetch_tradingview_data():
             headers = {
                 "User-Agent": random.choice(self.user_agents),
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -27,38 +47,61 @@ class TradingViewAgent(AdvancedStealthAgentBase):
                 "Connection": "keep-alive",
                 "Referer": "https://www.google.com/",
                 "Upgrade-Insecure-Requests": "1",
+                "Cache-Control": "no-cache",
             }
             
-            # Add random delay for stealth
+            # Add adaptive delay
             await asyncio.sleep(random.uniform(0.8, 2.5))
             
-            async with httpx.AsyncClient(timeout=8, headers=headers) as client:
-                # Try TradingView symbol page
-                url = f"https://www.tradingview.com/symbols/NSE-{symbol}/"
-                response = await client.get(url)
+            async with httpx.AsyncClient(timeout=15, headers=headers) as client:
+                # Try to find working URL with fallback
+                working_url = await self._find_working_url('tradingview', symbol, client)
+                
+                if not working_url:
+                    # Fallback to default URL
+                    working_url = f"https://www.tradingview.com/symbols/NSE-{symbol}/"
+                
+                response = await client.get(working_url)
                 
                 if response.status_code == 200:
                     soup = BeautifulSoup(response.text, "html.parser")
                     
-                    # Extract comprehensive TradingView data
+                    # Enhanced data extraction with safe utilities
                     price = self._extract_price_from_tradingview(soup)
                     volume = self._extract_volume_from_tradingview(soup)
                     technicals = self._extract_technicals_from_tradingview(soup)
                     chart_data = self._extract_chart_data_from_tradingview(soup)
                     
-                    return {
+                    # Validate extracted data
+                    if price is None or price <= 0:
+                        logger.warning(f"TradingView: Invalid price data for {symbol}")
+                        return None
+                    
+                    result = {
                         "price": price,
                         "volume": volume,
                         "technicals": technicals,
                         "chart_data": chart_data,
-                        "oscillators": technicals.get("oscillators", {}),
-                        "moving_averages": technicals.get("moving_averages", {}),
-                        "source": "tradingview_primary"
+                        "oscillators": technicals.get("oscillators", {}) if technicals else {},
+                        "moving_averages": technicals.get("moving_averages", {}) if technicals else {},
+                        "source": "tradingview_primary",
+                        "url_used": working_url
                     }
                     
-        except Exception as e:
-            logger.warning(f"TradingView primary source failed for {symbol}: {e}")
-            return None
+                    return result
+                elif response.status_code == 429:
+                    logger.warning(f"TradingView: Rate limited for {symbol}")
+                    raise Exception("Rate limit exceeded")
+                elif response.status_code == 403:
+                    logger.warning(f"TradingView: Access forbidden for {symbol}")
+                    raise Exception("Access forbidden - possible bot detection")
+                else:
+                    logger.warning(f"TradingView: HTTP {response.status_code} for {symbol}")
+                    return None
+                    
+        return await self._enhanced_fetch_with_fallback(
+            "tradingview_primary", symbol, _fetch_tradingview_data
+        )
         
         return None
     
@@ -315,15 +358,15 @@ class TradingViewAgent(AdvancedStealthAgentBase):
         
         return None
     
-    def _extract_best_volume(self, fused_data: QuadChannelData) -> Optional[int]:
-        """Extract the best volume from available channels."""
+    def _extract_best_volume(self, fused_data: QuadChannelData) -> int:
+        """Extract the best volume from available channels, never return None."""
         for channel in ["primary", "secondary", "tertiary", "emergency"]:
             channel_data = getattr(fused_data, channel)
             if channel_data and "volume" in channel_data:
                 volume = channel_data["volume"]
                 if isinstance(volume, (int, float)) and volume > 0:
                     return int(volume)
-        return None
+        return 0  # Return 0 instead of None to prevent NoneType errors
     
     def _extract_best_technicals(self, fused_data: QuadChannelData) -> Dict:
         """Extract and merge technical indicators from all channels."""
@@ -516,33 +559,30 @@ class TradingViewAgent(AdvancedStealthAgentBase):
             # Technical indicators analysis
             indicators = technicals.get("indicators", {})
             
-            # RSI analysis
-            rsi = indicators.get("rsi")
-            if rsi:
-                if rsi < 30:  # Oversold
-                    score += 0.15
-                elif rsi > 70:  # Overbought
-                    score -= 0.15
-                elif 40 <= rsi <= 60:  # Neutral zone
-                    score += 0.05
+            # RSI analysis with safe comparison
+            rsi = safe_get_float(indicators, "rsi", 0)
+            rsi_score = safe_rsi_score(rsi, 0.0)
+            score += rsi_score
             
-            # MACD analysis
-            macd = indicators.get("macd")
-            if macd and macd > 0:  # Above signal line
+            # MACD analysis with safe comparison
+            macd = safe_get_float(indicators, "macd", 0)
+            if macd > 0:  # Above signal line
                 score += 0.1
-            elif macd and macd < 0:
+            elif macd < 0:
+                score -= 0.1
                 score -= 0.1
             
             # Moving averages analysis
             mas = technicals.get("moving_averages", {})
             ma_signals = 0
+            current_price = self._extract_best_price(fused_data)  # Extract once outside loop
+            
             for ma_name, ma_value in mas.items():
                 if ma_value and isinstance(ma_value, (int, float)):
-                    # Compare with current price (approximate)
-                    current_price = self._extract_best_price(fused_data)
-                    if current_price is not None and current_price > ma_value:
+                    # Use safe comparison with current price
+                    if safe_numeric_compare(current_price, ma_value, 0):
                         ma_signals += 1
-                    elif current_price is not None:
+                    elif current_price is not None and current_price <= ma_value:
                         ma_signals -= 1
             
             if len(mas) > 0:

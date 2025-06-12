@@ -131,15 +131,16 @@ class MoneyControlAgent(AdvancedStealthAgentBase):
                         "current_price": analysis_data.get("price"),
                         "volume": analysis_data.get("volume"),
                         "market_cap": analysis_data.get("market_cap"),
-                        "pe_ratio": analysis_data.get("pe_ratio"),
-                        "price_validated": True
-                    },                    "data_quality": {
+                        "pe_ratio": analysis_data.get("pe_ratio"),                        "price_validated": True
+                    },
+                    "data_quality": {
                         "fusion_confidence": fused_data.fusion_confidence,
                         "validation_score": fused_data.validation_score,
                         "channels_used": fused_data.channels_used,
                         "data_freshness": f"{fused_data.collection_timestamp:.1f}s ago"
                     },
-                    "source": "enhanced_moneycontrol_quad_channel"                },
+                    "source": "enhanced_moneycontrol_quad_channel"
+                },
                 "error": None,
                 "agent_name": self.agent_name,
             }

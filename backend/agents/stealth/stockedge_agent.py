@@ -1,4 +1,9 @@
-from backend.agents.stealth.advanced_base import AdvancedStealthAgentBase, QuadChannelData
+from backend.agents.stealth.enhanced_stealth_base import EnhancedStealthAgentBase
+from backend.agents.stealth.advanced_base import QuadChannelData
+from backend.agents.stealth.safe_data_utils import (
+    safe_numeric_compare, safe_get_price, safe_get_volume, safe_get_float,
+    safe_rsi_score, validate_indian_market_data
+)
 import httpx
 import asyncio
 import random
@@ -9,14 +14,29 @@ from typing import Optional, Dict, List
 agent_name = "stockedge_agent"
 
 
-class StockEdgeAgent(AdvancedStealthAgentBase):
+class StockEdgeAgent(EnhancedStealthAgentBase):
     def __init__(self):
         super().__init__()
         self.agent_name = agent_name
     
+    def _get_url_patterns(self) -> Dict[str, List[str]]:
+        """URL patterns for StockEdge with fallbacks"""
+        return {
+            'stockedge': [
+                'https://web.stockedge.com/share/{symbol}/NSE',
+                'https://stockedge.com/share/{symbol}/NSE',
+                'https://web.stockedge.com/stock/{symbol}',
+                'https://web.stockedge.com/equity/{symbol}',
+                'https://web.stockedge.com/share/{symbol}/BSE',
+                'https://stockedge.com/stock/{symbol_lower}',
+                'https://web.stockedge.com/nse/{symbol}'
+            ]
+        }
+    
     async def _fetch_primary_source(self, symbol: str) -> Optional[Dict]:
-        """Fetch data from StockEdge primary source with stealth scraping."""
-        try:
+        """Enhanced StockEdge primary source with fallback URLs and circuit breakers."""
+        
+        async def _fetch_stockedge_data():
             headers = {
                 "User-Agent": random.choice(self.user_agents),
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -24,38 +44,56 @@ class StockEdgeAgent(AdvancedStealthAgentBase):
                 "Accept-Encoding": "gzip, deflate",
                 "Connection": "keep-alive",
                 "Upgrade-Insecure-Requests": "1",
+                "Referer": "https://www.google.com/",
             }
             
-            # Add random delay for stealth
+            # Add adaptive delay
             await asyncio.sleep(random.uniform(0.5, 2.0))
             
-            async with httpx.AsyncClient(timeout=8, headers=headers) as client:
-                # Try StockEdge URL pattern
-                url = f"https://web.stockedge.com/share/{symbol}/NSE"
-                response = await client.get(url)
+            async with httpx.AsyncClient(timeout=12, headers=headers) as client:
+                # Try to find working URL with fallback
+                working_url = await self._find_working_url('stockedge', symbol, client)
+                
+                if not working_url:
+                    # Fallback to default URL
+                    working_url = f"https://web.stockedge.com/share/{symbol}/NSE"
+                
+                response = await client.get(working_url)
                 
                 if response.status_code == 200:
                     soup = BeautifulSoup(response.text, "html.parser")
                     
-                    # Extract price data
+                    # Enhanced data extraction with safe utilities
                     price = self._extract_price_from_stockedge(soup)
                     volume = self._extract_volume_from_stockedge(soup)
                     technicals = self._extract_technicals_from_stockedge(soup)
                     
-                    return {
+                    # Validate extracted data
+                    if price is None or price <= 0:
+                        logger.warning(f"StockEdge: Invalid price data for {symbol}")
+                        return None
+                    
+                    result = {
                         "price": price,
                         "volume": volume,
                         "technicals": technicals,
                         "market_cap": None,
                         "pe_ratio": None,
-                        "source": "stockedge_primary"
+                        "source": "stockedge_primary",
+                        "url_used": working_url
                     }
                     
-        except Exception as e:
-            logger.warning(f"StockEdge primary source failed for {symbol}: {e}")
-            return None
-        
-        return None
+                    return result
+                elif response.status_code == 429:
+                    logger.warning(f"StockEdge: Rate limited for {symbol}")
+                    raise Exception("Rate limit exceeded")
+                else:
+                    logger.warning(f"StockEdge: HTTP {response.status_code} for {symbol}")
+                    return None
+                    
+        return await self._enhanced_fetch_with_fallback(
+            "stockedge_primary", symbol, _fetch_stockedge_data
+        )
     
     def _extract_price_from_stockedge(self, soup) -> Optional[float]:
         """Extract current price from StockEdge page."""
@@ -220,15 +258,15 @@ class StockEdgeAgent(AdvancedStealthAgentBase):
         
         return None
     
-    def _extract_best_volume(self, fused_data: QuadChannelData) -> Optional[int]:
-        """Extract the best volume from available channels."""
+    def _extract_best_volume(self, fused_data: QuadChannelData) -> int:
+        """Extract the best volume from available channels, never return None."""
         for channel in ["primary", "secondary", "tertiary", "emergency"]:
             channel_data = getattr(fused_data, channel)
             if channel_data and "volume" in channel_data:
                 volume = channel_data["volume"]
                 if isinstance(volume, (int, float)) and volume > 0:
                     return int(volume)
-        return None
+        return 0  # Return 0 instead of None to prevent NoneType errors
     
     def _extract_best_technicals(self, fused_data: QuadChannelData) -> Dict:
         """Extract and merge technical indicators from all channels."""
@@ -253,37 +291,60 @@ class StockEdgeAgent(AdvancedStealthAgentBase):
                 sources.append(source)
         return sources
     
-    def _analyze_stockedge_scores(self, price: float, volume: Optional[int], technicals: Dict, fused_data: QuadChannelData) -> float:
-        """Analyze StockEdge-specific scoring with quad-channel data."""
+    def _analyze_stockedge_scores(self, price: float, volume: int, technicals: Dict, fused_data: QuadChannelData) -> float:
+        """Enhanced StockEdge scoring with safe data operations and Indian market validation."""
         score = 0.5  # Base score
         
-        # Price momentum analysis
-        if price > 100:
+        # Price momentum analysis with safe comparisons
+        if safe_numeric_compare(price, 100, 0):
             score += 0.1
-        if price > 500:
+        if safe_numeric_compare(price, 500, 0):
             score += 0.1
-        if price > 1000:
-            score += 0.1
-            
-        # Volume analysis
-        if volume is not None and volume > 100000:
-            score += 0.1
-        if volume is not None and volume > 1000000:
+        if safe_numeric_compare(price, 1000, 0):
             score += 0.1
             
-        # Technical indicators boost
-        if technicals.get("rsi"):
-            rsi = technicals["rsi"]
-            if 30 <= rsi <= 70:  # Neutral zone
-                score += 0.05
-            elif rsi < 30:  # Oversold - potential buy
-                score += 0.15
-            elif rsi > 70:  # Overbought - potential sell
-                score -= 0.1
+        # Enhanced volume analysis with safe utilities
+        if safe_numeric_compare(volume, 100000, 0):
+            score += 0.1
+        if safe_numeric_compare(volume, 1000000, 0):
+            score += 0.1
+        
+        # Detect unusually high volume (potential breakout)
+        if safe_numeric_compare(volume, 10000000, 0):  # 10M+ volume
+            score += 0.05
+            
+        # Enhanced technical indicators with safe RSI scoring
+        rsi_score = safe_rsi_score(technicals.get("rsi"), 0.0)
+        score += rsi_score
+        
+        # MACD signal strength
+        macd = safe_get_float(technicals, "macd", 0)
+        if macd > 0:
+            score += 0.05
+        elif macd < -0.05:
+            score -= 0.05
+            
+        # Moving average signals
+        sma_20 = safe_get_float(technicals, "sma_20", 0)
+        sma_50 = safe_get_float(technicals, "sma_50", 0)
+        if sma_20 > 0 and sma_50 > 0 and price > 0:
+            if price > sma_20 and sma_20 > sma_50:  # Bullish alignment
+                score += 0.1
+            elif price < sma_20 and sma_20 < sma_50:  # Bearish alignment
+                score -= 0.05
                 
-        # Data quality bonus from quad-channel
-        quality_bonus = fused_data.validation_score * 0.2
-        score += quality_bonus
+        # Data quality bonus from quad-channel with enhanced validation
+        base_quality_bonus = fused_data.validation_score * 0.15
+        
+        # Additional validation for Indian market specifics
+        validation_result = validate_indian_market_data(price, volume, "UNKNOWN")
+        indian_market_bonus = validation_result['confidence'] * 0.1
+        
+        score += base_quality_bonus + indian_market_bonus
+        
+        # Channel diversity bonus (more sources = higher confidence)
+        channel_bonus = len(fused_data.channels_used) * 0.02
+        score += channel_bonus
         
         return max(0.0, min(1.0, score))
     
