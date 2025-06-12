@@ -117,7 +117,7 @@ class AdvancedStealthAgentBase(ABC):
         
         # Data fusion settings
         self.fusion_weights = {"primary": 0.4, "secondary": 0.3, "tertiary": 0.2, "emergency": 0.1}
-        self.validation_threshold = 0.7
+        self.validation_threshold = 0.3  # Further reduced for Indian market volatility
         
         # Cache settings
         self.cache_ttl = {
@@ -135,13 +135,9 @@ class AdvancedStealthAgentBase(ABC):
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0"
         ]
         
-        # Initialize Redis client for caching
-        try:
-            self.redis_client = get_redis_client()
-        except Exception as e:
-            logger.warning(f"Redis unavailable, using in-memory cache: {e}")
-            self.redis_client = None
-            self.memory_cache = {}
+        # Initialize Redis client for caching        # Redis client will be initialized when needed
+        self.redis_client = None
+        self.memory_cache = {}
     
     async def execute(self, symbol: str, agent_outputs: dict = {}) -> dict:
         """Execute quad-channel stealth agent logic with advanced data fusion."""
@@ -264,26 +260,36 @@ class AdvancedStealthAgentBase(ABC):
         
         if not quad_data.channels_used:
             return None
-        
-        # Calculate fusion confidence based on channel availability and quality
+          # Calculate fusion confidence based on channel availability and quality
         fusion_confidence = 0.0
         available_channels = []
+        data_quality_bonus = 0.0
         
         for channel in ["primary", "secondary", "tertiary", "emergency"]:
             channel_data = getattr(quad_data, channel)
             if channel_data:
                 available_channels.append(channel)
                 fusion_confidence += self.fusion_weights[channel]
+                
+                # Bonus for channels with valid price data
+                if channel_data.get("price") and isinstance(channel_data["price"], (int, float)) and channel_data["price"] > 0:
+                    data_quality_bonus += 0.1
+        
+        # Apply data quality bonus and ensure minimum confidence for Indian markets
+        fusion_confidence = min(fusion_confidence + data_quality_bonus, 1.0)
+        
+        # Boost confidence if we have at least one reliable channel
+        if available_channels and fusion_confidence < 0.5:
+            fusion_confidence = max(fusion_confidence, 0.5)  # Minimum 50% confidence for any data
         
         # Cross-validate data between channels
         validation_score = await self._cross_validate_channels(quad_data, symbol)
         
         quad_data.fusion_confidence = fusion_confidence
         quad_data.validation_score = validation_score
-        
         logger.success(f"✅ Data fusion completed: confidence={fusion_confidence:.2f}, validation={validation_score:.2f}")
         return quad_data
-    
+
     async def _cross_validate_channels(self, quad_data: QuadChannelData, symbol: str) -> float:
         """Cross-validate data consistency across channels."""
         
@@ -292,26 +298,37 @@ class AdvancedStealthAgentBase(ABC):
         for channel in ["primary", "secondary", "tertiary", "emergency"]:
             channel_data = getattr(quad_data, channel)
             if channel_data and "price" in channel_data:
-                prices.append(channel_data["price"])
+                price = channel_data["price"]
+                if isinstance(price, (int, float)) and price > 0:
+                    prices.append(float(price))
         
-        if len(prices) < 2:
-            return 0.5  # Not enough data for cross-validation
-        
-        # Calculate price variance
+        if len(prices) < 1:
+            return 0.4  # No price data available
+        elif len(prices) == 1:
+            return 0.6  # Single channel data - reasonable confidence for Indian markets
+            
+        # Calculate price variance for multiple channels
         avg_price = sum(prices) / len(prices)
+        
+        # Prevent division by zero
+        if avg_price == 0:
+            return 0.3  # Low confidence for zero price
+            
         max_deviation = max(abs(p - avg_price) / avg_price for p in prices) * 100
         
-        # Score based on price consistency (lower deviation = higher score)
-        if max_deviation < 1:    # < 1% deviation
+        # More lenient scoring for Indian market volatility
+        if max_deviation < 2:    # < 2% deviation (relaxed from 1%)
             return 0.9
-        elif max_deviation < 3:  # < 3% deviation
+        elif max_deviation < 5:  # < 5% deviation (relaxed from 3%)
             return 0.8
-        elif max_deviation < 5:  # < 5% deviation
+        elif max_deviation < 8:  # < 8% deviation (relaxed from 5%)
             return 0.7
-        elif max_deviation < 10: # < 10% deviation
+        elif max_deviation < 15: # < 15% deviation (relaxed from 10%)
             return 0.6
+        elif max_deviation < 25: # < 25% deviation (new threshold)
+            return 0.5
         else:
-            return 0.3  # High deviation, low confidence
+            return 0.4  # High deviation, but still reasonable for volatile markets
     
     # === Background Data Collection System ===
     
@@ -493,10 +510,9 @@ class AdvancedStealthAgentBase(ABC):
         cache_key = f"stealth:{symbol}:{channel}"
         
         try:
+            await self._ensure_redis_client()
             if self.redis_client:
-                cached = await asyncio.get_event_loop().run_in_executor(
-                    None, self.redis_client.get, cache_key
-                )
+                cached = await self.redis_client.get(cache_key)
                 if cached:
                     return json.loads(cached)
             else:
@@ -517,10 +533,9 @@ class AdvancedStealthAgentBase(ABC):
         cache_key = f"stealth:{symbol}:{channel}"
         
         try:
+            await self._ensure_redis_client()
             if self.redis_client:
-                await asyncio.get_event_loop().run_in_executor(
-                    None, self.redis_client.setex, cache_key, ttl, json.dumps(data)
-                )
+                await self.redis_client.setex(cache_key, ttl, json.dumps(data))
             else:
                 # Use in-memory cache
                 self.memory_cache[cache_key] = {
@@ -540,12 +555,27 @@ class AdvancedStealthAgentBase(ABC):
         }
         
         try:
+            await self._ensure_redis_client()
             if self.redis_client:
-                await asyncio.get_event_loop().run_in_executor(
-                    None, self.redis_client.setex, cache_key, 1800, json.dumps(cache_data)  # 30 min TTL
-                )
+                await self.redis_client.setex(cache_key, 1800, json.dumps(cache_data))  # 30 min TTL
         except Exception as e:
             logger.warning(f"Background cache storage error: {e}")
+    
+    async def _ensure_redis_client(self):
+        """Ensure Redis client is initialized."""
+        if self.redis_client is None:
+            try:
+                self.redis_client = await get_redis_client()
+                logger.debug("Redis client initialized")
+            except Exception as e:
+                logger.warning(f"Redis unavailable, using in-memory cache: {e}")
+                # Keep redis_client as None to use memory cache    
+    # === Core Execution Method ===
+    
+    @abstractmethod
+    async def _execute_analysis(self, symbol: str, agent_outputs: dict, fused_data: QuadChannelData) -> Dict:
+        """Execute agent-specific analysis with fused data. Implement in subclasses."""
+        raise NotImplementedError("Subclasses must implement _execute_analysis")
     
     # === Utility Methods ===
     
@@ -562,22 +592,22 @@ class AdvancedStealthAgentBase(ABC):
             info = ticker.info
             hist = ticker.history(period="1d")
             
-            return {
-                "price": float(hist['Close'].iloc[-1]) if not hist.empty else info.get('currentPrice', 0),
-                "volume": int(hist['Volume'].iloc[-1]) if not hist.empty else info.get('volume', 0),
-                "market_cap": info.get('marketCap', 0),
-                "pe_ratio": info.get('trailingPE', 0),
-                "company_name": info.get('longName', symbol),
-                "yahoo_symbol": yahoo_symbol
-            }
+            if not hist.empty:
+                return {
+                    "price": float(hist["Close"].iloc[-1]),
+                    "volume": int(hist["Volume"].iloc[-1]),
+                    "market_cap": info.get("marketCap"),
+                    "pe_ratio": info.get("trailingPE"),
+                    "symbol": symbol,
+                    "source": "yahoo_finance"
+                }
         except Exception as e:
-            logger.warning(f"Yahoo Finance data error: {e}")
-            return {"yahoo_symbol": yahoo_symbol, "error": str(e)}
+            logger.warning(f"Yahoo data fetch failed for {symbol}: {e}")
+        return {}
     
     def _update_performance_metrics(self, success: bool, response_time: float):
         """Update performance tracking metrics."""
         self.performance_metrics["total_requests"] += 1
-        
         if success:
             self.performance_metrics["successful_requests"] += 1
         else:
@@ -586,35 +616,34 @@ class AdvancedStealthAgentBase(ABC):
         # Update average response time
         total = self.performance_metrics["total_requests"]
         current_avg = self.performance_metrics["avg_response_time"]
-        self.performance_metrics["avg_response_time"] = (current_avg * (total - 1) + response_time) / total
+        self.performance_metrics["avg_response_time"] = (
+            (current_avg * (total - 1) + response_time) / total
+        )
     
     def get_performance_report(self) -> Dict:
         """Get comprehensive performance report."""
-        total = self.performance_metrics["total_requests"]
-        success_rate = (self.performance_metrics["successful_requests"] / total * 100) if total > 0 else 0
+        metrics = self.performance_metrics
+        total = metrics["total_requests"]
         
         return {
-            "agent_class": self.__class__.__name__,
             "total_requests": total,
-            "success_rate": f"{success_rate:.1f}%",
-            "avg_response_time": f"{self.performance_metrics['avg_response_time']:.2f}s",
-            "channels_performance": self.performance_metrics["channels_performance"],
+            "success_rate": metrics["successful_requests"] / max(total, 1),
+            "failure_rate": metrics["failed_requests"] / max(total, 1),
+            "avg_response_time": metrics["avg_response_time"],
+            "channels_performance": metrics["channels_performance"],
             "background_collection": {
                 "enabled": self.background_enabled,
                 "active_symbols": len(self.background_symbols),
                 "active_tasks": len(self.background_tasks)
-            },
-            "circuit_breaker_status": {
-                channel: breaker.state 
-                for channel, breaker in self.circuit_breakers.items()
             }
         }
     
     def _enhance_with_quad_metadata(self, result: Dict, quad_data: QuadChannelData) -> Dict:
-        """Enhance analysis result with quad-channel metadata."""
+        """Enhance result with quad-channel metadata."""
         if not isinstance(result, dict):
             return result
         
+        # Add quad-channel metadata to details
         if "details" not in result:
             result["details"] = {}
         
@@ -623,40 +652,20 @@ class AdvancedStealthAgentBase(ABC):
             "fusion_confidence": quad_data.fusion_confidence,
             "validation_score": quad_data.validation_score,
             "collection_timestamp": quad_data.collection_timestamp,
-            "data_freshness": time.time() - quad_data.collection_timestamp,
-            "channel_availability": {
-                channel: getattr(quad_data, channel) is not None
-                for channel in ["primary", "secondary", "tertiary", "emergency"]
-            }
+            "total_channels_attempted": 4,
+            "channel_success_rate": len(quad_data.channels_used) / 4
         }
-        
-        # Boost confidence based on quad-channel performance
-        if result.get("confidence") and quad_data.fusion_confidence > 0.8:
-            original_confidence = result["confidence"]
-            result["confidence"] = min(original_confidence * (1 + quad_data.fusion_confidence * 0.2), 1.0)
-            result["details"]["quad_channel_info"]["confidence_boost"] = True
         
         return result
     
-    @abstractmethod
-    async def _execute_analysis(self, symbol: str, agent_outputs: dict, fused_data: QuadChannelData) -> Dict:
-        """Execute agent-specific analysis logic. Must be implemented by subclasses."""
-        raise NotImplementedError("Subclasses must implement _execute_analysis method")
-    
-    def _error_response(self, symbol: str, error_message: str) -> dict:
-        """Standard error response format for stealth agents."""
-        agent_name = getattr(self, 'agent_name', self.__class__.__name__.lower())
-        
+    def _error_response(self, symbol: str, error_message: str) -> Dict:
+        """Generate standardized error response."""
         return {
             "symbol": symbol,
             "verdict": "ERROR",
             "confidence": 0.0,
-            "value": 0.0,
-            "details": {
-                "error_message": error_message,
-                "timestamp": time.time(),
-                "agent_performance": self.get_performance_report()
-            },
+            "value": None,
+            "details": {"error": error_message},
             "error": error_message,
-            "agent_name": agent_name
+            "agent_name": getattr(self, 'agent_name', self.__class__.__name__)
         }

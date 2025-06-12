@@ -10,6 +10,7 @@ from backend.agents.stealth.stockedge_agent import StockEdgeAgent
 from backend.agents.stealth.tickertape_agent import TickertapeAgent
 from backend.agents.stealth.tijori_agent import TijoriAgent
 from backend.agents.stealth.tradingview_agent import TradingViewAgent
+from backend.agents.stealth.zerodha_agent import ZerodhaAgent
 
 async def test_all_stealth_agents():
     """Test all available Indian market stealth agents"""
@@ -22,7 +23,9 @@ async def test_all_stealth_agents():
         ('StockEdge', StockEdgeAgent()),
         ('Tickertape', TickertapeAgent()),
         ('Tijori', TijoriAgent()),
-        ('TradingView', TradingViewAgent())    ]
+        ('TradingView', TradingViewAgent()),
+        ('Zerodha', ZerodhaAgent())
+    ]
     
     test_symbols = ['RELIANCE', 'TCS', 'INFY']
     results = {}
