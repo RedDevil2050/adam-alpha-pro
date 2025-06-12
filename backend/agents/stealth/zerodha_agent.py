@@ -11,17 +11,20 @@ class ZerodhaAgent(StealthAgentBase):
     async def execute(self, symbol: str, agent_outputs: dict = {}) -> dict:  # Modified signature
         return await self._execute(symbol, agent_outputs=agent_outputs) # Pass agent_outputs
 
-    async def _execute(self, symbol: str, agent_outputs: dict) -> dict:
+    async def _execute(self, symbol: str, agent_outputs: dict, validated_data: dict) -> dict:
         try:
-            data = await self._fetch_stealth_data(symbol)
-            if not data:
-                return self._error_response(symbol, "No data available")
+            # Use pre-validated dual-channel data instead of fetching again
+            if not validated_data:
+                return self._error_response(symbol, "No validated data available")
 
-            score = self._analyze_data(data)
+            score = self._analyze_data(validated_data)
             verdict = self._get_verdict(score)
-            confidence = min(
-                score * 0.85, 1.0
-            )  # Cap confidence due to data reliability
+            confidence = min(score * 0.85, 1.0)  # Base confidence
+            
+            # Boost confidence if dual-channel data is available
+            if validated_data.get("has_dual_channel"):
+                confidence = min(confidence * 1.1, 1.0)
+                logger.debug(f"📈 Confidence boosted due to dual-channel data: {confidence:.2f}")
 
             return {
                 "symbol": symbol,
@@ -29,16 +32,25 @@ class ZerodhaAgent(StealthAgentBase):
                 "confidence": confidence,
                 "value": round(score, 2),
                 "details": {
-                    "metrics": data.get("metrics", {}),
-                    "margins": data.get("margins", {}),
-                    "source": "zerodha",
+                    "metrics": validated_data.get("metrics", {}),
+                    "margins": validated_data.get("margins", {}),
+                    "price_data": {
+                        "current_price": validated_data.get("price"),
+                        "price_validated": validated_data.get("price_validated", False)
+                    },
+                    "data_quality": {
+                        "confidence_score": validated_data.get("data_confidence", 0.0),
+                        "sources_used": validated_data.get("data_sources", []),
+                        "cross_validated": validated_data.get("has_dual_channel", False)
+                    },
+                    "source": "zerodha_enhanced",
                 },
                 "error": None,
                 "agent_name": agent_name,
             }
 
         except Exception as e:
-            logger.error(f"Zerodha scraping error: {e}")
+            logger.error(f"❌ Zerodha enhanced analysis error for {symbol}: {e}")
             return self._error_response(symbol, str(e))
 
     async def _fetch_stealth_data(self, symbol: str) -> dict:

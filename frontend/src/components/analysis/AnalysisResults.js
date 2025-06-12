@@ -100,10 +100,25 @@ const AnalysisResults = ({ data, symbol }) => {
       market_cap: '2.89T'
     }
   };
-
   const analysisData = data || mockData;
 
+  // Safe data access with fallbacks
+  const priceData = analysisData.price_data || {
+    current_price: 0,
+    change: 0,
+    change_percent: 0,
+    volume: 0,
+    market_cap: 'N/A'
+  };
+
+  const categories = analysisData.categories || {};
+  const overallVerdict = analysisData.overall_verdict || 'UNKNOWN';
+  const overallConfidence = analysisData.overall_confidence || 0;
+  const overallScore = analysisData.overall_score || 0;
+  const timestamp = analysisData.timestamp || new Date().toISOString();
+
   const getVerdictColor = (verdict) => {
+    if (!verdict || typeof verdict !== 'string') return 'gray';
     switch (verdict.toUpperCase()) {
       case 'BUY': return 'green';
       case 'STRONG_BUY': return 'green';
@@ -148,57 +163,55 @@ const AnalysisResults = ({ data, symbol }) => {
                 color="white"
                 fontSize="xl"
                 fontWeight="bold"
-              />
-              <VStack align="start" spacing={1}>
+              />              <VStack align="start" spacing={1}>
                 <Heading size="lg">{analysisData.symbol}</Heading>
                 <HStack>
                   <Badge
-                    colorScheme={getVerdictColor(analysisData.overall_verdict)}
+                    colorScheme={getVerdictColor(overallVerdict)}
                     variant="solid"
                     fontSize="sm"
                     px={3}
                     py={1}
                   >
-                    {analysisData.overall_verdict}
+                    {overallVerdict}
                   </Badge>
                   <Badge
-                    colorScheme={getConfidenceColor(analysisData.overall_confidence)}
+                    colorScheme={getConfidenceColor(overallConfidence)}
                     variant="outline"
                   >
-                    {(analysisData.overall_confidence * 100).toFixed(0)}% Confidence
+                    {(overallConfidence * 100).toFixed(0)}% Confidence
                   </Badge>
                 </HStack>
               </VStack>
             </HStack>
             <VStack align="end" spacing={1}>
               <Text fontSize="3xl" fontWeight="bold">
-                ${analysisData.price_data.current_price}
+                ${priceData.current_price}
               </Text>
               <HStack>
-                {analysisData.price_data.change > 0 ? (
+                {priceData.change > 0 ? (
                   <TrendingUp size={16} color="green" />
                 ) : (
                   <TrendingDown size={16} color="red" />
                 )}
                 <Text
-                  color={analysisData.price_data.change > 0 ? 'green.500' : 'red.500'}
+                  color={priceData.change > 0 ? 'green.500' : 'red.500'}
                   fontWeight="medium"
                 >
-                  {analysisData.price_data.change > 0 ? '+' : ''}
-                  {analysisData.price_data.change} ({analysisData.price_data.change_percent}%)
+                  {priceData.change > 0 ? '+' : ''}
+                  {priceData.change} ({priceData.change_percent}%)
                 </Text>
               </HStack>
             </VStack>
           </HStack>
         </CardHeader>
-        <CardBody pt={0}>
-          <Grid templateColumns="repeat(4, 1fr)" gap={6}>
+        <CardBody pt={0}>          <Grid templateColumns="repeat(4, 1fr)" gap={6}>
             <Stat>
               <StatLabel>Overall Score</StatLabel>
-              <StatNumber>{analysisData.overall_score}/10</StatNumber>
+              <StatNumber>{overallScore}/10</StatNumber>
               <Progress
-                value={analysisData.overall_score * 10}
-                colorScheme={getVerdictColor(analysisData.overall_verdict)}
+                value={overallScore * 10}
+                colorScheme={getVerdictColor(overallVerdict)}
                 size="sm"
                 mt={2}
               />
@@ -206,27 +219,31 @@ const AnalysisResults = ({ data, symbol }) => {
             <Stat>
               <StatLabel>Volume</StatLabel>
               <StatNumber fontSize="lg">
-                {(analysisData.price_data.volume / 1000000).toFixed(1)}M
+                {priceData.volume ? (priceData.volume / 1000000).toFixed(1) + 'M' : 'N/A'}
               </StatNumber>
             </Stat>
             <Stat>
               <StatLabel>Market Cap</StatLabel>
-              <StatNumber fontSize="lg">{analysisData.price_data.market_cap}</StatNumber>
+              <StatNumber fontSize="lg">{priceData.market_cap}</StatNumber>
             </Stat>
             <Stat>
               <StatLabel>Analysis Time</StatLabel>
               <StatNumber fontSize="sm">
-                {new Date(analysisData.timestamp).toLocaleTimeString()}
+                {new Date(timestamp).toLocaleTimeString()}
               </StatNumber>
             </Stat>
           </Grid>
         </CardBody>
-      </MotionCard>
-
-      {/* Category Breakdown */}
+      </MotionCard>      {/* Category Breakdown */}
       <Grid templateColumns={{ base: '1fr', md: 'repeat(2, 1fr)' }} gap={6}>
-        {Object.entries(analysisData.categories).map(([category, data], index) => {
-          const Icon = categoryIcons[category];
+        {Object.entries(categories).map(([category, data], index) => {
+          const Icon = categoryIcons[category] || Activity;
+          const verdict = data?.verdict || 'UNKNOWN';
+          const confidence = data?.confidence || 0;
+          const score = data?.score || 0;
+          const agentsCount = data?.agents_count || 0;
+          const keyInsights = data?.key_insights || [];
+          
           return (
             <MotionCard
               key={category}
@@ -243,8 +260,8 @@ const AnalysisResults = ({ data, symbol }) => {
                     <Box
                       p={2}
                       borderRadius="lg"
-                      bg={`${getVerdictColor(data.verdict)}.100`}
-                      color={`${getVerdictColor(data.verdict)}.600`}
+                      bg={`${getVerdictColor(verdict)}.100`}
+                      color={`${getVerdictColor(verdict)}.600`}
                     >
                       <Icon size={20} />
                     </Box>
@@ -253,15 +270,15 @@ const AnalysisResults = ({ data, symbol }) => {
                         {category}
                       </Heading>
                       <Text fontSize="sm" color="gray.500">
-                        {data.agents_count} agents
+                        {agentsCount} agents
                       </Text>
                     </VStack>
                   </HStack>
                   <Badge
-                    colorScheme={getVerdictColor(data.verdict)}
+                    colorScheme={getVerdictColor(verdict)}
                     variant="solid"
                   >
-                    {data.verdict}
+                    {verdict}
                   </Badge>
                 </HStack>
               </CardHeader>
@@ -269,21 +286,21 @@ const AnalysisResults = ({ data, symbol }) => {
                 <VStack spacing={4} align="stretch">
                   <HStack justify="space-between">
                     <Text fontSize="sm" color="gray.500">Score</Text>
-                    <Text fontWeight="bold">{data.score}/10</Text>
+                    <Text fontWeight="bold">{score}/10</Text>
                   </HStack>
                   <Progress
-                    value={data.score * 10}
-                    colorScheme={getVerdictColor(data.verdict)}
+                    value={score * 10}
+                    colorScheme={getVerdictColor(verdict)}
                     size="md"
                     borderRadius="full"
                   />
                   <HStack justify="space-between">
                     <Text fontSize="sm" color="gray.500">Confidence</Text>
                     <Badge
-                      colorScheme={getConfidenceColor(data.confidence)}
+                      colorScheme={getConfidenceColor(confidence)}
                       variant="subtle"
                     >
-                      {(data.confidence * 100).toFixed(0)}%
+                      {(confidence * 100).toFixed(0)}%
                     </Badge>
                   </HStack>
                   
@@ -293,7 +310,7 @@ const AnalysisResults = ({ data, symbol }) => {
                     <Text fontSize="sm" fontWeight="medium" color="gray.600">
                       Key Insights:
                     </Text>
-                    {data.key_insights.slice(0, 3).map((insight, i) => (
+                    {keyInsights.slice(0, 3).map((insight, i) => (
                       <HStack key={i} spacing={2} align="start">
                         <Box
                           w={1.5}
@@ -308,6 +325,11 @@ const AnalysisResults = ({ data, symbol }) => {
                         </Text>
                       </HStack>
                     ))}
+                    {keyInsights.length === 0 && (
+                      <Text fontSize="sm" color="gray.500" fontStyle="italic">
+                        No insights available
+                      </Text>
+                    )}
                   </VStack>
                 </VStack>
               </CardBody>

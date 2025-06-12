@@ -8,20 +8,21 @@ from datetime import datetime, timedelta
 from loguru import logger
 from typing import Dict, Any, Optional, List, Tuple, Union, AsyncIterator
 from abc import ABC, abstractmethod
+import redis
 import json
 
 class StealthAgentBase(ABC):
     """
-    Advanced base class for stealth agents with enhanced multi-channel data scraping.
+    Advanced base class for stealth agents with quad-channel data scraping and background collection.
     
     Enhanced features:
-    1. Multi-Channel Architecture (Primary + fallback sources)
-    2. Background continuous data collection support
-    3. Advanced caching capabilities
-    4. Circuit breaker patterns and rate limiting
-    5. Performance monitoring and health checks
-    6. Data validation and cross-verification
-    7. Real-time streaming support
+    1. Quad-Channel Architecture (Primary + 3 fallback sources)
+    2. Background continuous data collection
+    3. Real-time data streaming capabilities
+    4. Advanced caching with Redis support
+    5. Circuit breaker patterns and rate limiting
+    6. Performance monitoring and health checks
+    7. Data validation and cross-verification
     """
     
     # Class-level shared cache and background tasks
@@ -39,39 +40,36 @@ class StealthAgentBase(ABC):
         self.circuit_breaker_threshold = 5
         self.circuit_breaker_timeout = 300  # 5 minutes
         
-        # Initialize Redis if available (optional)
+        # Initialize Redis if available
         try:
-            import redis
             self.redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
             self.redis_client.ping()
             logger.info("✅ Redis connection established for caching")
         except:
             self.redis_client = None
-            logger.debug("📦 Using in-memory cache (Redis not available)")
+            logger.warning("⚠️ Redis not available, using in-memory cache")
         
         self.user_agents = [
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/119.0"
-        ]
-
-    async def execute(self, symbol: str, agent_outputs: dict = {}) -> dict:
-        """Execute enhanced multi-channel stealth agent logic with background collection support."""
-        logger.info(f"🔍 Starting enhanced analysis for {symbol} using {self.__class__.__name__}")
+        ]    async def execute(self, symbol: str, agent_outputs: dict = {}) -> dict:
+        """Execute quad-channel stealth agent logic with background collection support."""
+        logger.info(f"🔍 Starting quad-channel analysis for {symbol} using {self.__class__.__name__}")
         
         try:
-            # Check cache first
+            # Check if background collection is available first
             cached_data = await self._get_cached_data(symbol)
             if cached_data and self._is_data_fresh(cached_data):
                 logger.info(f"📦 Using fresh cached data for {symbol}")
                 validated_data = cached_data
             else:
-                # Attempt multi-channel data collection
-                primary_data, fallback_data = await self._dual_channel_fetch(symbol)
+                # Attempt quad-channel data collection
+                channel_data = await self._quad_channel_fetch(symbol)
                 
-                # Validate and merge data from both channels
-                validated_data = self._validate_and_merge_data(primary_data, fallback_data, symbol)
+                # Validate and merge data from all channels
+                validated_data = self._validate_and_merge_quad_data(channel_data, symbol)
                 
                 if not validated_data:
                     return self._error_response(symbol, "No valid data from any channel")
@@ -82,18 +80,18 @@ class StealthAgentBase(ABC):
             # Execute agent-specific analysis
             result = await self._execute(symbol, agent_outputs, validated_data)
             
-            # Enhance result with metadata
-            result = self._enhance_result_with_metadata(result, validated_data)
+            # Enhance result with quad-channel metadata
+            result = self._enhance_result_with_quad_metadata(result, validated_data)
             
             # Update performance metrics
             self._update_performance_metrics(symbol, True)
             
-            logger.success(f"✅ Enhanced analysis completed for {symbol}")
+            logger.success(f"✅ Quad-channel analysis completed for {symbol}")
             return result
             
         except Exception as e:
             self._update_performance_metrics(symbol, False)
-            logger.error(f"❌ Enhanced analysis failed for {symbol}: {e}")
+            logger.error(f"❌ Quad-channel analysis failed for {symbol}: {e}")
             return self._error_response(symbol, f"Analysis failed: {str(e)}")
 
     async def _dual_channel_fetch(self, symbol: str) -> Tuple[Optional[Dict], Optional[Dict]]:
@@ -151,57 +149,59 @@ class StealthAgentBase(ABC):
     async def _fetch_fallback_data(self, symbol: str) -> Optional[Dict]:
         """Fetch data from fallback source (Yahoo Finance)."""
         try:
-            logger.debug(f"🔄 Fallback fetch for {symbol}")
+            logger.debug(f"🔄 Fetching fallback data for {symbol}")
+            
+            # Normalize symbol for Yahoo Finance (add .NS for Indian stocks)
             yahoo_symbol = self._normalize_symbol_for_yahoo(symbol)
             
-            # Use asyncio.to_thread for CPU-bound yfinance operations
-            yahoo_data = await asyncio.to_thread(self._get_yahoo_data, yahoo_symbol)
+            async def fetch_yahoo_data():
+                # Use yfinance in thread pool to avoid blocking
+                loop = asyncio.get_event_loop()
+                return await loop.run_in_executor(None, self._get_yahoo_data, yahoo_symbol)
             
-            if yahoo_data:
+            data = await asyncio.wait_for(fetch_yahoo_data(), timeout=self.fallback_timeout)
+            
+            if data:
                 logger.debug(f"✅ Fallback fetch successful for {symbol}")
-                return {**yahoo_data, "source": "yahoo_finance"}
-            else:
-                logger.warning(f"⚠️ Fallback fetch returned no data for {symbol}")
-                return None
+                return {**data, "source": "yahoo_fallback", "symbol_used": yahoo_symbol}
                 
         except Exception as e:
-            logger.error(f"❌ Fallback fetch failed for {symbol}: {e}")
-            return None
+            logger.warning(f"⚠️ Fallback fetch failed for {symbol}: {e}")
+            
+        return None
 
     def _get_yahoo_data(self, yahoo_symbol: str) -> Dict:
         """Get Yahoo Finance data synchronously."""
-        try:
-            ticker = yf.Ticker(yahoo_symbol)
-            info = ticker.info
-            hist = ticker.history(period="5d")
+        ticker = yf.Ticker(yahoo_symbol)
+        
+        # Get basic info and price data
+        info = ticker.info
+        hist = ticker.history(period="5d")
+        
+        if hist.empty:
+            raise ValueError("No historical data available")
             
-            if hist.empty:
-                return {}
-                
-            latest = hist.iloc[-1]
-            return {
-                "price": float(latest['Close']),
-                "volume": int(latest['Volume']),
-                "high": float(latest['High']),
-                "low": float(latest['Low']),
-                "open": float(latest['Open']),
-                "market_cap": info.get('marketCap'),
-                "pe_ratio": info.get('trailingPE'),
-                "company_name": info.get('longName', ''),
-                "sector": info.get('sector', ''),
-                "yahoo_symbol": yahoo_symbol
-            }
-        except Exception as e:
-            logger.error(f"Yahoo Finance error: {e}")
-            return {}
+        current_price = hist['Close'].iloc[-1]
+        volume = hist['Volume'].iloc[-1]
+        
+        return {
+            "price": float(current_price),
+            "volume": int(volume),
+            "market_cap": info.get("marketCap"),
+            "pe_ratio": info.get("trailingPE"),
+            "company_name": info.get("longName", info.get("shortName")),
+            "sector": info.get("sector"),
+            "currency": info.get("currency"),
+            "previous_close": info.get("previousClose"),
+            "day_high": info.get("dayHigh"),
+            "day_low": info.get("dayLow"),
+            "yahoo_symbol": yahoo_symbol
+        }
 
     def _normalize_symbol_for_yahoo(self, symbol: str) -> str:
         """Normalize symbol for Yahoo Finance API."""
-        # Remove exchange prefix if present
-        base_symbol = symbol.split(':')[-1] if ':' in symbol else symbol
-        
-        # Convert to uppercase
-        base_symbol = base_symbol.upper()
+        # Remove existing suffixes
+        base_symbol = symbol.replace('.NS', '').replace('.BO', '').replace('.BSE', '')
         
         # Add .NS for NSE (primary Indian exchange)
         return f"{base_symbol}.NS"
@@ -210,6 +210,11 @@ class StealthAgentBase(ABC):
                                 fallback_data: Optional[Dict], symbol: str) -> Optional[Dict]:
         """
         Validate and intelligently merge data from both channels.
+        
+        Validation includes:
+        - Data completeness checks
+        - Cross-verification of key metrics
+        - Outlier detection
         """
         logger.debug(f"🔍 Validating and merging data for {symbol}")
         
@@ -260,119 +265,59 @@ class StealthAgentBase(ABC):
             ],
             "data_confidence": min(confidence_score, 1.0),
             "has_dual_channel": bool(primary_data and fallback_data),
-            "validation_timestamp": time.time()
+            "validation_timestamp": asyncio.get_event_loop().time()
         })
         
         logger.success(f"✅ Data validation and merge completed for {symbol} (confidence: {confidence_score:.2f})")
         return merged_data
 
-    def _enhance_result_with_metadata(self, result: Dict, validated_data: Dict) -> Dict:
-        """Enhance analysis result with enhanced metadata."""
+    def _enhance_result_with_metadata(self, result: Dict, primary_data: Optional[Dict], 
+                                    fallback_data: Optional[Dict]) -> Dict:
+        """Enhance analysis result with dual-channel metadata."""
         if not isinstance(result, dict):
             return result
             
-        # Add enhanced metadata to details
+        # Add dual-channel metadata to details
         if "details" not in result:
             result["details"] = {}
             
-        result["details"]["enhanced_info"] = {
-            "data_sources": validated_data.get("data_sources", []),
-            "cross_validated": validated_data.get("has_dual_channel", False),
-            "data_confidence": validated_data.get("data_confidence", 0.0),
-            "price_validated": validated_data.get("price_validated", False),
-            "cache_status": "hit" if validated_data.get("from_cache") else "miss"
+        result["details"]["dual_channel_info"] = {
+            "primary_source_available": bool(primary_data),
+            "fallback_source_available": bool(fallback_data),
+            "data_sources": [
+                source for source in [
+                    primary_data.get("source") if primary_data else None,
+                    fallback_data.get("source") if fallback_data else None
+                ] if source
+            ],
+            "cross_validated": bool(primary_data and fallback_data),
+            "reliability_score": self._calculate_reliability_score(primary_data, fallback_data)
         }
         
-        # Adjust confidence based on data quality
-        if result.get("confidence") and validated_data.get("has_dual_channel"):
+        # Adjust confidence based on dual-channel availability
+        if result.get("confidence") and primary_data and fallback_data:
             # Boost confidence if both channels available
             original_confidence = result["confidence"]
             result["confidence"] = min(original_confidence * 1.1, 1.0)
-            result["details"]["enhanced_info"]["confidence_boost"] = True
+            result["details"]["dual_channel_info"]["confidence_boost"] = True
             
         return result
 
-    # Cache management methods
-    async def _get_cached_data(self, symbol: str) -> Optional[Dict]:
-        """Get cached data for symbol."""
-        try:
-            if self.redis_client:
-                cached = self.redis_client.get(f"stealth:{symbol}")
-                if cached:
-                    data = json.loads(cached)
-                    data["from_cache"] = True
-                    return data
-            
-            # Fallback to in-memory cache
-            cache_key = f"{self.__class__.__name__}:{symbol}"
-            if cache_key in self._cache:
-                data = self._cache[cache_key][-1] if self._cache[cache_key] else None
-                if data:
-                    data["from_cache"] = True
-                return data
-                
-        except Exception as e:
-            logger.warning(f"Cache retrieval error: {e}")
+    def _calculate_reliability_score(self, primary_data: Optional[Dict], 
+                                   fallback_data: Optional[Dict]) -> float:
+        """Calculate reliability score based on data availability and validation."""
+        score = 0.0
         
-        return None
-
-    async def _cache_data(self, symbol: str, data: Dict):
-        """Cache validated data."""
-        try:
-            cache_data = {**data, "cached_at": time.time()}
+        if primary_data:
+            score += 0.6
+        if fallback_data:
+            score += 0.4
+        if primary_data and fallback_data:
+            score += 0.2  # Bonus for dual-channel
+        if primary_data and fallback_data and primary_data.get("price_validated"):
+            score += 0.1  # Bonus for price validation
             
-            if self.redis_client:
-                self.redis_client.setex(
-                    f"stealth:{symbol}", 
-                    self.cache_ttl, 
-                    json.dumps(cache_data, default=str)
-                )
-            
-            # Also store in memory cache
-            cache_key = f"{self.__class__.__name__}:{symbol}"
-            self._cache[cache_key].append(cache_data)
-            
-        except Exception as e:
-            logger.warning(f"Cache storage error: {e}")
-
-    def _is_data_fresh(self, data: Dict) -> bool:
-        """Check if cached data is still fresh."""
-        cached_at = data.get("cached_at", 0)
-        return (time.time() - cached_at) < self.cache_ttl
-
-    def _update_performance_metrics(self, symbol: str, success: bool):
-        """Update performance metrics."""
-        metric_key = f"{self.__class__.__name__}:{symbol}"
-        self._performance_metrics[metric_key].append({
-            "timestamp": time.time(),
-            "success": success
-        })
-        
-        # Keep only last 100 metrics per agent-symbol pair
-        if len(self._performance_metrics[metric_key]) > 100:
-            self._performance_metrics[metric_key] = self._performance_metrics[metric_key][-100:]
-
-    # Background collection methods (to be implemented)
-    async def start_background_collection(self, symbols: List[str]):
-        """Start background data collection for given symbols."""
-        logger.info(f"🔄 Starting background collection for {len(symbols)} symbols")
-        # Implementation for background collection
-        pass
-
-    async def stop_background_collection(self):
-        """Stop background data collection."""
-        logger.info("⏹️ Stopping background collection")
-        # Implementation for stopping background collection
-        pass
-
-    async def get_live_stream(self, symbol: str) -> AsyncIterator[Dict]:
-        """Get live data stream for symbol."""
-        # Implementation for live streaming
-        while True:
-            data = await self._get_cached_data(symbol)
-            if data:
-                yield data
-            await asyncio.sleep(5)  # 5-second intervals
+        return min(score, 1.0)
 
     @abstractmethod
     async def _fetch_stealth_data(self, symbol: str) -> Optional[Dict]:
@@ -392,23 +337,25 @@ class StealthAgentBase(ABC):
         
     def _error_response(self, symbol: str, error_message: str) -> dict:
         """Standard error response format for stealth agents."""
+        # Try to get agent_name from instance, then class, then default
         agent_name = getattr(self, 'agent_name', None)
         if agent_name is None:
-            # Try to get from module globals
-            import inspect
-            frame = inspect.currentframe()
-            try:
-                caller_frame = frame.f_back
-                agent_name = caller_frame.f_globals.get('agent_name', self.__class__.__name__)
-            finally:
-                del frame
-        
+            agent_name = getattr(self.__class__, 'agent_name', 'stealth_agent_base')
         return {
             "symbol": symbol,
             "verdict": "ERROR",
             "confidence": 0.0,
             "value": None,
-            "details": {"error_details": error_message},
+            "details": {
+                "error": error_message,
+                "dual_channel_info": {
+                    "primary_source_available": False,
+                    "fallback_source_available": False,
+                    "data_sources": [],
+                    "cross_validated": False,
+                    "reliability_score": 0.0
+                }
+            },
             "error": error_message,
             "agent_name": agent_name,
         }

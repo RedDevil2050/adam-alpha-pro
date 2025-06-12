@@ -7,28 +7,46 @@ agent_name = "tickertape_agent"
 
 
 class TickertapeAgent(StealthAgentBase):
-    async def _execute(self, symbol: str, agent_outputs: dict) -> dict:
+    async def _execute(self, symbol: str, agent_outputs: dict, validated_data: dict) -> dict:
         try:
-            data = await self._fetch_stealth_data(symbol)
-            if not data:
-                return self._error_response(symbol, "No data available")
+            # Use pre-validated dual-channel data instead of fetching again
+            if not validated_data:
+                return self._error_response(symbol, "No validated data available")
 
-            score = self._calculate_score(data)
+            score = self._calculate_score(validated_data)
             verdict = self._get_verdict(score)
-            confidence = score * 0.85  # Conservative confidence due to data source
+            confidence = score * 0.85  # Base confidence
+            
+            # Boost confidence if dual-channel data is available
+            if validated_data.get("has_dual_channel"):
+                confidence = min(confidence * 1.12, 1.0)
+                logger.debug(f"📈 Confidence boosted due to dual-channel data: {confidence:.2f}")
 
             return {
                 "symbol": symbol,
                 "verdict": verdict,
                 "confidence": confidence,
                 "value": round(score, 2),
-                "details": data,
+                "details": {
+                    "ratios": validated_data.get("ratios", {}),
+                    "recommendations": validated_data.get("recommendations", []),
+                    "price_data": {
+                        "current_price": validated_data.get("price"),
+                        "price_validated": validated_data.get("price_validated", False)
+                    },
+                    "data_quality": {
+                        "confidence_score": validated_data.get("data_confidence", 0.0),
+                        "sources_used": validated_data.get("data_sources", []),
+                        "cross_validated": validated_data.get("has_dual_channel", False)
+                    },
+                    "source": "tickertape_enhanced",
+                },
                 "error": None,
                 "agent_name": agent_name,
             }
 
         except Exception as e:
-            logger.error(f"Tickertape scraping error: {e}")
+            logger.error(f"❌ Tickertape enhanced analysis error for {symbol}: {e}")
             return self._error_response(symbol, str(e))
 
     async def _fetch_stealth_data(self, symbol: str) -> dict:

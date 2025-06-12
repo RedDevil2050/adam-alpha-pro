@@ -2,13 +2,13 @@
   "name": "zion-frontend",
   "version": "1.0.0",
   "description": "Zion Market Analysis Platform - Frontend",
-  "main": "index.js",
-  "scripts": {
-    "start": "react-scripts start",
+  "main": "index.js",  "scripts": {
+    "start": "set NODE_OPTIONS=--no-deprecation && react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
-    "dev": "react-scripts start"
+    "dev": "set NODE_OPTIONS=--no-deprecation && react-scripts start",
+    "start:quiet": "react-scripts start"
   },
   "dependencies": {
     "@chakra-ui/react": "^2.5.1",

@@ -164,8 +164,8 @@ const AgentBreakdown = ({ data, symbol }) => {
   };
 
   const agentData = data?.agents || mockAgentData;
-
   const getVerdictColor = (verdict) => {
+    if (!verdict || typeof verdict !== 'string') return 'gray';
     const upper = verdict.toUpperCase();
     if (upper.includes('BUY') || upper.includes('POSITIVE') || upper.includes('STRONG')) return 'green';
     if (upper.includes('SELL') || upper.includes('NEGATIVE') || upper.includes('WEAK')) return 'red';

@@ -7,30 +7,47 @@ agent_name = "stockedge_agent"
 
 
 class StockEdgeAgent(StealthAgentBase):
-    async def _execute(self, symbol: str, agent_outputs: dict) -> dict:
+    async def _execute(self, symbol: str, agent_outputs: dict, validated_data: dict) -> dict:
         try:
-            data = await self._fetch_stealth_data(symbol)
-            if not data:
-                return self._error_response(symbol, "No data available")
+            # Use pre-validated dual-channel data instead of fetching again
+            if not validated_data:
+                return self._error_response(symbol, "No validated data available")
 
-            score = self._analyze_scores(data)
+            score = self._analyze_scores(validated_data)
             verdict = self._get_verdict(score)
-            confidence = (
-                score * 0.8
-            )  # Reduced confidence due to data source reliability
+            confidence = score * 0.8  # Base confidence
+            
+            # Boost confidence if dual-channel data is available
+            if validated_data.get("has_dual_channel"):
+                confidence = min(confidence * 1.15, 1.0)
+                logger.debug(f"📈 Confidence boosted due to dual-channel data: {confidence:.2f}")
 
             return {
                 "symbol": symbol,
                 "verdict": verdict,
                 "confidence": confidence,
                 "value": round(score, 2),
-                "details": data,
+                "details": {
+                    "quality_score": validated_data.get("quality_score", 50),
+                    "technicals": validated_data.get("technicals", {}),
+                    "metrics": validated_data.get("metrics", {}),
+                    "price_data": {
+                        "current_price": validated_data.get("price"),
+                        "price_validated": validated_data.get("price_validated", False)
+                    },
+                    "data_quality": {
+                        "confidence_score": validated_data.get("data_confidence", 0.0),
+                        "sources_used": validated_data.get("data_sources", []),
+                        "cross_validated": validated_data.get("has_dual_channel", False)
+                    },
+                    "source": "stockedge_enhanced",
+                },
                 "error": None,
                 "agent_name": agent_name,
             }
 
         except Exception as e:
-            logger.error(f"StockEdge scraping error: {e}")
+            logger.error(f"❌ StockEdge enhanced analysis error for {symbol}: {e}")
             return self._error_response(symbol, str(e))
 
     async def _fetch_stealth_data(self, symbol: str) -> dict:

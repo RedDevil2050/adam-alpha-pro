@@ -65,8 +65,8 @@ const RecentAnalyses = () => {
       trend: 'down',
     },
   ];
-
   const getVerdictColor = (verdict) => {
+    if (!verdict) return 'gray';
     switch (verdict) {
       case 'BUY': return 'green';
       case 'SELL': return 'red';

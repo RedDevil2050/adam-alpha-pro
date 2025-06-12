@@ -13,25 +13,36 @@ class MoneyControlAgent(StealthAgentBase):
         self.anomaly_detector = IsolationForest(contamination=0.1)
         self.timeframes = [5, 15, 60, 240]  # minutes
 
-    async def _execute(self, symbol: str, agent_outputs: dict) -> dict:
+    async def _execute(self, symbol: str, agent_outputs: dict, validated_data: dict) -> dict:
+        """
+        Execute MoneyControl analysis using dual-channel validated data.
+        
+        Args:
+            symbol: Stock symbol
+            agent_outputs: Outputs from other agents
+            validated_data: Pre-validated data from dual-channel fetch
+        """
         try:
-            data = await self._fetch_stealth_data(symbol)
-            if not data:
-                return self._error_response(symbol, "No data available")
-
-            # Enhanced analysis
-            multi_tf_analysis = self._analyze_multiple_timeframes(data)
-            anomalies = self._detect_anomalies(data)
-            volume_profile = self._analyze_volume_profile(data)
-            sentiment_impact = self._analyze_sentiment_impact(data)
+            logger.info(f"💹 Starting MoneyControl enhanced analysis for {symbol}")
+            
+            # Enhanced analysis using validated data
+            multi_tf_analysis = self._analyze_multiple_timeframes(validated_data)
+            anomalies = self._detect_anomalies(validated_data)
+            volume_profile = self._analyze_volume_profile(validated_data)
+            sentiment_impact = self._analyze_sentiment_impact(validated_data)
 
             # Composite scoring with ML
             score = self._calculate_ml_enhanced_score(
-                data, multi_tf_analysis, anomalies, volume_profile, sentiment_impact
+                validated_data, multi_tf_analysis, anomalies, volume_profile, sentiment_impact
             )
 
             verdict = self._get_ml_verdict(score, anomalies)
             confidence = self._calculate_confidence(score, anomalies)
+            
+            # Boost confidence if dual-channel data is available
+            if validated_data.get("has_dual_channel"):
+                confidence = min(confidence * 1.15, 1.0)
+                logger.debug(f"📈 Confidence boosted due to dual-channel data: {confidence:.2f}")
 
             return {
                 "symbol": symbol,
@@ -39,19 +50,32 @@ class MoneyControlAgent(StealthAgentBase):
                 "confidence": confidence,
                 "value": round(score, 2),
                 "details": {
-                    "expert_ratings": data.get("ratings", {}),
-                    "technical_signals": data.get("technicals", {}),
-                    "news_sentiment": data.get("sentiment", "neutral"),
+                    "expert_ratings": validated_data.get("ratings", {}),
+                    "technical_signals": validated_data.get("technicals", {}),
+                    "news_sentiment": validated_data.get("sentiment", "neutral"),
                     "anomalies_detected": anomalies,
                     "volume_profile": volume_profile,
                     "timeframe_analysis": multi_tf_analysis,
-                    "source": "moneycontrol",
+                    "price_data": {
+                        "current_price": validated_data.get("price"),
+                        "volume": validated_data.get("volume"),
+                        "market_cap": validated_data.get("market_cap"),
+                        "pe_ratio": validated_data.get("pe_ratio"),
+                        "price_validated": validated_data.get("price_validated", False)
+                    },
+                    "data_quality": {
+                        "confidence_score": validated_data.get("data_confidence", 0.0),
+                        "sources_used": validated_data.get("data_sources", []),
+                        "cross_validated": validated_data.get("has_dual_channel", False)
+                    },
+                    "source": "moneycontrol_enhanced",
                 },
                 "error": None,
                 "agent_name": agent_name,
             }
+
         except Exception as e:
-            logger.error(f"MoneyControl advanced analysis error: {e}")
+            logger.error(f"❌ MoneyControl enhanced analysis error for {symbol}: {e}")
             return self._error_response(symbol, str(e))
 
     def _analyze_multiple_timeframes(self, data: dict) -> dict:

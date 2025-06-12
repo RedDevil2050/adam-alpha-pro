@@ -31,21 +31,21 @@ class TradingViewAgent(StealthAgentBase):
             "error": message,
         }
 
-    async def _execute(self, symbol: str, agent_outputs: dict) -> dict:
+    async def _execute(self, symbol: str, agent_outputs: dict, validated_data: dict) -> dict:
         try:
-            data = await self._fetch_stealth_data(symbol)
-            if not data:
-                return self._error_response(symbol, "No data available")
+            # Use pre-validated dual-channel data instead of fetching again
+            if not validated_data:
+                return self._error_response(symbol, "No validated data available")
 
-            # Advanced technical analysis
-            candlestick_patterns = self._analyze_candlestick_patterns(data)
-            fibonacci_levels = self._calculate_fibonacci_levels(data)
-            pivot_points = self._calculate_pivot_points(data)
-            elliott_waves = self._detect_elliott_waves(data)
+            # Advanced technical analysis using validated data
+            candlestick_patterns = self._analyze_candlestick_patterns(validated_data)
+            fibonacci_levels = self._calculate_fibonacci_levels(validated_data)
+            pivot_points = self._calculate_pivot_points(validated_data)
+            elliott_waves = self._detect_elliott_waves(validated_data)
 
             # Enhanced signal processing
             signals = self._process_advanced_signals(
-                data,
+                validated_data,
                 candlestick_patterns,
                 fibonacci_levels,
                 pivot_points,
@@ -54,6 +54,11 @@ class TradingViewAgent(StealthAgentBase):
 
             confidence = self._calculate_weighted_confidence(signals)
             verdict = self._get_advanced_verdict(signals)
+            
+            # Boost confidence if dual-channel data is available
+            if validated_data.get("has_dual_channel"):
+                confidence = min(confidence * 1.12, 1.0)
+                logger.debug(f"📈 Confidence boosted due to dual-channel data: {confidence:.2f}")
 
             return {
                 "symbol": symbol,
@@ -66,7 +71,16 @@ class TradingViewAgent(StealthAgentBase):
                     "fibonacci_levels": fibonacci_levels,
                     "elliott_wave_position": elliott_waves,
                     "pivot_points": pivot_points,
-                    "source": "tradingview",
+                    "price_data": {
+                        "current_price": validated_data.get("price"),
+                        "price_validated": validated_data.get("price_validated", False)
+                    },
+                    "data_quality": {
+                        "confidence_score": validated_data.get("data_confidence", 0.0),
+                        "sources_used": validated_data.get("data_sources", []),
+                        "cross_validated": validated_data.get("has_dual_channel", False)
+                    },
+                    "source": "tradingview_enhanced",
                 },
                 "error": None,
                 "agent_name": agent_name,
