@@ -658,53 +658,123 @@ class TrendlyneAgent(AdvancedStealthAgentBase):
         
         return urls[:10]  # Reduced to 10 URLs for faster processing
 
-    # REQUIRED ABSTRACT METHOD IMPLEMENTATIONS
-    async def _fetch_primary_source(self, symbol: str) -> Optional[Dict]:
-        """Fetch data from TrendLyne primary source with circuit breaker"""
-        logger.debug(f"🎯 TrendLyne primary source fetch starting for {symbol}")
-        result = await self._fetch_with_exponential_backoff(
-            self._fetch_trendlyne_data, symbol, 'primary', max_retries=3
-        )
-        if result:
-            logger.success(f"✅ TrendLyne primary source successful for {symbol}: price={result.get('price')}")
-        else:
-            logger.warning(f"❌ TrendLyne primary source failed for {symbol}")
-        return result
+    def _parse_alternative_formats(self, html_content: str, symbol: str) -> Optional[Dict]:
+        """Parse alternative data formats (JSON, embedded data) for live scraping"""
+        try:
+            # Try to find JSON data in script tags
+            soup = BeautifulSoup(html_content, 'html.parser')
+            script_tags = soup.find_all('script')
+            
+            for script in script_tags:
+                if script.string:
+                    script_content = script.string
+                    
+                    # Look for JSON-like structures
+                    if 'price' in script_content.lower() or 'quote' in script_content.lower():
+                        price_data = self._extract_from_json_like(script_content, symbol)
+                        if price_data:
+                            return price_data
+            
+            # Try to extract from data attributes
+            data_elements = soup.find_all(attrs={'data-price': True})
+            for element in data_elements:
+                price_text = element.get('data-price')
+                price = self._extract_number(price_text)
+                if price and 1 <= price <= 500000:
+                    return {
+                        'symbol': symbol,
+                        'price': price,
+                        'volume': 0,
+                        'source': 'trendlyne_data_attr',
+                        'timestamp': time.time(),
+                        'data_quality': 'medium',
+                        'scraping_method': 'data_attributes'
+                    }
+            
+            return None
+            
+        except Exception as e:
+            logger.debug(f"TrendLyne: Error in alternative parsing for {symbol}: {e}")
+            return None
     
-    async def _fetch_secondary_source(self, symbol: str) -> Optional[Dict]:
-        """Fetch data from TrendLyne secondary source with circuit breaker"""
-        logger.debug(f"🎯 TrendLyne secondary source fetch starting for {symbol}")
-        result = await self._fetch_with_exponential_backoff(
-            self._fetch_trendlyne_data, symbol, 'secondary', max_retries=4
-        )
-        if result:
-            logger.success(f"✅ TrendLyne secondary source successful for {symbol}: price={result.get('price')}")
-        else:
-            logger.warning(f"❌ TrendLyne secondary source failed for {symbol}")
-        return result
-    
-    async def _fetch_tertiary_source(self, symbol: str) -> Optional[Dict]:
-        """Fetch data from TrendLyne tertiary source with circuit breaker"""
-        parent_method = super()._fetch_tertiary_source
-        
-        async def tertiary_fetch(sym):
-            return await parent_method(sym)
-        
-        return await self._fetch_with_exponential_backoff(
-            tertiary_fetch, symbol, 'tertiary', max_retries=3
-        )
-    
-    async def _fetch_emergency_source(self, symbol: str) -> Optional[Dict]:
-        """Fetch data from emergency source with circuit breaker"""
-        parent_method = super()._fetch_emergency_source
-        
-        async def emergency_fetch(sym):
-            return await parent_method(sym)
-        
-        return await self._fetch_with_exponential_backoff(
-            emergency_fetch, symbol, 'emergency', max_retries=2
-        )
-    
+    def _extract_from_json_like(self, script_content: str, symbol: str) -> Optional[Dict]:
+        """Extract price data from JSON-like structures in scripts"""
+        try:
+            import re
+            import json
+            
+            # Try to find JSON objects
+            json_patterns = [
+                r'\{[^{}]*"price"[^{}]*\}',
+                r'\{[^{}]*"ltp"[^{}]*\}',
+                r'\{[^{}]*"currentPrice"[^{}]*\}',
+                r'\{[^{}]*"quote"[^{}]*\}'
+            ]
+            
+            for pattern in json_patterns:
+                matches = re.findall(pattern, script_content, re.IGNORECASE)
+                for match in matches:
+                    try:
+                        data = json.loads(match)
+                        price = None
+                        volume = None
+                        
+                        # Look for price in various keys
+                        for key in ['price', 'ltp', 'currentPrice', 'last', 'close']:
+                            if key in data and isinstance(data[key], (int, float, str)):
+                                price = self._extract_number(str(data[key]))
+                                if price and 1 <= price <= 500000:
+                                    break
+                        
+                        # Look for volume
+                        for key in ['volume', 'vol', 'tradeVolume']:
+                            if key in data:
+                                volume = self._extract_volume_number(str(data[key]))
+                                if volume:
+                                    break
+                        
+                        if price:
+                            return {
+                                'symbol': symbol,
+                                'price': price,
+                                'volume': volume or 0,
+                                'source': 'trendlyne_json',
+                                'timestamp': time.time(),
+                                'data_quality': 'high',
+                                'scraping_method': 'json_extraction'
+                            }
+                            
+                    except json.JSONDecodeError:
+                        continue
+            
+            # Try regex patterns for numeric values
+            price_patterns = [
+                r'"price"[:\s]*([0-9.]+)',
+                r'"ltp"[:\s]*([0-9.]+)',
+                r'"currentPrice"[:\s]*([0-9.]+)'
+            ]
+            
+            for pattern in price_patterns:
+                match = re.search(pattern, script_content, re.IGNORECASE)
+                if match:
+                    price = float(match.group(1))
+                    if 1 <= price <= 500000:
+                        return {
+                            'symbol': symbol,
+                            'price': price,
+                            'volume': 0,
+                            'source': 'trendlyne_regex',
+                            'timestamp': time.time(),
+                            'data_quality': 'medium',
+                            'scraping_method': 'regex_extraction'
+                        }
+            
+            return None
+            
+        except Exception as e:
+            logger.debug(f"TrendLyne: Error extracting from JSON-like content: {e}")
+            return None
+
     def _extract_best_data(self, fused_data: QuadChannelData) -> Dict:
         """Extract the best available data from quad-channel fusion."""
         # Priority order: primary -> secondary -> tertiary -> emergency
