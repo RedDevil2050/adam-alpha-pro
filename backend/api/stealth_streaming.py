@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 import uvicorn
 from backend.agents.stealth.background_manager import background_manager
-from backend.agents.stealth.enhanced_moneycontrol_agent import EnhancedMoneyControlAgent
+from backend.agents.stealth.moneycontrol_agent import MoneyControlAgent
 from backend.agents.stealth.moneycontrol_agent import MoneyControlAgent
 from backend.agents.stealth.trendlyne_agent import TrendlyneAgent
 from backend.agents.stealth.stockedge_agent import StockEdgeAgent
@@ -110,7 +110,7 @@ async def initialize_background_system():
     try:
         # Register enhanced agents
         agents = [
-            ("enhanced_moneycontrol", EnhancedMoneyControlAgent()),
+            ("moneycontrol", MoneyControlAgent()),
             ("moneycontrol", MoneyControlAgent()),
             ("trendlyne", TrendlyneAgent()),
             ("stockedge", StockEdgeAgent())

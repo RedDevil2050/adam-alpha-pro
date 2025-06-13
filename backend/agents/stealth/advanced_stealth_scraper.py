@@ -19,7 +19,9 @@ from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass, asdict
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options as ChromeOptions
+from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
+from selenium.webdriver.firefox.service import Service as FirefoxService
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -27,6 +29,8 @@ from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import TimeoutException, WebDriverException
 from selenium_stealth import stealth
 import undetected_chromedriver as uc
+from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.firefox import GeckoDriverManager
 import httpx
 from fake_useragent import UserAgent
 from loguru import logger
@@ -174,8 +178,7 @@ class AdvancedStealthScraper:
         prefs = {
             "profile.default_content_setting_values": {
                 "notifications": 2,
-                "media_stream": 2,
-            },
+                "media_stream": 2,            },
             "profile.managed_default_content_settings": {
                 "images": 2
             }
@@ -183,7 +186,9 @@ class AdvancedStealthScraper:
         options.add_experimental_option("prefs", prefs)
         
         try:
-            driver = webdriver.Chrome(options=options)
+            # Use webdriver manager to get the correct ChromeDriver version
+            service = ChromeService(ChromeDriverManager().install())
+            driver = webdriver.Chrome(service=service, options=options)
             
             # Apply stealth techniques
             if config.stealth_mode:
@@ -247,8 +252,9 @@ class AdvancedStealthScraper:
                 options.set_preference("network.proxy.ssl", proxy_parts[0])
                 options.set_preference("network.proxy.ssl_port", int(proxy_parts[1]))
         
-        try:
-            driver = webdriver.Firefox(options=options)
+        try:            # Use webdriver manager to get the correct GeckoDriver version
+            service = FirefoxService(GeckoDriverManager().install())
+            driver = webdriver.Firefox(service=service, options=options)
             
             # Set viewport size
             driver.set_window_size(profile.viewport_size[0], profile.viewport_size[1])
@@ -286,7 +292,8 @@ class AdvancedStealthScraper:
             options.add_argument(f"--proxy-server={config.proxy}")
         
         try:
-            driver = uc.Chrome(options=options, version_main=120)
+            # Auto-detect Chrome version instead of hardcoding
+            driver = uc.Chrome(options=options)
             
             # Additional stealth setup
             if config.stealth_mode:
@@ -483,11 +490,16 @@ class AdvancedStealthScraper:
             
             # Additional human-like delay
             await asyncio.sleep(random.uniform(1.0, 3.0))
-            
-            # Extract data using selectors
+              # Extract data using selectors
             extracted_data = {}
             for field, selector in selectors.items():
                 try:
+                    # Validate selector syntax
+                    if ',,' in selector or '..' in selector:
+                        logger.warning(f"⚠️ {channel_name}: Invalid selector syntax detected: '{selector}' for field '{field}' - skipping")
+                        extracted_data[field] = None
+                        continue
+                        
                     element = WebDriverWait(driver, 10).until(
                         EC.presence_of_element_located((By.CSS_SELECTOR, selector))
                     )

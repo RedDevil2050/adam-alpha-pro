@@ -69,8 +69,14 @@ class StockEdgeAgent(AdvancedStealthAgentBase):
                     
                     # Validate extracted data
                     if price is None or price <= 0:
-                        logger.warning(f"StockEdge: Invalid price data for {symbol}")
-                        return None
+                        logger.warning(f"StockEdge: Invalid price data for {symbol} - trying fallback parsing")
+                        
+                        # Try alternative parsing approaches
+                        price = self._extract_price_fallback(soup, symbol)
+                        
+                        if price is None or price <= 0:
+                            logger.warning(f"StockEdge: All price extraction methods failed for {symbol}")
+                            return None
                     
                     result = {
                         "price": price,
@@ -148,6 +154,81 @@ class StockEdgeAgent(AdvancedStealthAgentBase):
             logger.warning(f"Price extraction failed: {e}")
         return None
     
+    def _extract_price_fallback(self, soup, symbol: str) -> float:
+        """Fallback price extraction with more aggressive patterns"""
+        try:
+            # More aggressive selector patterns
+            fallback_selectors = [
+                '[data-value]',
+                '.value',
+                '.price-value',
+                '.current-value',
+                '.quote-value',
+                '[class*="price"]',
+                '[class*="quote"]',
+                '[class*="value"]'
+            ]
+            
+            # Try fallback selectors
+            for selector in fallback_selectors:
+                elements = soup.select(selector)
+                for elem in elements:
+                    # Check data-value attribute
+                    if elem.get('data-value'):
+                        try:
+                            price = float(elem['data-value'])
+                            if 1 <= price <= 100000:  # Reasonable price range
+                                logger.debug(f"StockEdge fallback: Found price {price} via data-value")
+                                return price
+                        except ValueError:
+                            continue
+                    
+                    # Check text content
+                    text = elem.get_text(strip=True)
+                    if text:
+                        # Extract number from text
+                        import re
+                        numbers = re.findall(r'\d+\.?\d*', text.replace(',', ''))
+                        for num_str in numbers:
+                            try:
+                                price = float(num_str)
+                                if 1 <= price <= 100000:  # Reasonable price range
+                                    logger.debug(f"StockEdge fallback: Found price {price} via text extraction")
+                                    return price
+                            except ValueError:
+                                continue
+            
+            # Last resort: scan entire page for price-like numbers
+            text_content = soup.get_text()
+            import re
+            # Look for price-like patterns in the entire page
+            price_candidates = re.findall(r'\b\d{1,5}\.?\d{0,2}\b', text_content)
+            
+            # Filter and validate candidates
+            valid_prices = []
+            for candidate in price_candidates:
+                try:
+                    price = float(candidate)
+                    if 10 <= price <= 50000:  # More realistic range for Indian stocks
+                        valid_prices.append(price)
+                except ValueError:
+                    continue
+            
+            if valid_prices:
+                # Return the most common price or median price
+                from collections import Counter
+                price_counts = Counter(valid_prices)
+                most_common_price = price_counts.most_common(1)[0][0]
+                logger.debug(f"StockEdge fallback: Using most common price {most_common_price}")
+                return most_common_price
+            
+            logger.warning(f"StockEdge fallback: No valid price found for {symbol}")
+            return None
+            
+        except Exception as e:
+            logger.warning(f"StockEdge fallback price extraction failed: {e}")
+            return None
+
     def _extract_volume_from_stockedge(self, soup) -> Optional[int]:
         """Extract volume from StockEdge page."""
         try:

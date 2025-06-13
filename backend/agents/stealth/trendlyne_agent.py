@@ -737,6 +737,68 @@ class TrendlyneAgent(AdvancedStealthAgentBase):
             logger.debug(f"TrendLyne tertiary source failed: {e}")
             return None
 
+    async def _try_working_fallback_apis(self, symbol: str) -> Optional[Dict]:
+        """Try working fallback APIs for reliable data"""
+        try:
+            # List of reliable fallback APIs
+            fallback_apis = [
+                f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}.NS",
+                f"https://api.polygon.io/v2/aggs/ticker/{symbol}/prev?apikey=demo",
+                f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}.BSE&apikey=demo"
+            ]
+            
+            async with self._create_stealth_client() as client:
+                for api_url in fallback_apis:
+                    try:
+                        await self._apply_smart_delay()
+                        response = await client.get(api_url, timeout=10.0)
+                        
+                        if response.status_code == 200:
+                            json_data = response.json()
+                            
+                            # Parse based on API type
+                            if 'yahoo' in api_url:
+                                parsed_data = await self._parse_tertiary_json(json_data, symbol, 'yahoo')
+                                if parsed_data:
+                                    return parsed_data
+                            
+                            elif 'alphavantage' in api_url:
+                                global_quote = json_data.get('Global Quote', {})
+                                price = global_quote.get('05. price')
+                                if price:
+                                    return {
+                                        'symbol': symbol,
+                                        'price': float(price),
+                                        'volume': int(global_quote.get('06. volume', 0)),
+                                        'change': float(global_quote.get('09. change', 0)),
+                                        'source': 'trendlyne_fallback_alpha',
+                                        'timestamp': time.time(),
+                                        'data_quality': 'high'
+                                    }
+                            
+                            elif 'polygon' in api_url:
+                                results = json_data.get('results', [])
+                                if results:
+                                    result = results[0]
+                                    return {
+                                        'symbol': symbol,
+                                        'price': float(result.get('c', 0)),
+                                        'volume': int(result.get('v', 0)),
+                                        'source': 'trendlyne_fallback_polygon',
+                                        'timestamp': time.time(),
+                                        'data_quality': 'high'
+                                    }
+                    
+                    except Exception as e:
+                        logger.debug(f"Fallback API {api_url} failed: {e}")
+                        continue
+            
+            return None
+            
+        except Exception as e:
+            logger.debug(f"Working fallback APIs failed: {e}")
+            return None
+
     async def _fetch_emergency_source(self, symbol: str) -> Optional[Dict]:
         """
         🎯 EMERGENCY SOURCE: Reliable fallback with working APIs
@@ -782,6 +844,100 @@ class TrendlyneAgent(AdvancedStealthAgentBase):
         except Exception as e:
             logger.debug(f"TrendLyne emergency source failed: {e}")
             return await self._generate_intelligent_fallback(symbol)
+
+    async def _parse_trendlyne_page(self, html_content: str, symbol: str, url: str) -> Optional[Dict]:
+        """Parse TrendLyne page HTML content to extract stock data"""
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+            
+            # Common TrendLyne selectors for stock data
+            selectors = {
+                'price': [
+                    'span.price-text',
+                    '.current-price',
+                    '.stock-price',
+                    '[data-testid="stock-price"]',
+                    '.quote-price'
+                ],
+                'change': [
+                    '.price-change',
+                    '.change-value',
+                    '.stock-change',
+                    '[data-testid="price-change"]'
+                ],
+                'volume': [
+                    '.volume-value',
+                    '.trading-volume',
+                    '[data-testid="volume"]'
+                ]
+            }
+            
+            extracted_data = {}
+            
+            # Extract price
+            for selector in selectors['price']:
+                price_elem = soup.select_one(selector)
+                if price_elem:
+                    price_text = price_elem.get_text(strip=True)
+                    # Clean price text (remove ₹, commas, etc.)
+                    price_clean = ''.join(c for c in price_text if c.isdigit() or c == '.')
+                    if price_clean:
+                        try:
+                            extracted_data['price'] = float(price_clean)
+                            break
+                        except ValueError:
+                            continue
+            
+            # Extract change
+            for selector in selectors['change']:
+                change_elem = soup.select_one(selector)
+                if change_elem:
+                    change_text = change_elem.get_text(strip=True)
+                    # Extract numeric change value
+                    import re
+                    change_match = re.search(r'[-+]?\d*\.?\d+', change_text)
+                    if change_match:
+                        try:
+                            extracted_data['change'] = float(change_match.group())
+                            break
+                        except ValueError:
+                            continue
+            
+            # Extract volume
+            for selector in selectors['volume']:
+                volume_elem = soup.select_one(selector)
+                if volume_elem:
+                    volume_text = volume_elem.get_text(strip=True)
+                    # Clean volume text and convert to number
+                    volume_clean = ''.join(c for c in volume_text if c.isdigit())
+                    if volume_clean:
+                        try:
+                            extracted_data['volume'] = int(volume_clean)
+                            break
+                        except ValueError:
+                            continue
+            
+            # If we have at least price data, return the result
+            if 'price' in extracted_data:
+                result = {
+                    'symbol': symbol,
+                    'price': extracted_data['price'],
+                    'volume': extracted_data.get('volume', 0),
+                    'change': extracted_data.get('change', 0.0),
+                    'source': 'trendlyne_page',
+                    'timestamp': time.time(),
+                    'data_quality': 'medium'
+                }
+                
+                logger.debug(f"✅ Parsed TrendLyne data for {symbol}: price={result['price']}")
+                return result
+            else:
+                logger.debug(f"❌ No price data found in TrendLyne page for {symbol}")
+                return None
+                
+        except Exception as e:
+            logger.debug(f"TrendLyne page parsing error for {symbol}: {e}")
+            return None
 
     async def _parse_tertiary_json(self, json_data: dict, symbol: str, source: str) -> Optional[Dict]:
         """Parse tertiary source JSON data"""
@@ -1684,6 +1840,7 @@ class TrendlyneAgent(AdvancedStealthAgentBase):
             # Market context adjustments
             volatility = market_context.get('volatility_level', 'moderate')
             risk_env = market_context.get('risk_environment', 'moderate')
+
             
             # Conservative adjustments in high-risk environments
             if risk_env == 'high' and base_verdict in ['STRONG_BUY', 'BUY']:
@@ -1741,6 +1898,7 @@ class TrendlyneAgent(AdvancedStealthAgentBase):
             
             # Volume-based tradability
             volume = data.get('volume', 0)
+           
             if volume > 1000000:
                 tradability = 0.9
             elif volume > 500000:

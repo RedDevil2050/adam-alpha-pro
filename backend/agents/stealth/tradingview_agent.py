@@ -70,14 +70,6 @@ class TradingViewAgent(AdvancedStealthAgentBase):
         
         # Fallback to HTTP requests
         return await self._fetch_with_http_fallback(urls, symbol)
-                    except Exception as e:
-                        logger.warning(f"TradingView URL {url} failed: {e}")
-                        continue
-                        
-        except Exception as e:
-            logger.warning(f"TradingView primary source failed for {symbol}: {e}")
-            
-        return None
     
     async def _parse_tradingview_page(self, response: httpx.Response, symbol: str) -> Optional[Dict]:
         """Parse TradingView page for technical data."""

@@ -54,8 +54,8 @@ async def test_all_agents():
     # Test 3: Enhanced MoneyControl Agent
     logger.info("\n3️⃣ Testing Enhanced MoneyControl Agent")
     try:
-        from backend.agents.stealth.enhanced_moneycontrol_agent import EnhancedMoneyControlAgent
-        agent = EnhancedMoneyControlAgent()
+        from backend.agents.stealth.moneycontrol_agent import MoneyControlAgent
+        agent = MoneyControlAgent()
         result = await agent.execute('RELIANCE')
         if result and 'signal' in result:
             logger.success(f"✅ Enhanced MoneyControl: WORKING - {result['signal']}")

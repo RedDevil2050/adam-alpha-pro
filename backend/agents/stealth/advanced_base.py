@@ -1406,18 +1406,33 @@ class AdvancedStealthAgentBase(ABC):
     @abstractmethod
     async def _execute_analysis(self, symbol: str, agent_outputs: dict, fused_data: QuadChannelData) -> Dict[str, Any]:
         """Execute agent-specific analysis using fused quad-channel data. Implement in subclasses."""
-        raise NotImplementedError("Subclasses must implement _execute_analysis")
-    
+        raise NotImplementedError("Subclasses must implement _execute_analysis")    
     # === UTILITY METHODS ===
     
     def _get_yahoo_data(self, yahoo_symbol: str, original_symbol: str) -> Dict:
-        """Get data from Yahoo Finance (blocking call for executor)"""
+        """Get data from Yahoo Finance (blocking call for executor) with rate limiting"""
         try:
-            ticker = yf.Ticker(yahoo_symbol)
-            info = ticker.info
-            hist = ticker.history(period="1d")
+            # Add delay to avoid rate limiting
+            import time
+            time.sleep(random.uniform(0.5, 1.5))
             
-            if not hist.empty:
+            ticker = yf.Ticker(yahoo_symbol)
+            
+            # Try to get info first (less likely to be rate limited)
+            try:
+                info = ticker.info
+            except Exception as info_e:
+                logger.warning(f"Yahoo info error for {yahoo_symbol}: {info_e}")
+                info = {}
+            
+            # Try to get historical data
+            try:
+                hist = ticker.history(period="1d", timeout=10)
+            except Exception as hist_e:
+                logger.warning(f"Yahoo history error for {yahoo_symbol}: {hist_e}")
+                hist = None
+            
+            if hist is not None and not hist.empty:
                 latest = hist.iloc[-1]
                 return {
                     "price": float(latest['Close']),
@@ -1429,18 +1444,25 @@ class AdvancedStealthAgentBase(ABC):
                     "symbol": original_symbol,
                     "yahoo_symbol": yahoo_symbol
                 }
-            else:
+            elif info:
                 # Fallback with basic info
                 return {
-                    "price": info.get('currentPrice', 0),
+                    "price": info.get('currentPrice', info.get('regularMarketPrice', 0)),
                     "market_cap": info.get('marketCap', 0),
                     "symbol": original_symbol,
                     "yahoo_symbol": yahoo_symbol,
                     "fallback": "info_only"
                 }
+            else:
+                return {"symbol": original_symbol, "yahoo_symbol": yahoo_symbol, "error": "No data available"}
+                
         except Exception as e:
-            logger.warning(f"Yahoo Finance error for {yahoo_symbol}: {e}")
-            return {"symbol": original_symbol, "yahoo_symbol": yahoo_symbol, "error": str(e)}
+            error_msg = str(e)
+            if "Too Many Requests" in error_msg or "rate limit" in error_msg.lower():
+                logger.warning(f"Yahoo Finance rate limited for {yahoo_symbol} - will retry later")
+            else:
+                logger.warning(f"Yahoo Finance error for {yahoo_symbol}: {e}")
+            return {"symbol": original_symbol, "yahoo_symbol": yahoo_symbol, "error": error_msg}
     
     async def _cache_background_data(self, symbol: str, fused_data: QuadChannelData) -> None:
         """Cache background collection data with extended TTL"""

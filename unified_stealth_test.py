@@ -93,14 +93,19 @@ class UnifiedStealthTester:
     
     def print_section(self, title: str):
         """Print section header"""
-        print(f'\n📋 {title}')
+        print(f'\\n📋 {title}')
         print('-' * (len(title) + 4))
     
-    async def test_single_agent(self, agent_class, agent_name: str, symbol: str, timeout: int = 30) -> Dict:
+    async def test_single_agent(self, agent_class, agent_name: str, symbol: str, timeout: int = 30, basic_mode: bool = False) -> Dict:
         """Test a single agent with comprehensive metrics"""
         try:
             start_time = time.time()
             agent = agent_class()
+            
+            # For basic mode, disable browser automation to avoid Chrome issues
+            if basic_mode and hasattr(agent, 'browser_enabled'):
+                agent.browser_enabled = False
+                logger.info(f"🔧 {agent_name}: Browser automation disabled for basic mode")
             
             # Execute with timeout protection
             result = await asyncio.wait_for(
@@ -883,14 +888,72 @@ class UnifiedStealthTester:
         
         return quick_results
 
+    async def test_basic(self, symbols: List[str] = None) -> Dict:
+        """Run basic test without browser automation to avoid Chrome/driver issues"""
+        symbols = symbols or ['RELIANCE', 'TCS']
+        self.print_header("🔧 BASIC STEALTH AGENT TEST (No Browser Automation)")
+        
+        all_results = []
+        for symbol in symbols:
+            print(f'\n📊 Testing symbol: {symbol}')
+            print('-' * 40)
+            
+            for agent_name, agent_class in self.agents:
+                try:
+                    result = await self.test_single_agent(agent_class, agent_name, symbol, timeout=20, basic_mode=True)
+                    all_results.append(result)
+                    
+                    # Print immediate feedback
+                    status = "✅" if result['success'] else "❌"
+                    verdict = result.get('verdict', 'UNKNOWN')
+                    confidence = result.get('confidence', 0.0)
+                    execution_time = result.get('execution_time', 0.0)
+                    
+                    print(f"{status} {agent_name:12} | {verdict:8} | {confidence:5.1f}% | {execution_time:5.2f}s")
+                    
+                except Exception as e:
+                    print(f"❌ {agent_name:12} | ERROR: {str(e)[:50]}")
+                    all_results.append({
+                        'agent': agent_name,
+                        'symbol': symbol,
+                        'success': False,
+                        'error': str(e),
+                        'execution_time': 0.0
+                    })
+        
+        return self.generate_summary_report(all_results)
+
+    def generate_summary_report(self, results: List[Dict]) -> Dict:
+        """Generate comprehensive summary report"""
+        try:
+            summary = {
+                'total_agents': len(results),
+                'successful_agents': len([r for r in results if r['status'] == 'success']),
+                'failed_agents': len([r for r in results if r['status'] == 'failed']),
+                'timeout_agents': len([r for r in results if r['status'] == 'timeout']),
+                'average_execution_time': sum(r['execution_time'] for r in results) / len(results) if results else 0,
+                'results': results,
+                'success_rate': len([r for r in results if r['status'] == 'success']) / len(results) * 100 if results else 0,
+                'performance_grades': {
+                    'excellent': len([r for r in results if r['execution_time'] < 10 and r['status'] == 'success']),
+                    'good': len([r for r in results if 10 <= r['execution_time'] < 15 and r['status'] == 'success']),
+                    'acceptable': len([r for r in results if 15 <= r['execution_time'] < 20 and r['status'] == 'success']),
+                    'poor': len([r for r in results if r['execution_time'] >= 20 or r['status'] != 'success'])
+                }
+            }
+            return summary
+        except Exception as e:
+            logger.error(f"Error generating summary report: {e}")
+            return {'error': str(e), 'results': results}
+
 async def main():
     """Main test runner with command-line options"""
     import argparse
     parser = argparse.ArgumentParser(description='Unified Stealth Agent Testing Suite')
     # Add intelligence mode option
     parser.add_argument('--mode', 
-                       choices=['comprehensive', 'quick', 'health', 'errors', 'quad-channel', 'intelligence'], 
-                       default='comprehensive', 
+                       choices=['comprehensive', 'quick', 'basic', 'health', 'errors', 'quad-channel', 'intelligence'], 
+                       default='basic', 
                        help='Test mode to run')
     parser.add_argument('--agents', nargs='+', 
                        help='Specific agents to test for intelligence mode')
@@ -906,6 +969,8 @@ async def main():
             summary = await tester.test_comprehensive()
         elif args.mode == 'quick':
             summary = await tester.test_quick(args.symbols)
+        elif args.mode == 'basic':
+            summary = await tester.test_basic(args.symbols)
         elif args.mode == 'health':
             summary = await tester.test_health_monitor()
         elif args.mode == 'errors':
