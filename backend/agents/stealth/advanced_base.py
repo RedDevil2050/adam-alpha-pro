@@ -592,12 +592,10 @@ class AdvancedStealthAgentBase(ABC):
             # Try NSE India official
             f"https://www.nseindia.com/get-quotes/equity?symbol={symbol}",
             f"https://www.nseindia.com/api/quote-derivative?symbol={symbol}",
-            
-            # Try updated Tijori patterns (new domain structure)
-            f"https://tijori.com/company/{symbol}",
-            f"https://www.tijori.com/company/{symbol}",
-            f"https://tijori.com/stocks/{symbol}",
-            f"https://www.tijori.com/equity/{symbol}",
+              # Try updated Tijori patterns (2024/2025 domains)
+            f"https://tijori.finance/stock/{symbol.lower()}",
+            f"https://app.tijori.com/stocks/{symbol}",
+            f"https://tijori.finance/nse/{symbol.lower()}",
             
             # Try Screener.in (popular among Indian investors)
             f"https://www.screener.in/company/{symbol}/",
@@ -606,10 +604,10 @@ class AdvancedStealthAgentBase(ABC):
             # Try BSE official
             f"https://www.bseindia.com/stock-share-price/{symbol}/",
             f"https://api.bseindia.com/BseIndiaAPI/api/StockReachGraph/w?stock={symbol}",
-            
-            # Original tijori patterns as fallback
-            f"https://www.tijori.com/stock/{symbol}",
-            f"https://tijori.com/nse/{symbol}"
+              # Add more reliable Indian market sources
+            f"https://economictimes.indiatimes.com/markets/stocks/stock-quotes?ticker={symbol}",
+            f"https://www.investing.com/equities/{symbol.lower()}",
+            f"https://in.finance.yahoo.com/quote/{symbol}.NS"
         ]
         
         # Try emergency sources with improved error handling
@@ -625,8 +623,7 @@ class AdvancedStealthAgentBase(ABC):
             },
             follow_redirects=True
         ) as client:
-            
-            for url in emergency_urls:
+              for url in emergency_urls:
                 try:
                     logger.debug(f"🎯 Trying emergency URL: {url}")
                     response = await client.get(url)
@@ -640,8 +637,17 @@ class AdvancedStealthAgentBase(ABC):
                     elif response.status_code == 404:
                         logger.debug(f"404 Not Found: {url}")
                         continue
+                    elif response.status_code == 503:
+                        logger.debug(f"HTTP 503 from {url}")
+                        # MoneyControl is overloaded, continue to next source
+                        continue
+                    elif response.status_code >= 500:
+                        logger.debug(f"HTTP {response.status_code} from {url}")
+                        # Server error, continue to next source
+                        continue
                     else:
                         logger.debug(f"HTTP {response.status_code} from {url}")
+                        continue
                         
                 except Exception as e:
                     logger.debug(f"Request failed for {url}: {str(e)}")

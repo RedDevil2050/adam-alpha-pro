@@ -95,12 +95,15 @@ class StockEdgeAgent(AdvancedStealthAgentBase):
         )
     
     def _extract_price_from_stockedge(self, soup) -> Optional[float]:
-        """Extract current price from StockEdge page."""
+        """Extract current price from StockEdge page with enhanced selectors."""
         try:
-            # Try various price selectors
+            # Enhanced price selectors for 2024/2025 StockEdge layout
             price_selectors = [
                 ".current-price", ".stock-price", ".ltp", ".price-current",
-                "[data-testid='current-price']", ".price-value"
+                "[data-testid='current-price']", ".price-value",
+                ".stock-price-value", ".current-stock-price",
+                "[data-price]", ".quote-price", ".market-price",
+                ".price-text", ".stock-quote-price", ".equity-price"
             ]
             
             for selector in price_selectors:
@@ -108,20 +111,39 @@ class StockEdgeAgent(AdvancedStealthAgentBase):
                 if element:
                     price_text = element.get_text().strip()
                     # Clean and extract numeric value
-                    price_text = price_text.replace(",", "").replace("₹", "").replace("$", "")
+                    price_text = price_text.replace(",", "").replace("₹", "").replace("$", "").replace("Rs", "")
+                    # Remove any percentage or other symbols
+                    price_text = price_text.split()[0] if ' ' in price_text else price_text
                     try:
-                        return float(price_text)
+                        price = float(price_text)
+                        if price > 0:  # Ensure valid positive price
+                            return price
                     except ValueError:
                         continue
                         
-            # Fallback: search for price patterns in text
+            # Enhanced fallback: search for price patterns in text
             import re
-            price_pattern = r'₹?(\d{1,6}(?:,\d{3})*(?:\.\d{2})?)'
-            matches = re.findall(price_pattern, soup.get_text())
-            if matches:
-                price_text = matches[0].replace(",", "")
-                return float(price_text)
-                
+            # More comprehensive price pattern matching
+            price_patterns = [
+                r'₹\s*(\d{1,6}(?:,\d{3})*(?:\.\d{2})?)',
+                r'Rs\.?\s*(\d{1,6}(?:,\d{3})*(?:\.\d{2})?)',
+                r'Price[:\s]*₹?(\d{1,6}(?:,\d{3})*(?:\.\d{2})?)',
+                r'Current[:\s]*₹?(\d{1,6}(?:,\d{3})*(?:\.\d{2})?)',
+                r'LTP[:\s]*₹?(\d{1,6}(?:,\d{3})*(?:\.\d{2})?)'
+            ]
+            
+            text_content = soup.get_text()
+            for pattern in price_patterns:
+                matches = re.findall(pattern, text_content, re.IGNORECASE)
+                if matches:
+                    price_text = matches[0].replace(",", "")
+                    try:
+                        price = float(price_text)
+                        if price > 0:
+                            return price
+                    except ValueError:
+                        continue
+                        
         except Exception as e:
             logger.warning(f"Price extraction failed: {e}")
         return None

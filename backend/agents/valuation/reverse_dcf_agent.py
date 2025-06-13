@@ -1,4 +1,4 @@
-from backend.agents.valuation.base import ValuationAgentBase
+from backend.agents.base.category_bases import ValuationAgentBase
 from backend.utils.data_provider import fetch_price_point, fetch_fcf_per_share
 from loguru import logger
 from backend.agents.decorators import standard_agent_execution

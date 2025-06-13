@@ -28,11 +28,14 @@ class TijoriAgent(AdvancedStealthAgentBase):
             await asyncio.sleep(random.uniform(0.5, 2.0))
             
             async with httpx.AsyncClient(timeout=8, headers=headers) as client:
-                # Try Tijori URL pattern - using more generic approach due to 403 issues
+                # Try updated Tijori URL patterns (2024/2025)
                 potential_urls = [
-                    f"https://tijori.com/stock/{symbol}",
-                    f"https://www.tijori.com/stocks/{symbol}",
-                    f"https://tijori.com/equity/{symbol}"
+                    f"https://tijori.finance/stock/{symbol.lower()}",
+                    f"https://www.tijori.finance/stocks/{symbol.lower()}",
+                    f"https://tijori.finance/equity/{symbol.lower()}",
+                    f"https://app.tijori.com/stocks/{symbol}",
+                    f"https://tijori.com/nse/{symbol}",
+                    f"https://tijori.finance/nse/{symbol.lower()}"
                 ]
                 
                 for url in potential_urls:
