@@ -1,11 +1,13 @@
 from backend.agents.stealth.advanced_base import AdvancedStealthAgentBase, QuadChannelData
+from backend.agents.stealth.advanced_stealth_scraper import BrowserConfig
 import httpx
 import asyncio
 import random
 import re
+import json
 from bs4 import BeautifulSoup
 from loguru import logger
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 
 agent_name = "screener_agent"
 
@@ -15,120 +17,155 @@ class ScreenerAgent(AdvancedStealthAgentBase):
     def __init__(self):
         super().__init__()
         self.screener_base_url = "https://www.screener.in"
+        logger.info("🚀 Enhanced Screener Agent initialized with quad-channel stealth capabilities")
     
-    async def _fetch_primary_source(self, symbol: str) -> Optional[Dict]:
-        """Fetch from screener.in as primary source with stealth techniques."""
-        try:
-            headers = {
-                "User-Agent": random.choice(self.user_agents),
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                "Accept-Language": "en-US,en;q=0.5",
-                "Accept-Encoding": "gzip, deflate",
-                "Connection": "keep-alive",
-                "Referer": "https://www.google.com/",
+    async def _fetch_primary_source(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """Fetch from Screener with quad-channel stealth approach using advanced browser automation"""
+        logger.info(f"🔍 Starting quad-channel Screener fetch for {symbol}")
+        
+        # Try different URL patterns
+        urls = [
+            f"{self.screener_base_url}/company/{symbol.upper()}",
+            f"{self.screener_base_url}/company/{symbol.upper()}/consolidated",
+            f"{self.screener_base_url}/search/?q={symbol.upper()}",
+            f"{self.screener_base_url}/api/company/{symbol.upper()}"
+        ]
+        
+        # Enhanced quad-channel browser strategies
+        if self.browser_enabled:
+            selectors = {
+                'price': '.number, .current-price, [data-field="price"]',
+                'market_cap': 'td:contains("Market Cap") + td, .market-cap',
+                'pe_ratio': 'td:contains("P/E") + td, .pe-ratio',
+                'book_value': 'td:contains("Book Value") + td',
+                'dividend_yield': 'td:contains("Dividend Yield") + td'
             }
             
-            await asyncio.sleep(random.uniform(0.5, 2.0))
-            
-            url_patterns = [
-                f"{self.screener_base_url}/company/{symbol}/consolidated/",
-                f"{self.screener_base_url}/company/{symbol}/",
-                f"{self.screener_base_url}/stocks/{symbol}/"
-            ]
-            
-            async with httpx.AsyncClient(timeout=8, headers=headers) as client:
-                for url in url_patterns:
-                    try:
-                        response = await client.get(url)
-                        if response.status_code == 200:
-                            return await self._parse_screener_page(response, symbol)
-                    except Exception as e:
-                        logger.warning(f"Screener URL {url} failed: {e}")
-                        continue
-                        
-        except Exception as e:
-            logger.warning(f"Screener primary source failed for {symbol}: {e}")
-            
-        return None
-    
-    async def _parse_screener_page(self, response: httpx.Response, symbol: str) -> Optional[Dict]:
-        """Parse screener.in page for financial data."""
-        try:
-            soup = BeautifulSoup(response.text, "html.parser")
-            
-            # Extract price
-            price = self._extract_screener_price(soup)
-            
-            # Extract financial metrics
-            pe_ratio = self._extract_screener_metric(soup, ["P/E", "PE"])
-            market_cap = self._extract_screener_metric(soup, ["Market Cap", "Mkt Cap"])
-            debt_to_equity = self._extract_screener_metric(soup, ["Debt to equity", "D/E"])
-            roe = self._extract_screener_metric(soup, ["ROE", "Return on Equity"])
-            
-            if price and price > 0:
-                return {
-                    "price": price,
-                    "pe_ratio": pe_ratio,
-                    "market_cap": market_cap,
-                    "debt_to_equity": debt_to_equity,
-                    "roe": roe,
-                    "source": "screener_primary"
-                }
+            try:
+                browser_results = await self.stealth_scraper.quad_channel_scrape(urls, selectors)
                 
-        except Exception as e:
-            logger.warning(f"Failed to parse screener page: {e}")
+                # Process browser results
+                for channel_name, channel_result in browser_results.items():
+                    if channel_result.get('success') and channel_result.get('data'):
+                        processed_data = self._process_screener_data(channel_result['data'])
+                        if processed_data:
+                            logger.success(f"✅ Screener browser channel {channel_name} succeeded")
+                            return {
+                                'success': True,
+                                'data': processed_data,
+                                'channel': channel_name,
+                                'method': 'browser',
+                                'browser': channel_result.get('browser')
+                            }
+                        
+            except Exception as e:
+                logger.warning(f"⚠️ Browser scraping failed: {e}")
         
-        return None
+        # Fallback to HTTP requests with stealth
+        return await self._fetch_with_http_fallback(urls, symbol)
     
-    def _extract_screener_price(self, soup) -> Optional[float]:
-        """Extract current price from screener page."""
+    async def _fetch_screener_with_strategy(self, url: str, channel: int, strategy: Dict[str, Any]) -> Dict[str, Any]:
+        """Fetch Screener data with specific strategy"""
         try:
-            # Common price selectors for screener.in
-            price_selectors = [
-                "#top-ratios .number", ".price", ".current-price",
-                "[data-source='price']", ".stock-price"
-            ]
+            # Screener.in specific headers
+            headers = {
+                'User-Agent': self.stealth_scraper.get_random_user_agent(),
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'DNT': '1',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'none',
+                'Referer': 'https://www.google.com/'
+            }
             
-            for selector in price_selectors:
-                element = soup.select_one(selector)
-                if element:
-                    price_text = element.get_text().strip()
-                    price_text = re.sub(r'[^\d.]', '', price_text)
-                    try:
-                        return float(price_text)
-                    except ValueError:
-                        continue
-                        
-        except Exception as e:
-            logger.warning(f"Screener price extraction failed: {e}")
-        return None
-    
-    def _extract_screener_metric(self, soup, metric_names: List[str]) -> Optional[float]:
-        """Extract financial metrics from screener page."""
-        try:
-            for metric_name in metric_names:
-                # Look for table rows or divs containing the metric
-                elements = soup.find_all(text=re.compile(metric_name, re.IGNORECASE))
+            response = await self.stealth_scraper.scrape_with_browser(
+                url,
+                browser_type=strategy['browser'],
+                wait_time=strategy['delay'],
+                headers=headers,
+                scroll=strategy['scroll']
+            )
+            
+            if response['success']:
+                data = self._parse_screener_data(response['content'])
+                return {
+                    'success': True,
+                    'data': data,
+                    'channel': channel,
+                    'strategy': strategy
+                }
+            else:
+                return {'success': False, 'channel': channel, 'error': response.get('error')}
                 
-                for element in elements:
-                    parent = element.parent
-                    if parent:
-                        # Try to find associated value
-                        siblings = parent.find_next_siblings()
-                        for sibling in siblings[:3]:  # Check next few siblings
-                            value_text = sibling.get_text().strip()
-                            # Extract numeric value
-                            numeric_match = re.search(r'([\d,]+\.?\d*)', value_text)
-                            if numeric_match:
-                                try:
-                                    value = float(numeric_match.group(1).replace(',', ''))
-                                    return value
-                                except ValueError:
-                                    continue
-                                    
         except Exception as e:
-            logger.warning(f"Screener metric extraction failed: {e}")
-        return None
+            self.logger.error(f"Screener Channel {channel} failed: {str(e)}")
+            return {'success': False, 'channel': channel, 'error': str(e)}
+    
+    def _parse_screener_data(self, content: str) -> Dict[str, Any]:
+        """Parse Screener specific data"""
+        data = {}
+        
+        try:
+            soup = BeautifulSoup(content, 'html.parser')
+            
+            # Current price
+            price_elem = soup.find('span', {'class': 'number'}) or soup.find('div', {'class': 'current-price'})
+            if price_elem:
+                price_text = price_elem.get_text(strip=True)
+                try:
+                    data['price'] = float(re.sub(r'[^\d.]', '', price_text))
+                except:
+                    pass
+            
+            # Market cap
+            mcap_elem = soup.find('td', string=re.compile(r'Market Cap', re.I))
+            if mcap_elem and mcap_elem.find_next_sibling():
+                mcap_text = mcap_elem.find_next_sibling().get_text(strip=True)
+                data['market_cap'] = mcap_text
+            
+            # PE Ratio
+            pe_elem = soup.find('td', string=re.compile(r'P/E', re.I))
+            if pe_elem and pe_elem.find_next_sibling():
+                pe_text = pe_elem.find_next_sibling().get_text(strip=True)
+                data['pe_ratio'] = pe_text
+            
+            # Book Value
+            bv_elem = soup.find('td', string=re.compile(r'Book Value', re.I))
+            if bv_elem and bv_elem.find_next_sibling():
+                bv_text = bv_elem.find_next_sibling().get_text(strip=True)
+                data['book_value'] = bv_text
+            
+            # Dividend Yield
+            div_elem = soup.find('td', string=re.compile(r'Dividend Yield', re.I))
+            if div_elem and div_elem.find_next_sibling():
+                div_text = div_elem.find_next_sibling().get_text(strip=True)
+                data['dividend_yield'] = div_text
+            
+            # Revenue and Profit (from tables)
+            tables = soup.find_all('table')
+            for table in tables:
+                rows = table.find_all('tr')
+                for row in rows:
+                    cells = row.find_all(['td', 'th'])
+                    if len(cells) >= 2:
+                        header = cells[0].get_text(strip=True).lower()
+                        value = cells[1].get_text(strip=True)
+                        
+                        if 'sales' in header or 'revenue' in header:
+                            data['revenue'] = value
+                        elif 'profit' in header and 'net' in header:
+                            data['net_profit'] = value
+                        elif 'eps' in header:
+                            data['eps'] = value
+                            
+        except Exception as e:
+            self.logger.error(f"Error parsing Screener data: {str(e)}")
+        
+        return data
     
     async def _execute_analysis(self, symbol: str, agent_outputs: dict, fused_data: QuadChannelData) -> Dict:
         """Execute screener-specific fundamental analysis."""
@@ -301,6 +338,146 @@ class ScreenerAgent(AdvancedStealthAgentBase):
             return "Low"
         else:
             return "Unknown"
+    
+    async def _fetch_with_http_fallback(self, urls: List[str], symbol: str) -> Optional[Dict[str, Any]]:
+        """Fallback HTTP request method with stealth headers"""
+        
+        for i, url in enumerate(urls):
+            try:
+                headers = {
+                    'User-Agent': random.choice(self.user_agents),
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    'DNT': '1',
+                    'Connection': 'keep-alive',
+                    'Upgrade-Insecure-Requests': '1',
+                    'Sec-Fetch-Dest': 'document',
+                    'Sec-Fetch-Mode': 'navigate',
+                    'Sec-Fetch-Site': 'none',
+                    'Referer': 'https://www.google.com/',
+                    'Cache-Control': 'max-age=0'
+                }
+                
+                async with httpx.AsyncClient(
+                    timeout=20,
+                    follow_redirects=True,
+                    headers=headers
+                ) as client:
+                    
+                    # Add random delay to avoid rate limiting
+                    await asyncio.sleep(random.uniform(1, 3))
+                    
+                    response = await client.get(url)
+                    
+                    if response.status_code == 200:
+                        data = self._parse_screener_content(response.text)
+                        if data:
+                            logger.success(f"✅ HTTP fallback succeeded for {url}")
+                            return {
+                                'success': True,
+                                'data': data,
+                                'channel': f'http_{i}',
+                                'method': 'http'
+                            }
+                    elif response.status_code == 503:
+                        logger.warning(f"⚠️ Rate limited on {url}, trying next...")
+                        await asyncio.sleep(random.uniform(5, 10))
+                        continue
+                    else:
+                        logger.debug(f"HTTP {response.status_code} for {url}")
+                        
+            except Exception as e:
+                logger.warning(f"HTTP request failed for {url}: {e}")
+                continue
+        
+        return None
+    
+    def _process_screener_data(self, scraped_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Process data scraped from browser"""
+        processed = {}
+        
+        try:
+            # Extract price
+            if scraped_data.get('price'):
+                price_text = str(scraped_data['price']).strip()
+                price_match = re.search(r'[\d,]+\.?\d*', price_text)
+                if price_match:
+                    processed['price'] = float(price_match.group().replace(',', ''))
+            
+            # Extract other fields
+            for field in ['market_cap', 'pe_ratio', 'book_value', 'dividend_yield']:
+                if scraped_data.get(field):
+                    processed[field] = str(scraped_data[field]).strip()
+            
+        except Exception as e:
+            logger.error(f"Error processing scraped data: {e}")
+        
+        return processed
+    
+    def _parse_screener_content(self, content: str) -> Dict[str, Any]:
+        """Parse Screener HTML content"""
+        data = {}
+        
+        try:
+            soup = BeautifulSoup(content, 'html.parser')
+            
+            # Current price
+            price_elem = soup.find('span', {'class': 'number'}) or soup.find('div', {'class': 'current-price'})
+            if price_elem:
+                price_text = price_elem.get_text(strip=True)
+                try:
+                    data['price'] = float(re.sub(r'[^\d.]', '', price_text))
+                except:
+                    pass
+            
+            # Market cap
+            mcap_elem = soup.find('td', string=re.compile(r'Market Cap', re.I))
+            if mcap_elem and mcap_elem.find_next_sibling():
+                mcap_text = mcap_elem.find_next_sibling().get_text(strip=True)
+                data['market_cap'] = mcap_text
+            
+            # PE Ratio
+            pe_elem = soup.find('td', string=re.compile(r'P/E', re.I))
+            if pe_elem and pe_elem.find_next_sibling():
+                pe_text = pe_elem.find_next_sibling().get_text(strip=True)
+                data['pe_ratio'] = pe_text
+            
+            # Book Value
+            bv_elem = soup.find('td', string=re.compile(r'Book Value', re.I))
+            if bv_elem and bv_elem.find_next_sibling():
+                bv_text = bv_elem.find_next_sibling().get_text(strip=True)
+                data['book_value'] = bv_text
+            
+            # Dividend Yield
+            div_elem = soup.find('td', string=re.compile(r'Dividend Yield', re.I))
+            if div_elem and div_elem.find_next_sibling():
+                div_text = div_elem.find_next_sibling().get_text(strip=True)
+                data['dividend_yield'] = div_text
+            
+            # Revenue and Profit (from tables)
+            tables = soup.find_all('table')
+            for table in tables:
+                rows = table.find_all('tr')
+                for row in rows:
+                    cells = row.find_all(['td', 'th'])
+                    if len(cells) >= 2:
+                        header = cells[0].get_text(strip=True).lower()
+                        value = cells[1].get_text(strip=True)
+                        
+                        if 'sales' in header or 'revenue' in header:
+                            data['revenue'] = value
+                        elif 'profit' in header and 'net' in header:
+                            data['net_profit'] = value
+                        elif 'eps' in header:
+                            data['eps'] = value
+                            
+        except Exception as e:
+            logger.error(f"Error parsing Screener content: {e}")
+        
+        return data
+    
+    # ...existing code...
 
 
 async def run(symbol: str, agent_outputs: dict = {}) -> dict:

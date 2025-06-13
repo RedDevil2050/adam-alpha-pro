@@ -1,4 +1,5 @@
 from backend.agents.stealth.advanced_base import AdvancedStealthAgentBase, QuadChannelData
+from backend.agents.stealth.advanced_stealth_scraper import BrowserConfig
 from backend.agents.stealth.safe_data_utils import (
     safe_numeric_compare, safe_get_price, safe_get_volume, safe_get_float,
     validate_indian_market_data
@@ -6,6 +7,8 @@ from backend.agents.stealth.safe_data_utils import (
 import httpx
 import asyncio
 import random
+import re
+import json
 from bs4 import BeautifulSoup
 from loguru import logger
 from typing import Optional, Dict, List, Any
@@ -17,37 +20,55 @@ class TickertapeAgent(AdvancedStealthAgentBase):
     def __init__(self):
         super().__init__()
         self.agent_name = agent_name
+        self.base_url = "https://www.tickertape.in"
+        logger.info("🚀 Enhanced TickerTape Agent initialized with quad-channel stealth capabilities")
     
     async def _fetch_primary_source(self, symbol: str) -> Optional[Dict]:
-        """Enhanced Tickertape primary source with updated URL patterns and better error handling."""
+        """Enhanced TickerTape fetch with quad-channel browser automation"""
+        logger.info(f"🔍 Starting enhanced TickerTape fetch for {symbol}")
         
-        # Try multiple URL patterns for TickerTape
-        url_patterns = [
-            f"https://www.tickertape.in/stocks/{symbol}",
-            f"https://tickertape.in/stocks/{symbol}",
-            f"https://www.tickertape.in/stocks/{symbol.lower()}",
-            f"https://tickertape.in/stocks/{symbol.lower()}",
-            f"https://www.tickertape.in/equity/{symbol}",
-            f"https://tickertape.in/equity/{symbol}",
-            f"https://www.tickertape.in/stock/{symbol}",
-            f"https://tickertape.in/stock/{symbol}"
+        # Multiple URL patterns for TickerTape
+        urls = [
+            f"{self.base_url}/stocks/{symbol}",
+            f"{self.base_url}/stocks/{symbol.lower()}",
+            f"{self.base_url}/equity/{symbol}",
+            f"{self.base_url}/stock/{symbol}"
         ]
         
-        # Enhanced headers to avoid bot detection
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Connection": "keep-alive",
-            "Upgrade-Insecure-Requests": "1",
-            "Referer": "https://www.tickertape.in/",
-            "Origin": "https://www.tickertape.in",
-            "Sec-Fetch-Dest": "document",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "same-origin",
-            "Sec-CH-UA": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-            "Sec-CH-UA-Mobile": "?0",
+        # Enhanced browser-based scraping
+        if self.browser_enabled:
+            selectors = {
+                'price': '.stock-price, [data-testid="stock-price"], .current-price',
+                'change': '.change-value, [data-testid="change"], .price-change',
+                'change_percent': '.change-percent, [data-testid="change-percent"]',
+                'volume': '.volume-value, [data-testid="volume"]',
+                'market_cap': '[data-testid="market-cap"], .market-cap-value',
+                'pe_ratio': '[data-testid="pe-ratio"], .pe-value',
+                'pb_ratio': '[data-testid="pb-ratio"], .pb-value',
+                'dividend_yield': '[data-testid="dividend-yield"], .dividend-value'
+            }
+            
+            try:
+                browser_results = await self.stealth_scraper.quad_channel_scrape(urls, selectors)
+                
+                for channel_name, channel_result in browser_results.items():
+                    if channel_result.get('success') and channel_result.get('data'):
+                        processed_data = self._process_tickertape_data(channel_result['data'])
+                        if processed_data and processed_data.get('price'):
+                            logger.success(f"✅ TickerTape browser channel {channel_name} succeeded")
+                            return {
+                                'success': True,
+                                'data': processed_data,
+                                'channel': channel_name,
+                                'method': 'browser',
+                                'browser': channel_result.get('browser')
+                            }
+                        
+            except Exception as e:
+                logger.warning(f"⚠️ Browser scraping failed: {e}")
+        
+        # Fallback to HTTP requests
+        return await self._fetch_with_http_fallback(urls, symbol)
             "Sec-CH-UA-Platform": '"Windows"'
         }
         

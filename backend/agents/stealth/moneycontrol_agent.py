@@ -1,4 +1,5 @@
 from backend.agents.stealth.advanced_base import AdvancedStealthAgentBase, QuadChannelData
+from backend.agents.stealth.advanced_stealth_scraper import BrowserConfig
 from backend.utils.symbol_normalizer_fixed import IndianEquitySymbolNormalizer
 import httpx
 from bs4 import BeautifulSoup
@@ -6,28 +7,32 @@ import numpy as np
 from sklearn.ensemble import IsolationForest
 from loguru import logger
 import asyncio
-from typing import Dict, Optional
+import random
+import re
+from typing import Dict, Optional, List, Any
 
 agent_name = "moneycontrol_agent"
 
 
 class MoneyControlAgent(AdvancedStealthAgentBase):
     """
-    Enhanced MoneyControl agent with quad-channel architecture:
-    - Primary: MoneyControl website scraping
-    - Secondary: Yahoo Finance API
-    - Tertiary: Alpha Vantage API  
-    - Emergency: Polygon.io API
+    Enhanced MoneyControl agent with quad-channel browser automation:
+    - Primary: Chrome headless with stealth
+    - Secondary: Firefox headless with stealth  
+    - Tertiary: Undetected Chrome
+    - Emergency: HTTP requests with rotation
     """
     
     def __init__(self):
         super().__init__()
         self.agent_name = agent_name
+        self.base_url = "https://www.moneycontrol.com"
         
         # ML components for advanced analysis
         self.anomaly_detector = IsolationForest(contamination=0.1)
         self.timeframes = [5, 15, 60, 240]  # minutes
-          # Enhanced confidence thresholds for MoneyControl
+        
+        # Enhanced confidence thresholds for MoneyControl
         self.fusion_weights = {
             "primary": 0.5,    # Higher weight for MoneyControl
             "secondary": 0.3,   # Yahoo Finance
@@ -35,92 +40,234 @@ class MoneyControlAgent(AdvancedStealthAgentBase):
             "emergency": 0.05   # Polygon.io
         }
         
-        logger.info(f"🚀 Enhanced MoneyControl Agent initialized with quad-channel support")
+        logger.info(f"🚀 Enhanced MoneyControl Agent initialized with quad-channel browser support")
     
     async def _fetch_primary_source(self, symbol: str) -> Optional[Dict]:
-        """Fetch data from MoneyControl website (primary source) with updated URL patterns."""
+        """Fetch from MoneyControl with enhanced quad-channel browser automation"""
+        logger.info(f"🔍 Starting enhanced MoneyControl fetch for {symbol}")
         
-        # Try multiple URL patterns for MoneyControl
-        url_patterns = [
-            f"https://www.moneycontrol.com/india/stockpricequote/{symbol}",
-            f"https://www.moneycontrol.com/stocks/company_info/stock_comp_result.php?sc_id={symbol}",
-            f"https://www.moneycontrol.com/stocks/marketstats/indexcomp.php?optex=NSE&opttopic=indexcomp&symbol={symbol}",
-            f"https://www.moneycontrol.com/shares-stock-price/{symbol}",
-            f"https://www.moneycontrol.com/stock-price/{symbol}",
-            f"https://www.moneycontrol.com/equity/{symbol}",
-            # Search fallback
-            f"https://www.moneycontrol.com/search/all?search={symbol}"
+        # Multiple URL patterns for MoneyControl
+        urls = [
+            f"{self.base_url}/india/stockpricequote/{symbol}",
+            f"{self.base_url}/stocks/company_info/stock_comp_result.php?sc_id={symbol}",
+            f"{self.base_url}/shares-stock-price/{symbol}",
+            f"{self.base_url}/stock-price/{symbol}",
+            f"{self.base_url}/equity/{symbol}",
+            f"{self.base_url}/search/all?search={symbol}"
         ]
         
-        for url in url_patterns:
+        # Enhanced browser-based scraping with quad-channel
+        if self.browser_enabled:
+            selectors = {
+                'price': '.inprice1, #Nse_Prc_tick, .trade-price, .price-current',
+                'change': '.gainer, .loser, .change-value, .price-change',
+                'volume': 'td:contains("Volume") + td, .volume-data',
+                'market_cap': 'td:contains("Market Cap") + td, .market-cap',
+                'pe_ratio': 'td:contains("P/E") + td, .pe-ratio',
+                'high': 'td:contains("High") + td, .day-high',
+                'low': 'td:contains("Low") + td, .day-low'
+            }
+            
             try:
-                # Enhanced headers to avoid bot detection
-                headers = {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-                    "Accept-Language": "en-US,en;q=0.9",
-                    "Accept-Encoding": "gzip, deflate, br",
-                    "Referer": "https://www.moneycontrol.com/",
-                    "Connection": "keep-alive",
-                    "Upgrade-Insecure-Requests": "1",
-                    "Sec-Fetch-Dest": "document",
-                    "Sec-Fetch-Mode": "navigate",
-                    "Sec-Fetch-Site": "same-origin",
-                    "Cache-Control": "max-age=0",
-                    "Sec-CH-UA": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-                    "Sec-CH-UA-Mobile": "?0",
-                    "Sec-CH-UA-Platform": '"Windows"'
-                }
+                browser_results = await self.stealth_scraper.quad_channel_scrape(urls[:4], selectors)
                 
-                async with httpx.AsyncClient(
-                    timeout=15, 
-                    follow_redirects=True,
-                    headers=headers
-                ) as client:
-                    logger.debug(f"Trying MoneyControl URL: {url}")
-                    response = await client.get(url)
-                    
-                    if response.status_code == 200:
-                        soup = BeautifulSoup(response.text, "html.parser")
-                        
-                        # Basic validation - check if we got actual stock data
-                        if len(response.text) > 1000 and any(term in response.text.lower() for term in ['stock', 'price', 'market', 'nse', 'bse']):
-                            logger.success(f"MoneyControl: Successfully fetched data from {url}")
+                for channel_name, channel_result in browser_results.items():
+                    if channel_result.get('success') and channel_result.get('data'):
+                        processed_data = self._process_moneycontrol_data(channel_result['data'])
+                        if processed_data and processed_data.get('price'):
+                            logger.success(f"✅ MoneyControl browser channel {channel_name} succeeded")
                             return {
-                                "price": self._extract_price(soup),
-                                "ratings": self._extract_ratings(soup),
-                                "technicals": self._extract_technicals(soup),
-                                "sentiment": self._extract_sentiment(soup),
-                                "volume": self._extract_volume(soup),
-                                "market_cap": self._extract_market_cap(soup),
-                                "pe_ratio": self._extract_pe_ratio(soup),
-                                "source": "moneycontrol_primary"
+                                'success': True,
+                                'data': processed_data,
+                                'channel': channel_name,
+                                'method': 'browser',
+                                'browser': channel_result.get('browser'),
+                                'source': 'moneycontrol_primary'
                             }
-                        else:
-                            logger.warning(f"MoneyControl: Invalid content from {url}")
-                    
-                    elif response.status_code == 503:
-                        logger.warning(f"MoneyControl: Service unavailable (503) - possible rate limiting")
-                        # Add delay for 503 errors to handle rate limiting
-                        await asyncio.sleep(8)  # Fixed 8 second delay
-                        continue
-                    
-                    elif response.status_code == 403:
-                        logger.warning(f"MoneyControl: Access forbidden (403) - possible bot detection")
-                        continue
-                    
-                    else:
-                        logger.debug(f"MoneyControl: Status {response.status_code} for {url}")
                         
-            except httpx.TimeoutException:
-                logger.warning(f"MoneyControl: Timeout for {url}")
-                continue
             except Exception as e:
-                logger.warning(f"MoneyControl: Error with {url}: {e}")
-                continue
+                logger.warning(f"⚠️ Browser scraping failed: {e}")
         
-        logger.error(f"MoneyControl: All URL patterns failed for {symbol}")
+        # Fallback to enhanced HTTP requests with 503 handling
+        return await self._fetch_with_enhanced_http(urls, symbol)
+    
+    async def _fetch_with_enhanced_http(self, urls: List[str], symbol: str) -> Optional[Dict]:
+        """Enhanced HTTP fallback with exponential backoff for 503 errors"""
+        
+        for i, url in enumerate(urls):
+            max_retries = 3
+            base_delay = 2
+            
+            for attempt in range(max_retries):
+                try:
+                    headers = {
+                        "User-Agent": random.choice(self.user_agents),
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                        "Accept-Language": "en-US,en;q=0.9",
+                        "Accept-Encoding": "gzip, deflate, br",
+                        "Referer": "https://www.moneycontrol.com/",
+                        "Connection": "keep-alive",
+                        "Upgrade-Insecure-Requests": "1",
+                        "Sec-Fetch-Dest": "document",
+                        "Sec-Fetch-Mode": "navigate",
+                        "Sec-Fetch-Site": "same-origin",
+                        "Cache-Control": "max-age=0",
+                        "Sec-CH-UA": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+                        "Sec-CH-UA-Mobile": "?0",
+                        "Sec-CH-UA-Platform": '"Windows"'
+                    }
+                    
+                    async with httpx.AsyncClient(
+                        timeout=20, 
+                        follow_redirects=True,
+                        headers=headers
+                    ) as client:
+                        logger.debug(f"Attempting MoneyControl URL: {url} (attempt {attempt + 1})")
+                        response = await client.get(url)
+                        
+                        if response.status_code == 200:
+                            soup = BeautifulSoup(response.text, "html.parser")
+                            
+                            # Validate content quality
+                            if len(response.text) > 1000 and any(term in response.text.lower() 
+                                                               for term in ['stock', 'price', 'market', 'nse', 'bse']):
+                                data = self._parse_moneycontrol_html(soup)
+                                if data and data.get('price'):
+                                    logger.success(f"✅ MoneyControl HTTP succeeded: {url}")
+                                    return {
+                                        'success': True,
+                                        'data': data,
+                                        'channel': f'http_{i}',
+                                        'method': 'http',
+                                        'source': 'moneycontrol_primary'
+                                    }
+                            else:
+                                logger.warning(f"⚠️ Invalid content from {url}")
+                        
+                        elif response.status_code == 503:
+                            delay = min(base_delay * (2 ** attempt), 30)
+                            logger.warning(f"🔴 503 Service Unavailable - waiting {delay}s before retry")
+                            
+                            if attempt < max_retries - 1:
+                                await asyncio.sleep(delay)
+                            continue
+                        
+                        elif response.status_code == 403:
+                            logger.warning(f"🔴 403 Access Forbidden - possible bot detection")
+                            break  # Try next URL
+                        
+                        else:
+                            logger.debug(f"HTTP {response.status_code} for {url}")
+                            break  # Try next URL
+                            
+                except httpx.TimeoutException:
+                    logger.warning(f"⏱️ Timeout for {url}")
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(base_delay)
+                    continue
+                except Exception as e:
+                    logger.warning(f"❌ Error with {url}: {e}")
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(base_delay)
+                    continue
+        
+        logger.error(f"❌ All MoneyControl URL patterns failed for {symbol}")
         return None
+    
+    def _process_moneycontrol_data(self, scraped_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Process data scraped from MoneyControl browser automation"""
+        processed = {}
+        
+        try:
+            # Extract and clean price
+            if scraped_data.get('price'):
+                price_text = str(scraped_data['price']).strip()
+                price_match = re.search(r'[\d,]+\.?\d*', price_text)
+                if price_match:
+                    processed['price'] = float(price_match.group().replace(',', ''))
+            
+            # Extract change
+            if scraped_data.get('change'):
+                change_text = str(scraped_data['change']).strip()
+                processed['change'] = change_text
+            
+            # Extract volume
+            if scraped_data.get('volume'):
+                volume_text = str(scraped_data['volume']).strip()
+                processed['volume'] = volume_text
+            
+            # Extract other fields
+            for field in ['market_cap', 'pe_ratio', 'high', 'low']:
+                if scraped_data.get(field):
+                    processed[field] = str(scraped_data[field]).strip()
+            
+        except Exception as e:
+            logger.error(f"Error processing MoneyControl scraped data: {e}")
+        
+        return processed
+    
+    def _parse_moneycontrol_html(self, soup: BeautifulSoup) -> Dict[str, Any]:
+        """Parse MoneyControl HTML content"""
+        data = {}
+        
+        try:
+            # Price extraction with multiple selectors
+            price_selectors = [
+                {'class': 'inprice1'},
+                {'id': 'Nse_Prc_tick'},
+                {'class': 'trade-price'},
+                {'class': 'price-current'}
+            ]
+            
+            for selector in price_selectors:
+                price_elem = soup.find('div', selector) or soup.find('span', selector)
+                if price_elem:
+                    price_text = price_elem.get_text(strip=True)
+                    try:
+                        data['price'] = float(re.sub(r'[^\d.]', '', price_text))
+                        break
+                    except:
+                        continue
+            
+            # Change extraction
+            change_elem = soup.find('span', {'class': 'gainer'}) or soup.find('span', {'class': 'loser'})
+            if change_elem:
+                change_text = change_elem.get_text(strip=True)
+                data['change'] = change_text
+            
+            # Volume
+            volume_elem = soup.find('td', string=re.compile(r'Volume', re.I))
+            if volume_elem and volume_elem.find_next_sibling():
+                volume_text = volume_elem.find_next_sibling().get_text(strip=True)
+                data['volume'] = volume_text
+            
+            # Market cap
+            mcap_elem = soup.find('td', string=re.compile(r'Market Cap', re.I))
+            if mcap_elem and mcap_elem.find_next_sibling():
+                mcap_text = mcap_elem.find_next_sibling().get_text(strip=True)
+                data['market_cap'] = mcap_text
+            
+            # PE Ratio
+            pe_elem = soup.find('td', string=re.compile(r'P/E', re.I))
+            if pe_elem and pe_elem.find_next_sibling():
+                pe_text = pe_elem.find_next_sibling().get_text(strip=True)
+                data['pe_ratio'] = pe_text
+            
+            # Day High/Low
+            high_elem = soup.find('td', string=re.compile(r'High', re.I))
+            if high_elem and high_elem.find_next_sibling():
+                high_text = high_elem.find_next_sibling().get_text(strip=True)
+                data['high'] = high_text
+            
+            low_elem = soup.find('td', string=re.compile(r'Low', re.I))
+            if low_elem and low_elem.find_next_sibling():
+                low_text = low_elem.find_next_sibling().get_text(strip=True)
+                data['low'] = low_text
+                
+        except Exception as e:
+            logger.error(f"Error parsing MoneyControl HTML: {e}")
+        
+        return data
     
     async def _execute_analysis(self, symbol: str, agent_outputs: dict, fused_data: QuadChannelData) -> Dict:
         """Execute enhanced analysis using quad-channel fused data."""

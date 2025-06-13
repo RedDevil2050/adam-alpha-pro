@@ -31,6 +31,7 @@ from pathlib import Path
 from collections import defaultdict
 from typing import Dict, List, Optional, Any
 from datetime import datetime
+import logging
 
 # Import all stealth agents
 try:
@@ -47,6 +48,12 @@ except ImportError as e:
     print("Make sure you're running from the correct directory")
     sys.exit(1)
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 class UnifiedStealthTester:
     """Unified testing class for all stealth agents"""

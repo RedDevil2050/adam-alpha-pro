@@ -1,15 +1,17 @@
 """
-Advanced Quad-Channel Stealth Agent Base - Consolidated Edition
-==============================================================
+Advanced Quad-Channel Stealth Agent Base - Enhanced with Browser Support
+========================================================================
 
 This unified base class provides:
 - Quad-channel data collection (Primary, Secondary, Tertiary, Emergency)
+- Advanced stealth browser automation (Chrome, Firefox, Undetected Chrome)
 - Adaptive rate limiting and circuit breakers
 - Advanced caching with Redis (async)
 - Intelligent data fusion algorithms
 - Enhanced error handling and retry mechanisms
 - Real-time performance monitoring
 - Background data collection capabilities
+- Anti-detection and fingerprint randomization
 """
 
 import asyncio
@@ -32,6 +34,9 @@ from backend.utils.symbol_normalizer_fixed import IndianEquitySymbolNormalizer
 from backend.agents.stealth.safe_data_utils import (
     safe_get_price, safe_get_volume, validate_indian_market_data,
     log_data_extraction_result
+)
+from backend.agents.stealth.advanced_stealth_scraper import (
+    AdvancedStealthScraper, BrowserConfig, StealthProfile
 )
 
 @dataclass
@@ -103,7 +108,9 @@ class AdvancedStealthAgentBase(ABC):
     Next-generation stealth agent base with quad-channel architecture
     and continuous background data collection capabilities.
     """
-    def __init__(self):        # Channel configurations - Increased timeouts for Indian market reliability
+    
+    def __init__(self):
+        # Channel configurations - Increased timeouts for Indian market reliability
         self.channels = {
             "primary": DataChannelConfig("primary", timeout=15, max_retries=2, priority=1),
             "secondary": DataChannelConfig("secondary", timeout=20, max_retries=3, priority=2),
@@ -140,7 +147,8 @@ class AdvancedStealthAgentBase(ABC):
         # Data fusion settings
         self.fusion_weights = {"primary": 0.4, "secondary": 0.3, "tertiary": 0.2, "emergency": 0.1}
         self.validation_threshold = 0.3  # Further reduced for Indian market volatility
-          # Cache settings - Increased TTL for Indian market stability
+        
+        # Cache settings - Increased TTL for Indian market stability
         self.cache_ttl = {
             "primary": 90,      # 1.5 minutes for primary data
             "secondary": 180,   # 3 minutes for secondary
@@ -156,6 +164,19 @@ class AdvancedStealthAgentBase(ABC):
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0"
         ]
         
+        # Enhanced: Advanced Stealth Scraper Integration
+        self.stealth_scraper = AdvancedStealthScraper()
+        self.browser_enabled = True  # Enable browser-based scraping
+        self.browser_fallback = True  # Use browser as fallback when HTTP fails
+        
+        # Browser configuration presets
+        self.browser_configs = {
+            "primary": BrowserConfig("chrome", headless=True, stealth_mode=True),
+            "secondary": BrowserConfig("firefox", headless=True, stealth_mode=True),
+            "tertiary": BrowserConfig("undetected_chrome", headless=True, stealth_mode=True),
+            "emergency": BrowserConfig("chrome", headless=True, stealth_mode=True, timeout=45)
+        }
+        
         # Enhanced: Redis client will be initialized async when needed
         self.redis_client = None
         self.memory_cache = {}
@@ -163,7 +184,7 @@ class AdvancedStealthAgentBase(ABC):
         # Enhanced: URL patterns for fallback (override in subclasses)
         self.url_patterns = self._get_url_patterns()
         
-        logger.debug("✅ Advanced Stealth Agent Base initialized with enhanced features")
+        logger.debug("✅ Advanced Stealth Agent Base initialized with enhanced browser support")
     
     async def execute(self, symbol: str, agent_outputs: dict = {}) -> dict:
         """Execute quad-channel stealth agent logic with advanced data fusion."""
