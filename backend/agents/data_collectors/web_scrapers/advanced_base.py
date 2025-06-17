@@ -31,11 +31,11 @@ import yfinance as yf
 from backend.utils.cache_utils import get_redis_client
 from backend.monitor.tracker import AGENT_EXECUTION_COUNT, DATA_PROVIDER_CALLS, ACTIVE_USERS
 from backend.utils.symbol_normalizer_fixed import IndianEquitySymbolNormalizer
-from backend.agents.stealth.safe_data_utils import (
+from backend.agents.data_collectors.web_scrapers.safe_data_utils import (
     safe_get_price, safe_get_volume, validate_indian_market_data,
     log_data_extraction_result
 )
-from backend.agents.stealth.advanced_stealth_scraper import (
+from backend.agents.data_collectors.web_scrapers.advanced_stealth_scraper import (
     AdvancedStealthScraper, BrowserConfig, StealthProfile
 )
 
