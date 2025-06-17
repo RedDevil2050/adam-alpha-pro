@@ -1,5 +1,5 @@
 import asyncio
-from backend.orchestrator import run_full_cycle
+from backend.orchestrator.master_coordinator import run_full_cycle
 from loguru import logger
 
 if __name__ == "__main__":

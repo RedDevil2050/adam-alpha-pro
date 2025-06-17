@@ -1,7 +1,7 @@
 # backend/api/endpoints/analysis.py
 from fastapi import APIRouter, Depends, HTTPException, status
 # Import the run_full_cycle function instead of the Orchestrator class directly
-from backend.orchestrator import run_full_cycle 
+from backend.orchestrator.master_coordinator import run_full_cycle 
 from backend.security.jwt_auth import verify_token
 from backend.security.validate import SymbolRequest, EnhancedSymbolRequest
 from backend.config.settings import Settings, get_settings

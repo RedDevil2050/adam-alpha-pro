@@ -8,7 +8,7 @@ from backend.api.endpoints.health import router as health_router
 from backend.api.endpoints.analysis import router as analysis_router
 from backend.api.endpoints.market import router as market_router
 from backend.api.stealth_streaming import stealth_router
-from backend.services.continuous_data_service import continuous_data_service
+from backend.services.enhanced_websocket_service import continuous_data_service
 
 # Debug: Print router information
 print("🔍 Debug: Market router imported successfully")

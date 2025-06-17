@@ -18,7 +18,7 @@ from loguru import logger
 from backend.data.data_service import DataService
 from backend.data.providers.unified_provider import get_unified_provider
 from backend.utils.symbol_normalizer import normalize_indian_symbol
-from backend.agents.stealth.background_manager import background_manager
+from backend.agents.data_collectors.web_scrapers.background_manager import background_manager
 
 # Create router for live data endpoints
 live_router = APIRouter(prefix="/api/live", tags=["live-data"])

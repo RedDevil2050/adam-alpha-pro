@@ -37,6 +37,8 @@ import {
   AlertDescription,
 } from '@chakra-ui/react';
 import { motion } from 'framer-motion';
+import LiveDataTicker from '../components/common/LiveDataTicker';
+import LiveDataCard from '../components/common/LiveDataCard';
 import { 
   FiPieChart, 
   FiTrendingUp, 
@@ -138,7 +140,6 @@ const PortfolioPage = () => {
   const formatPercent = (value) => {
     return `${value > 0 ? '+' : ''}${value.toFixed(2)}%`;
   };
-
   return (
     <Box bg={bgColor} minH="100vh" py={8}>
       <Container maxW="7xl">
@@ -147,6 +148,14 @@ const PortfolioPage = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
+          {/* Live Data Ticker - Synchronized across all pages */}
+          <Box mb={6}>
+            <LiveDataTicker 
+              symbols={['RELIANCE', 'TCS', 'HDFCBANK', 'ICICIBANK']}
+              maxItems={4}
+            />
+          </Box>
+
           {/* Header */}
           <HStack justify="space-between" mb={8}>
             <VStack align="start" spacing={2}>

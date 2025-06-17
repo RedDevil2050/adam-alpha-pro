@@ -45,6 +45,8 @@ import {
   AlertDescription,
 } from '@chakra-ui/react';
 import { motion } from 'framer-motion';
+import LiveDataTicker from '../components/common/LiveDataTicker';
+import LiveDataCard from '../components/common/LiveDataCard';
 import { 
   FiSearch, 
   FiPlus, 
@@ -215,7 +217,6 @@ const WatchlistPage = () => {
   const gainers = filteredSymbols.filter(stock => stock.change > 0).length;
   const losers = filteredSymbols.filter(stock => stock.change < 0).length;
   const totalAlerts = filteredSymbols.reduce((sum, stock) => sum + stock.alerts, 0);
-
   return (
     <Box bg={bgColor} minH="100vh" py={8}>
       <Container maxW="7xl">
@@ -224,6 +225,14 @@ const WatchlistPage = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
+          {/* Live Data Ticker - Synchronized across all pages */}
+          <Box mb={6}>
+            <LiveDataTicker 
+              symbols={['RELIANCE', 'TCS', 'HDFCBANK', 'ICICIBANK', 'HINDUNILVR']}
+              maxItems={5}
+            />
+          </Box>
+
           {/* Header */}
           <HStack justify="space-between" mb={8}>
             <VStack align="start" spacing={2}>

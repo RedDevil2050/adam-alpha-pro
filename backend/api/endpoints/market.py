@@ -441,18 +441,17 @@ async def get_stealth_agents_status():
                     "error": str(e)
                 }
             results["summary"]["total_providers"] += 1
-        
-        # Test Stealth Agents
+          # Test Stealth Agents
         logger.info(f"Testing stealth agents with symbol: {test_symbol}")
         
         # Import stealth agents
         try:
-            from backend.agents.stealth.background_manager import background_manager
+            from backend.agents.data_collectors.web_scrapers.background_manager import background_manager
             
             # Test MoneyControl Agent
-            if 'moneycontrol' in background_manager.agents:
+            if 'moneycontrol' in background_manager.agent_registry:
                 try:
-                    agent = background_manager.agents['moneycontrol']
+                    agent = background_manager.agent_registry['moneycontrol']
                     result = await agent.execute(test_symbol)
                     results["stealth_agents"]["moneycontrol"] = {
                         "status": "✅ Working" if result.get('success') else "⚠️ Partial",
@@ -471,9 +470,9 @@ async def get_stealth_agents_status():
                 results["summary"]["total_stealth_agents"] += 1
             
             # Test TrendLyne Agent
-            if 'trendlyne' in background_manager.agents:
+            if 'trendlyne' in background_manager.agent_registry:
                 try:
-                    agent = background_manager.agents['trendlyne']
+                    agent = background_manager.agent_registry['trendlyne']
                     result = await agent.execute(test_symbol)
                     results["stealth_agents"]["trendlyne"] = {
                         "status": "✅ Working" if result.get('success') else "⚠️ Partial",
@@ -491,12 +490,12 @@ async def get_stealth_agents_status():
                     }
                 results["summary"]["total_stealth_agents"] += 1
             
-            # Test Enhanced MoneyControl Agent
-            if 'enhanced_moneycontrol' in background_manager.agents:
+            # Test StockEdge Agent
+            if 'stockedge' in background_manager.agent_registry:
                 try:
-                    agent = background_manager.agents['enhanced_moneycontrol']
+                    agent = background_manager.agent_registry['stockedge']
                     result = await agent.execute(test_symbol)
-                    results["stealth_agents"]["enhanced_moneycontrol"] = {
+                    results["stealth_agents"]["stockedge"] = {
                         "status": "✅ Working" if result.get('success') else "⚠️ Partial",
                         "confidence": result.get('confidence', 0),
                         "data_quality": result.get('data_quality', 'unknown'),
@@ -506,7 +505,7 @@ async def get_stealth_agents_status():
                     if result.get('success'):
                         results["summary"]["working_stealth_agents"] += 1
                 except Exception as e:
-                    results["stealth_agents"]["enhanced_moneycontrol"] = {
+                    results["stealth_agents"]["stockedge"] = {
                         "status": "❌ Failed",
                         "error": str(e)[:200]
                     }

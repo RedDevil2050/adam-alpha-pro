@@ -3,7 +3,7 @@ import time
 import asyncio
 from loguru import logger
 from prometheus_client import Counter, Histogram, Gauge
-from backend.agents.base import AgentBase
+from backend.agents.core import AgentBase
 from backend.agents.initialization import get_agent_initializer
 from backend.agents.categories import CategoryType, CategoryManager
 from backend.config.settings import get_settings

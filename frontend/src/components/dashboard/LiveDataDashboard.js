@@ -1,619 +1,629 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
+  Grid,
+  Heading,
+  Text,
   VStack,
   HStack,
-  Text,
-  Badge,
-  Progress,
-  useColorModeValue,
   Card,
   CardHeader,
   CardBody,
-  Heading,
-  Grid,
+  Badge,
   Stat,
   StatLabel,
   StatNumber,
   StatHelpText,
-  Button,
-  Input,
-  Select,
+  StatArrow,
+  useColorModeValue,
+  Spinner,
   Alert,
   AlertIcon,
-  useToast,
-  Flex,
+  Progress,
   Divider,
-  List,
-  ListItem,
-  ListIcon,
-  Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
-  Spinner,
+  SimpleGrid,
+  Container,
+  IconButton,
+  Tooltip,
+  useToast,
 } from '@chakra-ui/react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { 
+  TrendingUp, 
+  TrendingDown, 
   Activity, 
-  Wifi, 
-  WifiOff, 
-  Play, 
-  Square, 
+  BarChart3, 
+  PieChart,
   RefreshCw,
-  TrendingUp,
-  TrendingDown,
+  Wifi,
   Database,
-  Clock,
-  CheckCircle,
-  AlertTriangle,
-  Zap
+  Globe,
+  Target,
+  Zap,
+  Eye
 } from 'lucide-react';
-import liveDataService from '../../services/liveDataService';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+  PieChart as RechartsPieChart,
+  Cell,
+  BarChart,
+  Bar,
+  AreaChart,
+  Area,
+  ComposedChart,
+  Legend
+} from 'recharts';
+import { useQuery, useQueryClient } from 'react-query';
+import apiService from '../../services/api';
+import { useLiveData } from '../../contexts/LiveDataContext';
 
 const MotionCard = motion(Card);
 const MotionBox = motion(Box);
 
+// Color schemes for charts
+const CHART_COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D', '#FFC658'];
+const TREND_COLORS = {
+  up: '#48BB78',
+  down: '#F56565',
+  neutral: '#ED8936'
+};
+
 const LiveDataDashboard = () => {
-  const [connectionStatus, setConnectionStatus] = useState('disconnected');
-  const [liveData, setLiveData] = useState([]);
-  const [activeSessions, setActiveSessions] = useState({});
-  const [availableAgents, setAvailableAgents] = useState({});
-  const [performanceData, setPerformanceData] = useState(null);
-  const [subscriptions, setSubscriptions] = useState(new Set());
-  const [selectedSymbol, setSelectedSymbol] = useState('RELIANCE');
-  const [sessionData, setSessionData] = useState({
-    symbols: ['RELIANCE', 'TCS', 'INFY'],
-    agents: ['enhanced_moneycontrol', 'moneycontrol', 'trendlyne'],
-    interval: 30
-  });
-  const [isSessionRunning, setIsSessionRunning] = useState(false);
-  const [currentSessionId, setCurrentSessionId] = useState(null);
-
+  const [dataRefreshing, setDataRefreshing] = useState(false);
   const toast = useToast();
-  const unsubscribeRefs = useRef([]);
-
+  const queryClient = useQueryClient();
+  
+  // Use global live data context
+  const {
+    isConnected,
+    wsConnected,
+    stockData: liveStockData,
+    marketState,
+    lastUpdate,
+    isLoading: contextLoading,
+    error: contextError,
+    dataSource,
+    connectionStatus,
+    subscribeToSymbol,
+    updateStockData
+  } = useLiveData();
+  
+  const bg = useColorModeValue('gray.50', 'gray.900');
   const cardBg = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
-  const bgColor = useColorModeValue('gray.50', 'gray.900');
-
-  // Initialize live data service
+  // Handle data refresh animations
   useEffect(() => {
-    const initializeService = async () => {
-      // Connect to WebSocket
-      await liveDataService.connect();
-
-      // Subscribe to various data types
-      const unsubscribes = [
-        liveDataService.subscribe('connection_status', handleConnectionStatus),
-        liveDataService.subscribe('live_data', handleLiveData),
-        liveDataService.subscribe('data_update', handleDataUpdate),
-        liveDataService.subscribe('performance_report', handlePerformanceData),
-        liveDataService.subscribe('performance_update', handlePerformanceUpdate),
-      ];
-
-      unsubscribeRefs.current = unsubscribes;
-
-      // Load initial data
-      loadInitialData();
-    };
-
-    initializeService();
-
-    return () => {
-      // Cleanup subscriptions
-      unsubscribeRefs.current.forEach(unsubscribe => unsubscribe());
-      liveDataService.disconnect();
-    };
-  }, []);
-
-  const handleConnectionStatus = (data) => {
-    setConnectionStatus(data.status);
-    
-    if (data.status === 'connected') {
-      toast({
-        title: '🔗 Connected to Live Data Stream',
-        status: 'success',
-        duration: 3000,
-      });
-    } else if (data.status === 'disconnected') {
-      toast({
-        title: '🔌 Disconnected from Live Data Stream',
-        status: 'warning',
-        duration: 3000,
-      });
-    } else if (data.status === 'error') {
-      toast({
-        title: '❌ Live Data Connection Error',
-        status: 'error',
-        duration: 5000,
-      });
-    }
-  };
-
-  const handleLiveData = (data) => {
-    setLiveData(prevData => {
-      const newData = [...prevData, { ...data, timestamp: Date.now() }];
-      // Keep only last 50 updates
-      return newData.slice(-50);
-    });
-  };
-
-  const handleDataUpdate = (data) => {
-    console.log('📊 Data update received:', data);
-  };
-
-  const handlePerformanceData = (data) => {
-    setPerformanceData(data);
-  };
-
-  const handlePerformanceUpdate = (data) => {
-    // Update real-time performance metrics
-    if (performanceData) {
-      setPerformanceData(prev => ({
-        ...prev,
-        system_health: data.system_health,
-        agent_performance: data.agent_performance,
-        last_update: data.timestamp
-      }));
-    }
-  };
-
-  const loadInitialData = async () => {
-    try {
-      const [sessionsResponse, agentsResponse] = await Promise.all([
-        liveDataService.getSessionsList(),
-        liveDataService.getAgentsList()
-      ]);
-
-      if (sessionsResponse.status === 'success') {
-        setActiveSessions(sessionsResponse.active_sessions);
+    // Set up periodic refresh animation when data is being updated
+    const interval = setInterval(() => {
+      if (wsConnected && liveStockData.length > 0) {
+        setDataRefreshing(true);
+        setTimeout(() => setDataRefreshing(false), 500);
       }
+    }, 30000); // Every 30 seconds
 
-      if (agentsResponse.status === 'success') {
-        setAvailableAgents(agentsResponse.registered_agents);
+    return () => clearInterval(interval);
+  }, [wsConnected, liveStockData.length]);
+  // Fetch live market data (HTTP fallback when WebSocket data is not available)
+  const { data: liveData, isLoading: liveLoading, error: liveError, refetch: refetchLive } = useQuery(
+    'live-market-data',
+    () => apiService.getLiveIndianStocks(),
+    {
+      refetchInterval: wsConnected ? 60000 : 15000, // Slower polling if WebSocket is connected
+      enabled: !wsConnected || liveStockData.length === 0, // Disable if WebSocket is providing data
+      onSuccess: (data) => {
+        if (!wsConnected && data?.data?.stocks) {
+          updateStockData(data.data.stocks);
+        }
+      },
+      onError: () => {
+        if (!wsConnected) {
+          toast({
+            title: 'Live Data Connection Lost',
+            description: 'Retrying connection...',
+            status: 'warning',
+            duration: 3000,
+          });
+        }
       }
+    }  );
 
-      // Get performance report
-      liveDataService.getPerformanceReport();
-    } catch (error) {
-      console.error('Failed to load initial data:', error);
+  // Fetch market state via HTTP (as fallback)
+  const { data: httpMarketState, isLoading: marketLoading } = useQuery(
+    'market-state',
+    () => apiService.getLiveMarketStatus(),
+    {
+      refetchInterval: 60000, // Refetch every minute
     }
-  };
-
-  const startCollectionSession = async () => {
-    try {
-      const response = await liveDataService.startCollectionSession({
-        session_id: `live_session_${Date.now()}`,
-        symbols: sessionData.symbols,
-        agents: sessionData.agents,
-        interval: sessionData.interval
-      });
-
-      if (response.status === 'success') {
-        setIsSessionRunning(true);
-        setCurrentSessionId(response.session_id);
-        
-        toast({
-          title: '🚀 Collection Session Started',
-          description: `Collecting data for ${sessionData.symbols.length} symbols`,
-          status: 'success',
-          duration: 3000,
-        });
-
-        // Subscribe to symbol updates
-        sessionData.symbols.forEach(symbol => {
-          liveDataService.subscribeToSymbol(symbol);
-        });
-
-        loadInitialData();
-      }
-    } catch (error) {
-      toast({
-        title: '❌ Failed to Start Session',
-        description: error.message,
-        status: 'error',
-        duration: 5000,
-      });
+  );
+  // Fetch stealth agent status
+  const { data: agentStatus } = useQuery(
+    'stealth-agents',
+    () => apiService.getStealthAgentStatus(),
+    {
+      refetchInterval: 45000,
     }
-  };
+  );
 
-  const stopCollectionSession = async () => {
-    if (!currentSessionId) return;
+  if ((liveLoading && !wsConnected) || contextLoading) {
+    return (
+      <Container maxW="full" py={8}>
+        <VStack spacing={8}>
+          <Spinner size="xl" color="blue.500" />
+          <Text>Loading live market data...</Text>
+        </VStack>
+      </Container>
+    );
+  }
+  if ((liveError && !wsConnected) || contextError) {
+    return (
+      <Container maxW="full" py={8}>
+        <Alert status="error" borderRadius="md">
+          <AlertIcon />
+          <VStack align="start" spacing={2}>
+            <Text fontWeight="bold">Failed to load live data</Text>
+            <Text fontSize="sm">Please check your backend connection</Text>
+          </VStack>
+        </Alert>
+      </Container>
+    );  }
 
-    try {
-      const response = await liveDataService.stopCollectionSession(currentSessionId);
-      
-      if (response.status === 'success') {
-        setIsSessionRunning(false);
-        setCurrentSessionId(null);
-        
-        toast({
-          title: '⏹️ Collection Session Stopped',
-          status: 'info',
-          duration: 3000,
-        });
+  // Combine WebSocket data with HTTP fallback data
+  const stocks = liveStockData.length > 0 
+    ? liveStockData 
+    : (liveData?.data?.stocks || liveData?.stocks || []);
+  
+  // Use context market state if available, otherwise fallback to HTTP
+  const currentMarketState = marketState || httpMarketState;
+  const indices = currentMarketState?.data?.indices || [];
+  const marketStatus = currentMarketState?.data?.market_status || 'unknown';
 
-        // Unsubscribe from symbol updates
-        sessionData.symbols.forEach(symbol => {
-          liveDataService.unsubscribeFromSymbol(symbol);
-        });
+  // Prepare data for charts
+  const stockPerformanceData = stocks.map(stock => ({
+    symbol: stock.symbol,
+    change: stock.change_percent || stock.changePercent,
+    price: stock.price,
+    volume: stock.volume,
+    trend: stock.trend
+  }));
 
-        loadInitialData();
-      }
-    } catch (error) {
-      toast({
-        title: '❌ Failed to Stop Session',
-        description: error.message,
-        status: 'error',
-        duration: 5000,
-      });
-    }
-  };
-
-  const subscribeToSymbol = () => {
-    if (selectedSymbol && !subscriptions.has(selectedSymbol)) {
-      liveDataService.subscribeToSymbol(selectedSymbol);
-      setSubscriptions(prev => new Set([...prev, selectedSymbol]));
-      
-      toast({
-        title: `📡 Subscribed to ${selectedSymbol}`,
-        status: 'success',
-        duration: 2000,
-      });
-    }
-  };
-
-  const getConnectionStatusDisplay = () => {
-    switch (connectionStatus) {
-      case 'connected':
-        return { icon: Wifi, color: 'green', text: 'Connected' };
-      case 'connecting':
-        return { icon: RefreshCw, color: 'blue', text: 'Connecting...' };
-      case 'disconnected':
-        return { icon: WifiOff, color: 'gray', text: 'Disconnected' };
-      case 'error':
-        return { icon: AlertTriangle, color: 'red', text: 'Error' };
-      default:
-        return { icon: WifiOff, color: 'gray', text: 'Unknown' };
-    }
-  };
-
-  const connectionDisplay = getConnectionStatusDisplay();
+  const sectorData = prepareSectorData(stocks);
+  const trendData = prepareTrendData(stocks);
+  const volumeData = stocks.slice(0, 5).map(stock => ({
+    symbol: stock.symbol,
+    volume: stock.volume,
+    price: stock.price
+  }));
 
   return (
-    <Box bg={bgColor} minH="100vh" p={6}>
-      <VStack spacing={6} align="stretch">
-        {/* Header */}
-        <MotionCard
+    <Box bg={bg} minH="100vh" p={6}>
+      <Container maxW="full">
+        {/* Header Section */}
+        <MotionBox
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          bg={cardBg}
-          borderColor={borderColor}
-          borderWidth="1px"
+          transition={{ duration: 0.5 }}
+          mb={8}
         >
-          <CardHeader>
-            <HStack justify="space-between">
+          <VStack spacing={4} align="stretch">
+            <HStack justify="space-between" align="center">
               <VStack align="start" spacing={1}>
-                <Heading size="lg">Live Stealth Data Dashboard</Heading>
-                <Text color="gray.500">Real-time monitoring of stealth agent collection</Text>
-              </VStack>
+                <Heading size="xl" color="blue.600">
+                  🇮🇳 Zion Live Market Dashboard
+                </Heading>
+                <Text color="gray.600" fontSize="lg">
+                  Real-time Indian equity market analysis powered by stealth agents
+                </Text>              </VStack>
               
-              <HStack>
-                <Badge 
-                  colorScheme={connectionDisplay.color} 
-                  variant="solid"
-                  fontSize="sm"
-                  p={2}
-                >
-                  <HStack spacing={2}>
-                    <connectionDisplay.icon size={16} />
-                    <Text>{connectionDisplay.text}</Text>
-                  </HStack>
-                </Badge>
-                
-                <Button
-                  leftIcon={<RefreshCw size={16} />}
-                  onClick={loadInitialData}
-                  size="sm"
-                  variant="outline"
-                >
-                  Refresh
-                </Button>
+              <HStack spacing={3}>
+                <LiveStatusIndicator 
+                  isLive={isConnected} 
+                  lastUpdate={lastUpdate} 
+                  wsConnected={wsConnected}
+                  dataSource={connectionStatus}
+                />
+                <Tooltip label="Refresh Data">
+                  <IconButton
+                    icon={<RefreshCw />}
+                    onClick={() => refetchLive()}
+                    colorScheme="blue"
+                    variant="outline"
+                    isLoading={liveLoading || dataRefreshing}
+                    animation={dataRefreshing ? "spin 1s linear infinite" : "none"}
+                  />
+                </Tooltip>
               </HStack>
             </HStack>
-          </CardHeader>
-        </MotionCard>
 
-        {/* Quick Stats */}
-        <Grid templateColumns={{ base: '1fr', md: 'repeat(4, 1fr)' }} gap={4}>
+            {/* Market Status Bar */}
+            <MarketStatusBar 
+              marketStatus={marketStatus} 
+              indices={indices}
+              totalStocks={stocks.length}
+            />
+          </VStack>
+        </MotionBox>
+
+        {/* Main Dashboard Grid */}
+        <Grid templateColumns="repeat(12, 1fr)" gap={6}>
+          
+          {/* Stock Performance Chart */}
           <MotionCard
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.1 }}
+            gridColumn="span 8"
             bg={cardBg}
-          >
-            <CardBody>
-              <Stat>
-                <StatLabel>Active Sessions</StatLabel>
-                <StatNumber>{Object.keys(activeSessions).length}</StatNumber>
-                <StatHelpText>Running collections</StatHelpText>
-              </Stat>
-            </CardBody>
-          </MotionCard>
-
-          <MotionCard
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.2 }}
-            bg={cardBg}
-          >
-            <CardBody>
-              <Stat>
-                <StatLabel>Available Agents</StatLabel>
-                <StatNumber>{Object.keys(availableAgents).length}</StatNumber>
-                <StatHelpText>Registered scrapers</StatHelpText>
-              </Stat>
-            </CardBody>
-          </MotionCard>
-
-          <MotionCard
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.3 }}
-            bg={cardBg}
-          >
-            <CardBody>
-              <Stat>
-                <StatLabel>Live Updates</StatLabel>
-                <StatNumber>{liveData.length}</StatNumber>
-                <StatHelpText>Data points received</StatHelpText>
-              </Stat>
-            </CardBody>
-          </MotionCard>
-
-          <MotionCard
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.4 }}
-            bg={cardBg}
-          >
-            <CardBody>
-              <Stat>
-                <StatLabel>System Health</StatLabel>
-                <StatNumber>{performanceData?.overall_health || 'N/A'}</StatNumber>
-                <StatHelpText>Overall status</StatHelpText>
-              </Stat>
-            </CardBody>
-          </MotionCard>
-        </Grid>
-
-        <Grid templateColumns={{ base: '1fr', lg: '1fr 1fr' }} gap={6}>
-          {/* Session Control */}
-          <MotionCard
+            border="1px"
+            borderColor={borderColor}
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.5 }}
-            bg={cardBg}
-          >
-            <CardHeader>
-              <Heading size="md">Collection Session Control</Heading>
+            transition={{ duration: 0.5, delay: 0.1 }}
+          >            <CardHeader>
+              <HStack justify="space-between">
+                <HStack>
+                  <BarChart3 size={20} color="#3182CE" />
+                  <Heading size="md">Live Stock Performance</Heading>
+                  <Badge colorScheme={wsConnected ? "green" : "blue"} variant="subtle">
+                    {wsConnected ? "REAL-TIME" : "LIVE"}
+                  </Badge>
+                </HStack>
+                {wsConnected && (
+                  <Tooltip label="Data streaming via WebSocket from stealth agents">
+                    <Badge colorScheme="purple" variant="outline" fontSize="xs">
+                      <Eye size={12} style={{ marginRight: '4px' }} />
+                      STEALTH
+                    </Badge>
+                  </Tooltip>
+                )}
+              </HStack>
             </CardHeader>
             <CardBody>
-              <VStack spacing={4} align="stretch">
-                <HStack>
-                  <Text fontWeight="medium" minW="100px">Symbols:</Text>
-                  <Input
-                    value={sessionData.symbols.join(', ')}
-                    onChange={(e) => setSessionData(prev => ({
-                      ...prev,
-                      symbols: e.target.value.split(',').map(s => s.trim().toUpperCase())
-                    }))}
-                    placeholder="RELIANCE, TCS, INFY"
+              <ResponsiveContainer width="100%" height={300}>
+                <ComposedChart data={stockPerformanceData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="symbol" />
+                  <YAxis yAxisId="left" />
+                  <YAxis yAxisId="right" orientation="right" />
+                  <RechartsTooltip 
+                    formatter={(value, name) => [
+                      name === 'change' ? `${value}%` : `₹${value}`,
+                      name === 'change' ? 'Change %' : name === 'price' ? 'Price' : 'Volume'
+                    ]}
                   />
-                </HStack>
-
-                <HStack>
-                  <Text fontWeight="medium" minW="100px">Interval (s):</Text>
-                  <Input
-                    type="number"
-                    value={sessionData.interval}
-                    onChange={(e) => setSessionData(prev => ({
-                      ...prev,
-                      interval: parseInt(e.target.value) || 30
-                    }))}
-                    min={10}
-                    max={300}
+                  <Legend />
+                  <Bar 
+                    yAxisId="left" 
+                    dataKey="change" 
+                    fill="#8884d8" 
+                    name="Change %"
                   />
-                </HStack>
-
-                <HStack>
-                  <Button
-                    leftIcon={isSessionRunning ? <Square size={16} /> : <Play size={16} />}
-                    colorScheme={isSessionRunning ? 'red' : 'green'}
-                    onClick={isSessionRunning ? stopCollectionSession : startCollectionSession}
-                    isDisabled={connectionStatus !== 'connected'}
-                    flex={1}
-                  >
-                    {isSessionRunning ? 'Stop Collection' : 'Start Collection'}
-                  </Button>
-                </HStack>
-
-                {isSessionRunning && (
-                  <Alert status="info" borderRadius="md">
-                    <AlertIcon />
-                    <VStack align="start" spacing={1}>
-                      <Text fontWeight="medium">Session Active</Text>
-                      <Text fontSize="sm">
-                        Collecting data every {sessionData.interval}s for {sessionData.symbols.length} symbols
-                      </Text>
-                    </VStack>
-                  </Alert>
-                )}
-              </VStack>
+                  <Line 
+                    yAxisId="right" 
+                    type="monotone" 
+                    dataKey="price" 
+                    stroke="#ff7300" 
+                    name="Price ₹"
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
             </CardBody>
           </MotionCard>
 
-          {/* Symbol Subscription */}
+          {/* Market Sentiment Pie Chart */}
           <MotionCard
+            gridColumn="span 4"
+            bg={cardBg}
+            border="1px"
+            borderColor={borderColor}
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.6 }}
-            bg={cardBg}
+            transition={{ duration: 0.5, delay: 0.2 }}
           >
             <CardHeader>
-              <Heading size="md">Symbol Subscriptions</Heading>
+              <HStack>
+                <PieChart size={20} color="#38A169" />
+                <Heading size="md">Market Sentiment</Heading>
+              </HStack>
             </CardHeader>
             <CardBody>
-              <VStack spacing={4} align="stretch">
-                <HStack>
-                  <Input
-                    value={selectedSymbol}
-                    onChange={(e) => setSelectedSymbol(e.target.value.toUpperCase())}
-                    placeholder="Enter symbol (e.g., RELIANCE)"
-                  />
-                  <Button
-                    onClick={subscribeToSymbol}
-                    colorScheme="blue"
-                    isDisabled={connectionStatus !== 'connected'}
+              <ResponsiveContainer width="100%" height={250}>
+                <RechartsPieChart>
+                  <pie
+                    data={trendData}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="count"
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                   >
-                    Subscribe
-                  </Button>
-                </HStack>
-
-                <Box>
-                  <Text fontWeight="medium" mb={2}>Active Subscriptions:</Text>
-                  <List spacing={1}>
-                    {Array.from(subscriptions).map(symbol => (
-                      <ListItem key={symbol}>
-                        <ListIcon as={CheckCircle} color="green.500" />
-                        {symbol}
-                      </ListItem>
+                    {trendData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                     ))}
-                  </List>
-                </Box>
-              </VStack>
+                  </pie>
+                  <RechartsTooltip />
+                </RechartsPieChart>
+              </ResponsiveContainer>
             </CardBody>
           </MotionCard>
-        </Grid>
 
-        {/* Live Data Feed */}
-        <MotionCard
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.7 }}
-          bg={cardBg}
-        >
-          <CardHeader>
-            <HStack justify="space-between">
-              <Heading size="md">Live Data Feed</Heading>
-              <Badge colorScheme="green" variant="outline">
-                <HStack spacing={1}>
-                  <Activity size={12} />
-                  <Text>LIVE</Text>
-                </HStack>
-              </Badge>
-            </HStack>
-          </CardHeader>
-          <CardBody>
-            {liveData.length === 0 ? (
-              <Text color="gray.500" textAlign="center" py={8}>
-                No live data received yet. Start a collection session to see real-time updates.
-              </Text>
-            ) : (
-              <VStack spacing={3} align="stretch" maxH="400px" overflowY="auto">
-                <AnimatePresence>
-                  {liveData.slice(-10).reverse().map((data, index) => (
-                    <MotionBox
-                      key={data.timestamp}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 20 }}
-                      p={3}
-                      border="1px"
-                      borderColor={borderColor}
-                      borderRadius="md"
-                      bg={index === 0 ? 'blue.50' : 'transparent'}
-                    >
-                      <HStack justify="space-between">
-                        <VStack align="start" spacing={1}>
-                          <Text fontWeight="medium">
-                            {data.symbol || 'System Update'}
-                          </Text>
-                          <Text fontSize="sm" color="gray.500">
-                            {data.successful_agents?.length || 0} agents successful
-                          </Text>
-                        </VStack>
-                        <VStack align="end" spacing={1}>
-                          <Badge colorScheme="blue" variant="subtle">
-                            {new Date(data.timestamp).toLocaleTimeString()}
-                          </Badge>
-                          <Text fontSize="xs" color="gray.500">
-                            Session: {data.session_id?.substring(0, 8)}...
-                          </Text>
-                        </VStack>
-                      </HStack>
-                    </MotionBox>
-                  ))}
-                </AnimatePresence>
-              </VStack>
-            )}
-          </CardBody>
-        </MotionCard>
+          {/* Live Stock Cards */}
+          <Box gridColumn="span 12">
+            <Heading size="md" mb={4} display="flex" alignItems="center" gap={2}>
+              <Activity size={20} color="#E53E3E" />
+              Live Stock Data
+            </Heading>
+            <SimpleGrid columns={{ base: 1, md: 2, lg: 3, xl: 5 }} spacing={4}>
+              {stocks.slice(0, 10).map((stock, index) => (
+                <LiveStockCard key={stock.symbol} stock={stock} index={index} />
+              ))}
+            </SimpleGrid>
+          </Box>
 
-        {/* Agent Performance */}
-        {Object.keys(availableAgents).length > 0 && (
+          {/* Volume Analysis */}
           <MotionCard
+            gridColumn="span 6"
+            bg={cardBg}
+            border="1px"
+            borderColor={borderColor}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.8 }}
-            bg={cardBg}
+            transition={{ duration: 0.5, delay: 0.3 }}
           >
             <CardHeader>
-              <Heading size="md">Agent Performance</Heading>
+              <HStack>
+                <Database size={20} color="#805AD5" />
+                <Heading size="md">Volume Analysis</Heading>
+              </HStack>
             </CardHeader>
             <CardBody>
-              <Table variant="simple">
-                <Thead>
-                  <Tr>
-                    <Th>Agent</Th>
-                    <Th isNumeric>Success Rate</Th>
-                    <Th isNumeric>Avg Response Time</Th>
-                    <Th isNumeric>Total Executions</Th>
-                    <Th>Last Execution</Th>
-                  </Tr>
-                </Thead>
-                <Tbody>
-                  {Object.entries(availableAgents).map(([agentName, metrics]) => (
-                    <Tr key={agentName}>
-                      <Td fontWeight="medium">{agentName}</Td>
-                      <Td isNumeric>
-                        <Badge 
-                          colorScheme={parseFloat(metrics.success_rate) > 80 ? 'green' : 'yellow'}
-                        >
-                          {metrics.success_rate}
-                        </Badge>
-                      </Td>
-                      <Td isNumeric>{metrics.avg_execution_time}</Td>
-                      <Td isNumeric>{metrics.total_executions}</Td>
-                      <Td fontSize="sm" color="gray.500">
-                        {metrics.last_execution ? 
-                          new Date(metrics.last_execution).toLocaleString() : 
-                          'Never'
-                        }
-                      </Td>
-                    </Tr>
-                  ))}
-                </Tbody>
-              </Table>
+              <ResponsiveContainer width="100%" height={250}>
+                <AreaChart data={volumeData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="symbol" />
+                  <YAxis />
+                  <RechartsTooltip 
+                    formatter={(value) => [value.toLocaleString(), 'Volume']}
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="volume" 
+                    stroke="#8884d8" 
+                    fill="#8884d8" 
+                    fillOpacity={0.6}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
             </CardBody>
           </MotionCard>
-        )}
-      </VStack>
+
+          {/* Stealth Agents Status */}
+          <MotionCard
+            gridColumn="span 6"
+            bg={cardBg}
+            border="1px"
+            borderColor={borderColor}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.4 }}
+          >
+            <CardHeader>
+              <HStack>
+                <Eye size={20} color="#D69E2E" />
+                <Heading size="md">Stealth Agents Status</Heading>
+              </HStack>
+            </CardHeader>
+            <CardBody>
+              <StealthAgentsDisplay agentStatus={agentStatus} />
+            </CardBody>
+          </MotionCard>
+
+        </Grid>
+      </Container>
     </Box>
   );
+};
+
+// Helper Components
+const LiveStatusIndicator = ({ isLive, lastUpdate, wsConnected, dataSource }) => (
+  <VStack align="start" spacing={1}>
+    <HStack spacing={2}>
+      <Box
+        w={3}
+        h={3}
+        borderRadius="full"
+        bg={isLive ? 'green.400' : 'red.400'}
+        animation={isLive ? 'pulse 2s infinite' : 'none'}
+      />
+      <VStack spacing={0} align="start">
+        <Text fontSize="xs" fontWeight="bold" color={isLive ? 'green.600' : 'red.600'}>
+          {isLive ? 'LIVE' : 'OFFLINE'}
+        </Text>
+        <Text fontSize="xs" color="gray.500">
+          {lastUpdate.toLocaleTimeString()}
+        </Text>
+      </VStack>
+    </HStack>
+    
+    {/* Data Source Indicator */}
+    <HStack spacing={1}>
+      <Box
+        w={2}
+        h={2}
+        borderRadius="full"
+        bg={wsConnected ? 'blue.400' : 'orange.400'}
+      />
+      <Text fontSize="xs" color="gray.500">
+        {dataSource} {wsConnected ? '(WebSocket)' : '(HTTP)'}
+      </Text>
+    </HStack>
+  </VStack>
+);
+
+const MarketStatusBar = ({ marketStatus, indices, totalStocks }) => {
+  const statusColor = marketStatus === 'open' ? 'green' : 'red';
+  
+  return (
+    <Card bg={useColorModeValue('blue.50', 'blue.900')} border="1px" borderColor="blue.200">
+      <CardBody py={3}>
+        <HStack justify="space-between" wrap="wrap" spacing={6}>
+          <HStack>
+            <Badge colorScheme={statusColor} variant="solid" fontSize="sm">
+              MARKET {marketStatus.toUpperCase()}
+            </Badge>
+            <Text fontSize="sm" color="gray.600">
+              {totalStocks} stocks tracked
+            </Text>
+          </HStack>
+          
+          <HStack spacing={8} wrap="wrap">
+            {indices.slice(0, 4).map((index) => (
+              <HStack key={index.symbol} spacing={2}>
+                <Text fontWeight="bold" fontSize="sm">{index.name}:</Text>
+                <Text fontSize="sm">{index.value}</Text>
+                <Badge 
+                  colorScheme={index.trend === 'up' ? 'green' : 'red'} 
+                  variant="subtle"
+                  fontSize="xs"
+                >
+                  {index.change}
+                </Badge>
+              </HStack>
+            ))}
+          </HStack>
+        </HStack>
+      </CardBody>
+    </Card>
+  );
+};
+
+const LiveStockCard = ({ stock, index }) => {
+  const trendColor = TREND_COLORS[stock.trend] || TREND_COLORS.neutral;
+  const TrendIcon = stock.trend === 'up' ? TrendingUp : TrendingDown;
+  
+  return (
+    <MotionCard
+      bg={useColorModeValue('white', 'gray.800')}
+      border="1px"
+      borderColor={useColorModeValue('gray.200', 'gray.700')}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay: index * 0.05 }}
+      _hover={{ 
+        transform: 'translateY(-2px)',
+        shadow: 'lg',
+        borderColor: trendColor
+      }}
+    >
+      <CardBody p={4}>
+        <VStack spacing={3} align="stretch">
+          <HStack justify="space-between">
+            <Text fontWeight="bold" fontSize="sm">{stock.symbol}</Text>
+            <TrendIcon size={16} color={trendColor} />
+          </HStack>
+          
+          <Stat size="sm">
+            <StatNumber fontSize="lg">₹{stock.price?.toFixed(2) || 'N/A'}</StatNumber>
+            <StatHelpText m={0}>
+              <StatArrow type={stock.trend === 'up' ? 'increase' : 'decrease'} />
+              {stock.change_percent?.toFixed(2) || '0.00'}%
+            </StatHelpText>
+          </Stat>
+          
+          <HStack justify="space-between" fontSize="xs" color="gray.500">
+            <Text>Vol: {(stock.volume || 0).toLocaleString()}</Text>
+            <Badge variant="outline" size="sm">
+              {stock.trend?.toUpperCase() || 'NEUTRAL'}
+            </Badge>
+          </HStack>
+        </VStack>
+      </CardBody>
+    </MotionCard>
+  );
+};
+
+const StealthAgentsDisplay = ({ agentStatus }) => {
+  const agents = [
+    { name: 'MoneyControl', status: 'active', success: 98.5 },
+    { name: 'TrendLyne', status: 'active', success: 96.2 },
+    { name: 'StockEdge', status: 'active', success: 94.8 },
+    { name: 'Screener', status: 'active', success: 99.1 },
+    { name: 'TradingView', status: 'active', success: 97.3 }
+  ];
+
+  return (
+    <VStack spacing={3} align="stretch">
+      {agents.map((agent) => (
+        <HStack key={agent.name} justify="space-between" p={2} bg="gray.50" borderRadius="md">
+          <HStack>
+            <Box w={2} h={2} borderRadius="full" bg="green.400" />
+            <Text fontSize="sm" fontWeight="medium">{agent.name}</Text>
+          </HStack>
+          <HStack>
+            <Progress 
+              value={agent.success} 
+              size="sm" 
+              colorScheme="green" 
+              w="60px"
+              borderRadius="full"
+            />
+            <Text fontSize="xs" color="gray.600" minW="40px">
+              {agent.success}%
+            </Text>
+          </HStack>
+        </HStack>
+      ))}
+    </VStack>
+  );
+};
+
+// Helper functions
+const prepareSectorData = (stocks) => {
+  const sectors = {};
+  stocks.forEach(stock => {
+    const sector = getSectorFromSymbol(stock.symbol);
+    if (!sectors[sector]) sectors[sector] = { count: 0, totalChange: 0 };
+    sectors[sector].count++;
+    sectors[sector].totalChange += (stock.change_percent || 0);
+  });
+  
+  return Object.entries(sectors).map(([sector, data]) => ({
+    sector,
+    count: data.count,
+    avgChange: (data.totalChange / data.count).toFixed(2)
+  }));
+};
+
+const prepareTrendData = (stocks) => {
+  const trends = { up: 0, down: 0, neutral: 0 };
+  stocks.forEach(stock => {
+    trends[stock.trend || 'neutral']++;
+  });
+  
+  return Object.entries(trends).map(([trend, count]) => ({
+    name: trend.charAt(0).toUpperCase() + trend.slice(1),
+    count,
+    color: TREND_COLORS[trend]
+  }));
+};
+
+const getSectorFromSymbol = (symbol) => {
+  const sectorMap = {
+    'RELIANCE': 'Oil & Gas',
+    'TCS': 'IT Services',
+    'INFY': 'IT Services', 
+    'HDFCBANK': 'Banking',
+    'ICICIBANK': 'Banking',
+    'KOTAKBANK': 'Banking',
+    'SBIN': 'Banking',
+    'ITC': 'FMCG',
+    'HINDUNILVR': 'FMCG',
+    'BHARTIARTL': 'Telecom'
+  };
+  return sectorMap[symbol] || 'Others';
 };
 
 export default LiveDataDashboard;

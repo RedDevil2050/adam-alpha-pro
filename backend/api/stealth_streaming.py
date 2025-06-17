@@ -15,11 +15,11 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Ba
 from fastapi.responses import JSONResponse
 from loguru import logger
 import uvicorn
-from backend.agents.stealth.background_manager import background_manager
-from backend.agents.stealth.moneycontrol_agent import MoneyControlAgent
-from backend.agents.stealth.moneycontrol_agent import MoneyControlAgent
-from backend.agents.stealth.trendlyne_agent import TrendlyneAgent
-from backend.agents.stealth.stockedge_agent import StockEdgeAgent
+from backend.agents.data_collectors.web_scrapers.background_manager import background_manager
+from backend.agents.data_collectors.web_scrapers.moneycontrol_agent import MoneyControlAgent
+from backend.agents.data_collectors.web_scrapers.moneycontrol_agent import MoneyControlAgent
+from backend.agents.data_collectors.web_scrapers.trendlyne_agent import TrendlyneAgent
+from backend.agents.data_collectors.web_scrapers.stockedge_agent import StockEdgeAgent
 
 # Create router for stealth streaming endpoints
 stealth_router = APIRouter(prefix="/api/stealth", tags=["stealth-streaming"])

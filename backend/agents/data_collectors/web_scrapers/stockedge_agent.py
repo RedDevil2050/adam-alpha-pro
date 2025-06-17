@@ -1,0 +1,561 @@
+from backend.agents.data_collectors.web_scrapers.advanced_base import AdvancedStealthAgentBase, QuadChannelData
+from backend.agents.data_collectors.web_scrapers.safe_data_utils import (
+    safe_numeric_compare, safe_get_price, safe_get_volume, safe_get_float,
+    safe_rsi_score, validate_indian_market_data
+)
+import httpx
+import asyncio
+import random
+from bs4 import BeautifulSoup
+from loguru import logger
+from typing import Optional, Dict, List
+
+agent_name = "stockedge_agent"
+
+
+class StockEdgeAgent(AdvancedStealthAgentBase):
+    def __init__(self):
+        super().__init__()
+        self.agent_name = agent_name
+    
+    def _get_url_patterns(self) -> Dict[str, List[str]]:
+        """URL patterns for StockEdge with fallbacks"""
+        return {
+            'stockedge': [
+                'https://web.stockedge.com/share/{symbol}/NSE',
+                'https://stockedge.com/share/{symbol}/NSE',
+                'https://web.stockedge.com/stock/{symbol}',
+                'https://web.stockedge.com/equity/{symbol}',
+                'https://web.stockedge.com/share/{symbol}/BSE',
+                'https://stockedge.com/stock/{symbol_lower}',
+                'https://web.stockedge.com/nse/{symbol}'
+            ]
+        }
+    
+    async def _fetch_primary_source(self, symbol: str) -> Optional[Dict]:
+        """Enhanced StockEdge primary source with fallback URLs and circuit breakers."""
+        
+        async def _fetch_stockedge_data():
+            headers = {
+                "User-Agent": random.choice(self.user_agents),
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.5",
+                "Accept-Encoding": "gzip, deflate",
+                "Connection": "keep-alive",
+                "Upgrade-Insecure-Requests": "1",
+                "Referer": "https://www.google.com/",
+            }
+            
+            # Add adaptive delay
+            await asyncio.sleep(random.uniform(0.5, 2.0))
+            
+            async with httpx.AsyncClient(timeout=12, headers=headers) as client:
+                # Try to find working URL with fallback
+                working_url = await self._find_working_url('stockedge', symbol, client)
+                
+                if not working_url:
+                    # Fallback to default URL
+                    working_url = f"https://web.stockedge.com/share/{symbol}/NSE"
+                
+                response = await client.get(working_url)
+                
+                if response.status_code == 200:
+                    soup = BeautifulSoup(response.text, "html.parser")
+                    
+                    # Enhanced data extraction with safe utilities
+                    price = self._extract_price_from_stockedge(soup)
+                    volume = self._extract_volume_from_stockedge(soup)
+                    technicals = self._extract_technicals_from_stockedge(soup)
+                    
+                    # Validate extracted data
+                    if price is None or price <= 0:
+                        logger.warning(f"StockEdge: Invalid price data for {symbol} - trying fallback parsing")
+                        
+                        # Try alternative parsing approaches
+                        price = self._extract_price_fallback(soup, symbol)
+                        
+                        if price is None or price <= 0:
+                            logger.warning(f"StockEdge: All price extraction methods failed for {symbol}")
+                            return None
+                    
+                    result = {
+                        "price": price,
+                        "volume": volume,
+                        "technicals": technicals,
+                        "market_cap": None,
+                        "pe_ratio": None,
+                        "source": "stockedge_primary",
+                        "url_used": working_url
+                    }
+                    
+                    return result
+                elif response.status_code == 429:
+                    logger.warning(f"StockEdge: Rate limited for {symbol}")
+                    raise Exception("Rate limit exceeded")
+                else:
+                    logger.warning(f"StockEdge: HTTP {response.status_code} for {symbol}")
+                    return None
+                    
+        return await self._enhanced_fetch_with_fallback(
+            "stockedge_primary", symbol, _fetch_stockedge_data
+        )
+    
+    def _extract_price_from_stockedge(self, soup) -> Optional[float]:
+        """Extract current price from StockEdge page with enhanced selectors."""
+        try:
+            # Enhanced price selectors for 2024/2025 StockEdge layout
+            price_selectors = [
+                ".current-price", ".stock-price", ".ltp", ".price-current",
+                "[data-testid='current-price']", ".price-value",
+                ".stock-price-value", ".current-stock-price",
+                "[data-price]", ".quote-price", ".market-price",
+                ".price-text", ".stock-quote-price", ".equity-price"
+            ]
+            
+            for selector in price_selectors:
+                element = soup.select_one(selector)
+                if element:
+                    price_text = element.get_text().strip()
+                    # Clean and extract numeric value
+                    price_text = price_text.replace(",", "").replace("₹", "").replace("$", "").replace("Rs", "")
+                    # Remove any percentage or other symbols
+                    price_text = price_text.split()[0] if ' ' in price_text else price_text
+                    try:
+                        price = float(price_text)
+                        if price > 0:  # Ensure valid positive price
+                            return price
+                    except ValueError:
+                        continue
+                        
+            # Enhanced fallback: search for price patterns in text
+            import re
+            # More comprehensive price pattern matching
+            price_patterns = [
+                r'₹\s*(\d{1,6}(?:,\d{3})*(?:\.\d{2})?)',
+                r'Rs\.?\s*(\d{1,6}(?:,\d{3})*(?:\.\d{2})?)',
+                r'Price[:\s]*₹?(\d{1,6}(?:,\d{3})*(?:\.\d{2})?)',
+                r'Current[:\s]*₹?(\d{1,6}(?:,\d{3})*(?:\.\d{2})?)',
+                r'LTP[:\s]*₹?(\d{1,6}(?:,\d{3})*(?:\.\d{2})?)'
+            ]
+            
+            text_content = soup.get_text()
+            for pattern in price_patterns:
+                matches = re.findall(pattern, text_content, re.IGNORECASE)
+                if matches:
+                    price_text = matches[0].replace(",", "")
+                    try:
+                        price = float(price_text)
+                        if price > 0:
+                            return price
+                    except ValueError:
+                        continue
+                        
+        except Exception as e:
+            logger.warning(f"Price extraction failed: {e}")
+        return None
+    
+    def _extract_price_fallback(self, soup, symbol: str) -> float:
+        """Fallback price extraction with more aggressive patterns"""
+        try:
+            # More aggressive selector patterns
+            fallback_selectors = [
+                '[data-value]',
+                '.value',
+                '.price-value',
+                '.current-value',
+                '.quote-value',
+                '[class*="price"]',
+                '[class*="quote"]',
+                '[class*="value"]'
+            ]
+            
+            # Try fallback selectors
+            for selector in fallback_selectors:
+                elements = soup.select(selector)
+                for elem in elements:
+                    # Check data-value attribute
+                    if elem.get('data-value'):
+                        try:
+                            price = float(elem['data-value'])
+                            if 1 <= price <= 100000:  # Reasonable price range
+                                logger.debug(f"StockEdge fallback: Found price {price} via data-value")
+                                return price
+                        except ValueError:
+                            continue
+                    
+                    # Check text content
+                    text = elem.get_text(strip=True)
+                    if text:
+                        # Extract number from text
+                        import re
+                        numbers = re.findall(r'\d+\.?\d*', text.replace(',', ''))
+                        for num_str in numbers:
+                            try:
+                                price = float(num_str)
+                                if 1 <= price <= 100000:  # Reasonable price range
+                                    logger.debug(f"StockEdge fallback: Found price {price} via text extraction")
+                                    return price
+                            except ValueError:
+                                continue
+            
+            # Last resort: scan entire page for price-like numbers
+            text_content = soup.get_text()
+            import re
+            # Look for price-like patterns in the entire page
+            price_candidates = re.findall(r'\b\d{1,5}\.?\d{0,2}\b', text_content)
+            
+            # Filter and validate candidates
+            valid_prices = []
+            for candidate in price_candidates:
+                try:
+                    price = float(candidate)
+                    if 10 <= price <= 50000:  # More realistic range for Indian stocks
+                        valid_prices.append(price)
+                except ValueError:
+                    continue
+            
+            if valid_prices:
+                # Return the most common price or median price
+                from collections import Counter
+                price_counts = Counter(valid_prices)
+                most_common_price = price_counts.most_common(1)[0][0]
+                logger.debug(f"StockEdge fallback: Using most common price {most_common_price}")
+                return most_common_price
+            
+            logger.warning(f"StockEdge fallback: No valid price found for {symbol}")
+            return None
+            
+        except Exception as e:
+            logger.warning(f"StockEdge fallback price extraction failed: {e}")
+            return None
+
+    def _extract_volume_from_stockedge(self, soup) -> Optional[int]:
+        """Extract volume from StockEdge page."""
+        try:
+            volume_selectors = [
+                ".volume", ".trade-volume", "[data-testid='volume']"
+            ]
+            
+            for selector in volume_selectors:
+                element = soup.select_one(selector)
+                if element:
+                    volume_text = element.get_text().strip()
+                    # Handle K, M, B suffixes
+                    volume_text = volume_text.replace(",", "")
+                    if "K" in volume_text:
+                        return int(float(volume_text.replace("K", "")) * 1000)
+                    elif "M" in volume_text:
+                        return int(float(volume_text.replace("M", "")) * 1000000)
+                    elif "B" in volume_text:
+                        return int(float(volume_text.replace("B", "")) * 1000000000)
+                    else:
+                        try:
+                            return int(volume_text)
+                        except ValueError:
+                            continue
+        except Exception as e:
+            logger.warning(f"Volume extraction failed: {e}")
+        return None
+    
+    def _extract_technicals_from_stockedge(self, soup) -> Dict:
+        """Extract technical indicators from StockEdge page."""
+        try:
+            technicals = {}
+            
+            # Try to extract RSI, MACD, etc.
+            indicator_selectors = {
+                "rsi": [".rsi-value", "[data-indicator='rsi']"],
+                "macd": [".macd-value", "[data-indicator='macd']"],
+                "moving_average": [".ma-value", "[data-indicator='ma']"]
+            }
+            
+            for indicator, selectors in indicator_selectors.items():
+                for selector in selectors:
+                    element = soup.select_one(selector)
+                    if element:
+                        try:
+                            technicals[indicator] = float(element.get_text().strip())
+                            break
+                        except (ValueError, AttributeError):
+                            continue
+            
+            return technicals
+        except Exception as e:
+            logger.warning(f"Technicals extraction failed: {e}")
+        return {}
+
+    async def _execute_analysis(self, symbol: str, agent_outputs: dict, fused_data: QuadChannelData) -> Dict:
+        """Execute StockEdge-specific analysis with quad-channel fused data."""
+        try:
+            # Extract data from fused channels
+            price = self._extract_best_price(fused_data)
+            volume = self._extract_best_volume(fused_data)
+            technicals = self._extract_best_technicals(fused_data)
+            
+            if not price or price <= 0:
+                return self._error_response(symbol, "No valid price data from any channel")
+            
+            # Calculate StockEdge-specific score
+            score = self._analyze_stockedge_scores(price, volume, technicals, fused_data)
+            verdict = self._get_stockedge_verdict(score)
+            
+            # Calculate confidence with quad-channel boost
+            base_confidence = score * 0.8
+            quad_boost = len(fused_data.channels_used) * 0.05  # 5% per channel
+            confidence = min(base_confidence + quad_boost, 1.0)
+            
+            return {
+                "symbol": symbol,
+                "verdict": verdict,
+                "confidence": confidence,
+                "value": round(score, 2),
+                "details": {
+                    "price_analysis": {
+                        "current_price": price,
+                        "volume": volume,
+                        "price_sources": self._get_price_sources(fused_data)
+                    },
+                    "technical_analysis": technicals,
+                    "stockedge_metrics": {
+                        "quality_score": score * 100,
+                        "trend_strength": self._calculate_trend_strength(technicals),
+                        "momentum": self._calculate_momentum(price, technicals)
+                    },
+                    "quad_channel_performance": {
+                        "channels_used": fused_data.channels_used,
+                        "fusion_confidence": fused_data.fusion_confidence,
+                        "validation_score": fused_data.validation_score
+                    }
+                },
+                "error": None,
+                "agent_name": agent_name,
+            }
+
+        except Exception as e:
+            logger.error(f"❌ StockEdge quad-channel analysis error for {symbol}: {e}")
+            return self._error_response(symbol, str(e))
+    
+    def _extract_best_price(self, fused_data: QuadChannelData) -> Optional[float]:
+        """Extract the best price from available channels with priority."""
+        for channel in ["primary", "secondary", "tertiary", "emergency"]:
+            channel_data = getattr(fused_data, channel)
+            if channel_data and "price" in channel_data:
+                price = channel_data["price"]
+                if isinstance(price, (int, float)) and price > 0:
+                    return float(price)
+        
+        # If no valid price found, try to extract from any available data
+        for channel in ["primary", "secondary", "tertiary", "emergency"]:
+            channel_data = getattr(fused_data, channel)
+            if channel_data:
+                # Look for any numeric value that could be a price
+                for key, value in channel_data.items():
+                    if key in ['close', 'last', 'current_price', 'ltp', 'quote'] and value:
+                        try:
+                            price = float(str(value).replace(',', '').replace('₹', '').replace('$', ''))
+                            if 10 <= price <= 100000:  # Reasonable price range for Indian stocks
+                                return price
+                        except (ValueError, TypeError):
+                            continue
+        
+        return None
+    
+    def _extract_best_volume(self, fused_data: QuadChannelData) -> int:
+        """Extract the best volume from available channels, never return None."""
+        for channel in ["primary", "secondary", "tertiary", "emergency"]:
+            channel_data = getattr(fused_data, channel)
+            if channel_data and "volume" in channel_data:
+                volume = channel_data["volume"]
+                if isinstance(volume, (int, float)) and volume > 0:
+                    return int(volume)
+        return 0  # Return 0 instead of None to prevent NoneType errors
+    
+    def _extract_best_technicals(self, fused_data: QuadChannelData) -> Dict:
+        """Extract and merge technical indicators from all channels."""
+        merged_technicals = {}
+        
+        for channel in ["primary", "secondary", "tertiary", "emergency"]:
+            channel_data = getattr(fused_data, channel)
+            if channel_data and "technicals" in channel_data:
+                technicals = channel_data["technicals"]
+                if isinstance(technicals, dict):
+                    merged_technicals.update(technicals)
+        
+        return merged_technicals
+    
+    def _get_price_sources(self, fused_data: QuadChannelData) -> List[str]:
+        """Get list of sources that provided price data."""
+        sources = []
+        for channel in ["primary", "secondary", "tertiary", "emergency"]:
+            channel_data = getattr(fused_data, channel)
+            if channel_data and "price" in channel_data and channel_data["price"] > 0:
+                source = channel_data.get("source", channel)
+                sources.append(source)
+        return sources
+    
+    def _analyze_stockedge_scores(self, price: float, volume: int, technicals: Dict, fused_data: QuadChannelData) -> float:
+        """Enhanced StockEdge scoring with safe data operations and Indian market validation."""
+        score = 0.5  # Base score
+        
+        # Price momentum analysis with safe comparisons
+        if safe_numeric_compare(price, 100, 0):
+            score += 0.1
+        if safe_numeric_compare(price, 500, 0):
+            score += 0.1
+        if safe_numeric_compare(price, 1000, 0):
+            score += 0.1
+            
+        # Enhanced volume analysis with safe utilities
+        if safe_numeric_compare(volume, 100000, 0):
+            score += 0.1
+        if safe_numeric_compare(volume, 1000000, 0):
+            score += 0.1
+        
+        # Detect unusually high volume (potential breakout)
+        if safe_numeric_compare(volume, 10000000, 0):  # 10M+ volume
+            score += 0.05
+            
+        # Enhanced technical indicators with safe RSI scoring
+        rsi_score = safe_rsi_score(technicals.get("rsi"), 0.0)
+        score += rsi_score
+        
+        # MACD signal strength
+        macd = safe_get_float(technicals, "macd", 0)
+        if macd > 0:
+            score += 0.05
+        elif macd < -0.05:
+            score -= 0.05
+            
+        # Moving average signals
+        sma_20 = safe_get_float(technicals, "sma_20", 0)
+        sma_50 = safe_get_float(technicals, "sma_50", 0)
+        if sma_20 > 0 and sma_50 > 0 and price > 0:
+            if price > sma_20 and sma_20 > sma_50:  # Bullish alignment
+                score += 0.1
+            elif price < sma_20 and sma_20 < sma_50:  # Bearish alignment
+                score -= 0.05
+                
+        # Data quality bonus from quad-channel with enhanced validation
+        base_quality_bonus = fused_data.validation_score * 0.15
+        
+        # Additional validation for Indian market specifics
+        validation_result = validate_indian_market_data(price, volume, "UNKNOWN")
+        indian_market_bonus = validation_result['confidence'] * 0.1
+        
+        score += base_quality_bonus + indian_market_bonus
+        
+        # Channel diversity bonus (more sources = higher confidence)
+        channel_bonus = len(fused_data.channels_used) * 0.02
+        score += channel_bonus
+        
+        return max(0.0, min(1.0, score))
+    
+    def _get_stockedge_verdict(self, score: float) -> str:
+        """Get StockEdge-specific verdict based on score."""
+        if score >= 0.8:
+            return "STRONG_BUY"
+        elif score >= 0.65:
+            return "BUY"
+        elif score >= 0.55:
+            return "HOLD"
+        elif score >= 0.4:
+            return "WEAK_SIGNALS"
+        else:
+            return "SELL"
+    
+    def _calculate_trend_strength(self, technicals: Dict) -> float:
+        """Calculate trend strength from technical indicators."""
+        if not technicals:
+            return 0.5
+            
+        strength = 0.5
+        if "rsi" in technicals:
+            rsi = technicals["rsi"]
+            # Higher RSI deviation from 50 = stronger trend
+            strength += abs(rsi - 50) / 100
+            
+        return min(1.0, strength)
+    
+    def _calculate_momentum(self, price: float, technicals: Dict) -> float:
+        """Calculate price momentum indicator."""
+        momentum = 0.5
+        
+        # Simple momentum based on price level
+        if price > 500:
+            momentum += 0.2
+        if price > 1000:
+            momentum += 0.2
+            
+        # Technical momentum
+        if technicals.get("macd", 0) > 0:
+            momentum += 0.1
+            
+        return min(1.0, momentum)
+
+    async def _fetch_stealth_data(self, symbol: str) -> dict:
+        url = f"https://web.stockedge.com/share/{symbol}/overview"
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(url)
+        soup = BeautifulSoup(resp.text, "html.parser")
+
+        return {
+            "quality_score": self._extract_quality_score(soup),
+            "technicals": self._extract_technicals(soup),
+            "metrics": self._extract_key_metrics(soup),
+            "source": "stockedge",
+        }
+
+    def _analyze_scores(self, data: dict) -> float:
+        quality = data.get("quality_score", 50) / 100
+        tech_score = self._calculate_technical_score(data.get("technicals", {}))
+        return (quality + tech_score) / 2
+
+    def _get_verdict(self, score: float) -> str:
+        if score > 0.7:
+            return "HIGH_QUALITY"
+        elif score > 0.4:
+            return "AVERAGE_QUALITY"
+        return "LOW_QUALITY"
+
+    def _extract_quality_score(self, soup) -> float:
+        try:
+            score_elem = soup.select_one(".quality-score")
+            return float(score_elem.text.strip()) if score_elem else 50.0
+        except:
+            return 50.0
+
+    def _extract_technicals(self, soup) -> dict:
+        technicals = {}
+        try:
+            tech_div = soup.select_one(".technical-indicators")
+            if tech_div:
+                for indicator in tech_div.select(".indicator"):
+                    name = indicator.select_one(".name").text.strip()
+                    value = indicator.select_one(".value").text.strip()
+                    technicals[name] = value
+        except:
+            pass
+        return technicals
+
+    def _extract_key_metrics(self, soup) -> dict:
+        metrics = {}
+        try:
+            metrics_div = soup.select_one(".key-metrics")
+            if metrics_div:
+                for metric in metrics_div.select(".metric"):
+                    name = metric.select_one(".name").text.strip()
+                    value = metric.select_one(".value").text.strip()
+                    metrics[name] = value
+        except:
+            pass
+        return metrics
+
+    def _calculate_technical_score(self, technicals: dict) -> float:
+        positive_signals = len([v for v in technicals.values() if "buy" in v.lower()])
+        total_signals = len(technicals) or 1
+        return positive_signals / total_signals
+
+async def run(symbol: str, agent_outputs: dict = {}) -> dict:
+    agent = StockEdgeAgent()
+    # Pass agent_outputs to execute
+    return await agent.execute(symbol, agent_outputs=agent_outputs)

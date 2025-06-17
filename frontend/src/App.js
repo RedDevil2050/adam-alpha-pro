@@ -5,7 +5,9 @@ import { BrowserRouter as Router } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import AppRoutes from './routes/AppRoutes';
 import { AuthProvider } from './contexts/AuthContext';
+import { LiveDataProvider } from './contexts/LiveDataContext';
 import ErrorBoundary from './components/common/ErrorBoundary';
+import LiveDataTestPanel from './components/test/LiveDataTestPanel';
 import loveableTheme from './theme/loveableTheme';
 
 const queryClient = new QueryClient({
@@ -24,23 +26,28 @@ function App() {
       <ChakraProvider theme={loveableTheme}>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
-            <Router>
-              <div className="App">
-                <ErrorBoundary fallbackType="component">
-                  <AppRoutes />
-                </ErrorBoundary>
-                <Toaster 
-                  position="top-right"
-                  toastOptions={{
-                    duration: 4000,
-                    style: {
-                      background: '#363636',
-                      color: '#fff',
-                    },
-                  }}
-                />
-              </div>
-            </Router>
+            <LiveDataProvider>
+              <Router>                <div className="App">
+                  <ErrorBoundary fallbackType="component">
+                    <AppRoutes />
+                  </ErrorBoundary>
+                  
+                  {/* Live Data Test Panel - Shows connection status */}
+                  <LiveDataTestPanel />
+                  
+                  <Toaster 
+                    position="top-right"
+                    toastOptions={{
+                      duration: 4000,
+                      style: {
+                        background: '#363636',
+                        color: '#fff',
+                      },
+                    }}
+                  />
+                </div>
+              </Router>
+            </LiveDataProvider>
           </AuthProvider>
         </QueryClientProvider>
       </ChakraProvider>

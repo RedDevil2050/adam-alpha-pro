@@ -148,11 +148,10 @@ class ApiService {
   async removeFromWatchlist(symbol) {
     const response = await api.delete(`/api/watchlist/${symbol}`);
     return response.data;
-  }
-  // Real-time data helpers
+  }  // Real-time data helpers
   async getStockQuote(symbol) {
     try {
-      const response = await api.get(`/api/live/quote/${symbol}`);
+      const response = await api.get(`/api/analyze/${symbol}`);
       return response.data;
     } catch (error) {
       console.warn('Live quote failed, using fallback:', error.message);
@@ -168,11 +167,10 @@ class ApiService {
       return this.getDemoHistoricalData(symbol, period);
     }
   }
-
   // Live market data methods
   async getLiveMarketStatus() {
     try {
-      const response = await api.get('/api/live/market-status');
+      const response = await api.get('/api/market-state');
       return response.data;
     } catch (error) {
       console.warn('Live market status failed, using fallback:', error.message);
@@ -183,20 +181,26 @@ class ApiService {
       };
     }
   }
-
   async getLiveIndianIndices() {
     try {
-      const response = await api.get('/api/live/indices');
+      const response = await api.get('/api/market-state');
+      // Extract indices from market state data
+      if (response.data && response.data.data && response.data.data.indices) {
+        return {
+          status: 'success',
+          data: response.data.data.indices,
+          timestamp: response.data.data.timestamp
+        };
+      }
       return response.data;
     } catch (error) {
       console.warn('Live indices failed, using fallback:', error.message);
       return this.getIndianMarketIndices();
     }
   }
-
   async getLiveIndianStocks() {
     try {
-      const response = await api.get('/api/live/stocks/indian');
+      const response = await api.get('/api/live-data');
       return response.data;
     } catch (error) {
       console.warn('Live stocks failed, using fallback:', error.message);
@@ -207,12 +211,12 @@ class ApiService {
   async getIndianStockList() {
     try {
       // Try to get live data from backend first
-      const liveResponse = await api.get('/api/live/stocks/indian');
-      if (liveResponse.data && liveResponse.data.stocks) {
+      const liveResponse = await api.get('/api/live-data');
+      if (liveResponse.data && liveResponse.data.data && liveResponse.data.data.stocks) {
         return {
-          stocks: liveResponse.data.stocks,
+          stocks: liveResponse.data.data.stocks,
           source: 'live',
-          timestamp: liveResponse.data.timestamp
+          timestamp: liveResponse.data.data.timestamp || liveResponse.data.timestamp
         };
       }
     } catch (error) {

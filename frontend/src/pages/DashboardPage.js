@@ -23,6 +23,12 @@ import {
   Spinner,
   Alert,
   AlertIcon,
+  Container,
+  Tabs,
+  TabList,
+  TabPanels,
+  Tab,
+  TabPanel,
 } from '@chakra-ui/react';
 import { 
   Search, 
@@ -32,17 +38,24 @@ import {
   Target,
   Zap,
   Clock,
-  Activity
+  Activity,
+  Database,
+  Eye
 } from 'lucide-react';
 import { useQuery } from 'react-query';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import apiService from '../services/api';
+
+// Import the new comprehensive dashboard components
+import LiveDataDashboard from '../components/dashboard/LiveDataDashboard';
 import MarketOverviewCard from '../components/dashboard/MarketOverviewCard';
 import QuickAnalysisCard from '../components/dashboard/QuickAnalysisCard';
 import RecentAnalyses from '../components/dashboard/RecentAnalyses';
 import SystemHealthCard from '../components/dashboard/SystemHealthCard';
-// Import new loveable components
+import IndianMarketDashboard from '../components/dashboard/IndianMarketDashboard';
+
+// Import other components
 import AnimatedBackground from '../components/common/AnimatedBackground';
 import MarketPulse from '../components/dashboard/MarketPulse';
 import SystemHealthWidget from '../components/widgets/SystemHealthWidget';
@@ -54,8 +67,10 @@ const MotionCard = motion(Card);
 
 const DashboardPage = () => {
   const [searchSymbol, setSearchSymbol] = useState('');
+  const [activeTab, setActiveTab] = useState(0);
   const navigate = useNavigate();
   
+  const bg = useColorModeValue('gray.50', 'gray.900');
   const cardBg = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
 
@@ -87,213 +102,215 @@ const DashboardPage = () => {
     }
   };
 
-  const handleFloatingAction = (action) => {
-    switch (action) {
-      case 'analyze':
-        navigate('/analysis');
-        break;
-      case 'alert':
-        // Open alerts modal or navigate to alerts
-        console.log('Open alerts');
-        break;
-      case 'portfolio':
-        navigate('/portfolio');
-        break;
-      case 'watchlist':
-        navigate('/watchlist');
-        break;
-      default:
-        break;
-    }
-  };
-
-  const quickStats = [
-    {
-      label: 'Analyses Today',
-      value: '127',
-      change: 12.5,
-      icon: BarChart3,
-      color: 'blue',
-    },
-    {
-      label: 'Active Agents',
-      value: '23',
-      change: 0,
-      icon: Zap,
-      color: 'green',
-    },
-    {
-      label: 'Avg Response Time',
-      value: '1.2s',
-      change: -8.3,
-      icon: Clock,
-      color: 'purple',
-    },
-    {
-      label: 'Success Rate',
-      value: '99.1%',
-      change: 2.1,
-      icon: Target,
-      color: 'orange',
-    },
-  ];
-
   return (
-    <AnimatedBackground>
-      <VStack spacing={8} align="stretch" p={6}>
-        {/* Header Section */}
-        <Box>
-          <Heading size="lg" mb={2} color={useColorModeValue('gray.800', 'white')}>
-            Market Analysis Dashboard
-          </Heading>
-          <Text color={useColorModeValue('gray.600', 'gray.300')}>
-            Real-time insights powered by advanced AI agents
-          </Text>
-        </Box>
-
-        {/* Quick Search */}
-        <MotionCard
-          initial={{ opacity: 0, y: 20 }}
+    <Box bg={bg} minH="100vh">
+      <AnimatedBackground />
+      
+      <Container maxW="full" py={6}>
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          bg={cardBg}
-          borderColor={borderColor}
-          borderWidth="1px"
-          boxShadow="xl"
         >
-          <CardBody>
-            <form onSubmit={handleSearch}>
-              <HStack spacing={4}>
-                <InputGroup size="lg" flex={1}>
-                  <Input
-                    placeholder="Enter stock symbol (e.g., AAPL, TSLA, RELIANCE.NS)"
-                    value={searchSymbol}
-                    onChange={(e) => setSearchSymbol(e.target.value.toUpperCase())}
-                    bg={useColorModeValue('gray.50', 'gray.700')}
-                    border="1px"
-                    borderColor={useColorModeValue('gray.300', 'gray.600')}
-                    _hover={{ borderColor: 'brand.400' }}
-                    _focus={{ borderColor: 'brand.500', boxShadow: '0 0 0 1px var(--chakra-colors-brand-500)' }}
-                  />
-                  <InputRightElement>
-                    <Search size={20} color="gray.400" />
-                  </InputRightElement>
-                </InputGroup>
-                <Button
-                  type="submit"
-                  colorScheme="brand"
-                  size="lg"
-                  leftIcon={<BarChart3 size={20} />}
-                  isDisabled={!searchSymbol.trim()}
-                  boxShadow="lg"
-                  _hover={{ transform: 'translateY(-2px)', boxShadow: 'xl' }}
-                  transition="all 0.2s"
-                >
-                  Analyze
-                </Button>
-              </HStack>
-            </form>
-          </CardBody>
-        </MotionCard>
-
-        {/* Enhanced Quick Stats Grid */}
-        <Grid templateColumns={{ base: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' }} gap={6}>
-          {quickStats.map((stat, index) => (
-            <MotionCard
-              key={stat.label}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: index * 0.1 }}
-              bg={cardBg}
-              borderColor={borderColor}
-              borderWidth="1px"
-              boxShadow="lg"              _hover={{ 
-                transform: 'translateY(-4px)', 
-                boxShadow: 'xl',
-                borderColor: `${stat.color}.300`
-              }}
-              cursor="pointer"
-            >
-              <CardBody>
-                <Stat>
-                  <Flex justify="space-between" align="start">
-                    <Box>
-                      <StatLabel fontSize="sm" color="gray.500">
-                        {stat.label}
-                      </StatLabel>
-                      <StatNumber fontSize="2xl" fontWeight="bold">
-                        {stat.value}
-                      </StatNumber>
-                      {stat.change !== 0 && (
-                        <StatHelpText mb={0}>
-                          <StatArrow type={stat.change > 0 ? 'increase' : 'decrease'} />
-                          {Math.abs(stat.change)}%
-                        </StatHelpText>
-                      )}
-                    </Box>
-                    <Box
-                      p={3}
-                      borderRadius="xl"
-                      bg={`${stat.color}.100`}
-                      color={`${stat.color}.600`}
-                    >
-                      <stat.icon size={24} />
-                    </Box>
-                  </Flex>
-                </Stat>
-              </CardBody>
-            </MotionCard>
-          ))}
-        </Grid>
-
-        {/* Main Content Grid - Enhanced Layout */}
-        <Grid templateColumns={{ base: '1fr', lg: '2fr 1fr' }} gap={8}>
-          {/* Left Column */}
-          <VStack spacing={6} align="stretch">
-            {/* Market Overview */}
-            <MarketOverviewCard data={marketData} isLoading={marketLoading} error={marketError} />
-            
-            {/* Quick Analysis */}
-            <QuickAnalysisCard />
-
-            {/* Market Pulse - New Component */}
-            <MarketPulse />
-          </VStack>          {/* Right Column */}
-          <VStack spacing={6} align="stretch">
-            {/* Live Data Widget */}
-            <LiveDataWidget 
-              symbols={['RELIANCE', 'TCS', 'INFY', 'HDFCBANK']}
-              maxUpdates={8}
-              autoConnect={true}
-              showStats={true}
-            />
-            
-            {/* Enhanced System Health */}
-            <SystemHealthWidget data={healthData} />
-            
-            {/* Smart Watchlist - New Component */}
-            <SmartWatchlist />
-            
-            {/* Recent Analyses */}
-            <RecentAnalyses />
+          <VStack spacing={6} align="stretch" mb={8}>
+            <HStack justify="space-between" align="center" wrap="wrap" spacing={4}>
+              <VStack align="start" spacing={1}>
+                <Heading size="xl" bgGradient="linear(to-r, blue.400, purple.500)" bgClip="text">
+                  🇮🇳 Zion Market Intelligence
+                </Heading>
+                <Text color="gray.600" fontSize="lg">
+                  Live Indian equity market analysis powered by AI agents
+                </Text>
+              </VStack>
+              
+              {/* Quick Search */}
+              <Box w={{ base: 'full', md: '300px' }}>
+                <form onSubmit={handleSearch}>
+                  <InputGroup size="lg">
+                    <Input
+                      placeholder="Search stocks (e.g., RELIANCE, TCS)"
+                      value={searchSymbol}
+                      onChange={(e) => setSearchSymbol(e.target.value.toUpperCase())}
+                      bg={cardBg}
+                      border="2px"
+                      borderColor={borderColor}
+                      _focus={{ borderColor: 'blue.400' }}
+                    />
+                    <InputRightElement>
+                      <Button type="submit" colorScheme="blue" size="sm" mr={1}>
+                        <Search size={16} />
+                      </Button>
+                    </InputRightElement>
+                  </InputGroup>
+                </form>
+              </Box>
+            </HStack>
           </VStack>
-        </Grid>
+        </motion.div>
 
-        {/* Error Handling */}
-        {marketError && (
-          <Alert status="warning" borderRadius="lg" boxShadow="lg">
-            <AlertIcon />
-            <VStack align="start" spacing={1}>
-              <Text fontWeight="medium">Market data temporarily unavailable</Text>
-              <Text fontSize="sm">Some features may be limited until connection is restored.</Text>
-            </VStack>
-          </Alert>
-        )}
-      </VStack>
+        {/* Main Dashboard Tabs */}
+        <Tabs 
+          index={activeTab} 
+          onChange={setActiveTab}
+          variant="enclosed"
+          colorScheme="blue"
+        >
+          <TabList mb={6} bg={cardBg} borderRadius="lg" p={2}>
+            <Tab leftIcon={<Activity />}>Live Data Dashboard</Tab>
+            <Tab leftIcon={<BarChart3 />}>Indian Market Overview</Tab>
+            <Tab leftIcon={<Database />}>Analysis Tools</Tab>
+            <Tab leftIcon={<Eye />}>Stealth Agents</Tab>
+          </TabList>
 
-      {/* Floating Action Button */}
-      <FloatingActionButton onClick={handleFloatingAction} />
-    </AnimatedBackground>
+          <TabPanels>
+            {/* Live Data Dashboard Tab */}
+            <TabPanel p={0}>
+              <LiveDataDashboard />
+            </TabPanel>
+
+            {/* Indian Market Overview Tab */}
+            <TabPanel p={0}>
+              <IndianMarketDashboard />
+            </TabPanel>
+
+            {/* Analysis Tools Tab */}
+            <TabPanel p={0}>
+              <Grid templateColumns="repeat(12, 1fr)" gap={6}>
+                <Box gridColumn="span 8">
+                  <VStack spacing={6}>
+                    <QuickAnalysisCard />
+                    <RecentAnalyses />
+                  </VStack>
+                </Box>
+                <Box gridColumn="span 4">
+                  <VStack spacing={6}>
+                    <SystemHealthCard healthData={healthData} />
+                    <SmartWatchlist />
+                    <SystemHealthWidget />
+                  </VStack>
+                </Box>
+              </Grid>
+            </TabPanel>
+
+            {/* Stealth Agents Tab */}
+            <TabPanel p={0}>
+              <StealthAgentsDashboard />
+            </TabPanel>
+          </TabPanels>
+        </Tabs>
+
+        {/* Floating Action Button */}
+        <FloatingActionButton />
+      </Container>
+    </Box>
+  );
+};
+
+// New Stealth Agents Dashboard Component
+const StealthAgentsDashboard = () => {
+  const cardBg = useColorModeValue('white', 'gray.800');
+  const borderColor = useColorModeValue('gray.200', 'gray.700');
+
+  return (
+    <Grid templateColumns="repeat(12, 1fr)" gap={6}>
+      <MotionCard
+        gridColumn="span 12"
+        bg={cardBg}
+        border="1px"
+        borderColor={borderColor}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <CardBody>
+          <VStack spacing={6} align="stretch">
+            <Heading size="lg" display="flex" alignItems="center" gap={2}>
+              <Eye size={24} color="#D69E2E" />
+              Stealth Data Collection Agents
+            </Heading>
+            
+            <Text color="gray.600">
+              Monitor the performance and status of our data collection agents across multiple platforms
+            </Text>
+
+            <Grid templateColumns="repeat(auto-fit, minmax(300px, 1fr))" gap={4}>
+              <AgentStatusCard 
+                name="MoneyControl Agent"
+                status="active"
+                dataPoints={1247}
+                successRate={98.5}
+                lastUpdate="2 minutes ago"
+                description="Real-time stock prices and company data"
+              />
+              <AgentStatusCard 
+                name="TrendLyne Agent"
+                status="active"
+                dataPoints={892}
+                successRate={96.2}
+                lastUpdate="3 minutes ago"
+                description="Technical analysis and quality scores"
+              />
+              <AgentStatusCard 
+                name="Screener Agent"
+                status="active"
+                dataPoints={2156}
+                successRate={99.1}
+                lastUpdate="1 minute ago"
+                description="Fundamental ratios and financial metrics"
+              />
+              <AgentStatusCard 
+                name="StockEdge Agent"
+                status="active"
+                dataPoints={743}
+                successRate={94.8}
+                lastUpdate="4 minutes ago"
+                description="Market insights and sector analysis"
+              />
+            </Grid>
+          </VStack>
+        </CardBody>
+      </MotionCard>
+    </Grid>
+  );
+};
+
+// Agent Status Card Component
+const AgentStatusCard = ({ name, status, dataPoints, successRate, lastUpdate, description }) => {
+  const cardBg = useColorModeValue('gray.50', 'gray.700');
+  const statusColor = status === 'active' ? 'green' : 'red';
+
+  return (
+    <Card bg={cardBg} border="1px" borderColor="gray.200">
+      <CardBody>
+        <VStack spacing={4} align="stretch">
+          <HStack justify="space-between">
+            <Text fontWeight="bold" fontSize="lg">{name}</Text>
+            <Badge colorScheme={statusColor} variant="solid">
+              {status.toUpperCase()}
+            </Badge>
+          </HStack>
+          
+          <Text fontSize="sm" color="gray.600">
+            {description}
+          </Text>
+          
+          <VStack spacing={2} align="stretch">
+            <HStack justify="space-between">
+              <Text fontSize="sm">Data Points:</Text>
+              <Text fontWeight="bold">{dataPoints.toLocaleString()}</Text>
+            </HStack>
+            <HStack justify="space-between">
+              <Text fontSize="sm">Success Rate:</Text>
+              <Text fontWeight="bold" color="green.500">{successRate}%</Text>
+            </HStack>
+            <HStack justify="space-between">
+              <Text fontSize="sm">Last Update:</Text>
+              <Text fontSize="sm" color="gray.500">{lastUpdate}</Text>
+            </HStack>
+          </VStack>
+        </VStack>
+      </CardBody>
+    </Card>
   );
 };
 

@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from loguru import logger
 import time
-from backend.agents.stealth.background_manager import background_manager
+from backend.agents.data_collectors.web_scrapers.background_manager import background_manager
 
 router = APIRouter(prefix="/api/live", tags=["live-data"])
 

@@ -1,5 +1,5 @@
-from backend.agents.nlp.nlp_topic_agent import run as run_topic
-from backend.agents.nlp.nlp_summary_agent import run as run_summary
+from backend.agents.intelligence.nlp_processing.nlp_topic_agent import run as run_topic
+from backend.agents.intelligence.nlp_processing.nlp_summary_agent import run as run_summary
 
 
 def run_nlp_insights(symbol: str, agent_outputs: dict) -> dict:
